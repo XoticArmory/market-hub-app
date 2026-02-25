@@ -46,7 +46,9 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/events/:eventId/posts' as const,
-      input: insertVendorPostSchema.omit({ eventId: true }),
+      input: insertVendorPostSchema.omit({ eventId: true }).extend({
+        imageUrl: z.string().optional(),
+      }),
       responses: {
         201: z.any(), // Returns VendorPostResponse
         400: errorSchemas.validation,

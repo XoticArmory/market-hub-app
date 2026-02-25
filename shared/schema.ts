@@ -18,6 +18,7 @@ export const vendorPosts = pgTable("vendor_posts", {
   eventId: integer("event_id").notNull().references(() => events.id),
   vendorId: varchar("vendor_id").notNull().references(() => users.id),
   itemsDescription: text("items_description").notNull(),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

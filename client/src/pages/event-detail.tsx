@@ -15,8 +15,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+
 const postSchema = z.object({
   itemsDescription: z.string().min(5, "Please tell us a bit more about what you're bringing."),
+  imageUrl: z.string().url("Please enter a valid image URL").optional().or(z.literal("")),
 });
 
 type PostFormValues = z.infer<typeof postSchema>;
@@ -37,7 +41,10 @@ export default function EventDetail() {
   });
 
   const onSubmit = (data: PostFormValues) => {
-    createPost(data, {
+    createPost({
+      itemsDescription: data.itemsDescription,
+      imageUrl: data.imageUrl || undefined,
+    }, {
       onSuccess: () => {
         setIsDialogOpen(false);
         form.reset();
@@ -150,6 +157,23 @@ export default function EventDetail() {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={form.control}
+                        name="imageUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Image URL (Optional)</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="https://images.unsplash.com/..."
+                                className="rounded-xl"
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <Button type="submit" className="w-full h-12 rounded-xl text-base" disabled={isCreating}>
                         {isCreating ? "Posting..." : "Share with Community"}
                       </Button>
@@ -166,47 +190,83 @@ export default function EventDetail() {
         </div>
       </div>
 
-      {/* Vendor Posts Section */}
-      <div className="space-y-6">
-        <h2 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
-          Who's Coming
-          <span className="bg-primary/10 text-primary text-sm py-1 px-3 rounded-full font-sans font-semibold">
-            {posts?.length || 0} Vendors
-          </span>
-        </h2>
+      {/* Tabs Section */}
+      <Tabs defaultValue="vendors" className="space-y-6">
+        <TabsList className="bg-muted/50 p-1 rounded-xl h-12">
+          <TabsTrigger value="vendors" className="rounded-lg px-6 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            Vendors
+          </TabsTrigger>
+          <TabsTrigger value="gallery" className="rounded-lg px-6 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            Item Gallery
+          </TabsTrigger>
+        </TabsList>
 
-        {isLoadingPosts ? (
-          <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
-        ) : posts?.length === 0 ? (
-          <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
-            <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-medium text-foreground mb-2">No vendors listed yet</h3>
-            <p className="text-muted-foreground">Be the first to share what you're bringing to this event!</p>
+        <TabsContent value="vendors" className="space-y-6 mt-0">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
+              Who's Coming
+              <span className="bg-primary/10 text-primary text-sm py-1 px-3 rounded-full font-sans font-semibold">
+                {posts?.length || 0} Vendors
+              </span>
+            </h2>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {posts?.map((post) => (
-              <div key={post.id} className="bg-card p-6 rounded-2xl border border-border/50 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-4 mb-4">
-                  <Avatar className="w-12 h-12 border-2 border-primary/10">
-                    <AvatarImage src={post.vendorAvatar || ""} />
-                    <AvatarFallback className="bg-secondary text-secondary-foreground">
-                      <User className="w-5 h-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h4 className="font-semibold text-foreground text-lg">{post.vendorName || "Anonymous Vendor"}</h4>
-                    <p className="text-xs text-muted-foreground">{format(new Date(post.createdAt!), 'MMM d, h:mm a')}</p>
+
+          {isLoadingPosts ? (
+            <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+          ) : posts?.length === 0 ? (
+            <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
+              <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No vendors listed yet</h3>
+              <p className="text-muted-foreground">Be the first to share what you're bringing to this event!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {posts?.map((post) => (
+                <div key={post.id} className="bg-card p-6 rounded-2xl border border-border/50 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-4 mb-4">
+                    <Avatar className="w-12 h-12 border-2 border-primary/10">
+                      <AvatarImage src={post.vendorAvatar || ""} />
+                      <AvatarFallback className="bg-secondary text-secondary-foreground">
+                        <User className="w-5 h-5" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h4 className="font-semibold text-foreground text-lg">{post.vendorName || "Anonymous Vendor"}</h4>
+                      <p className="text-xs text-muted-foreground">{format(new Date(post.createdAt!), 'MMM d, h:mm a')}</p>
+                    </div>
+                  </div>
+                  <div className="bg-muted/50 p-4 rounded-xl text-foreground text-sm leading-relaxed">
+                    {post.itemsDescription}
                   </div>
                 </div>
-                <div className="bg-muted/50 p-4 rounded-xl text-foreground text-sm leading-relaxed">
-                  {post.itemsDescription}
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="gallery" className="mt-0">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {posts?.filter(post => post.imageUrl).map((post) => (
+              <div key={`gallery-${post.id}`} className="group relative aspect-square rounded-2xl overflow-hidden border border-border/50 bg-muted">
+                <img 
+                  src={post.imageUrl!} 
+                  alt={post.vendorName || "Vendor item"}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                  <p className="text-white text-sm font-medium line-clamp-1">{post.vendorName}</p>
+                  <p className="text-white/80 text-xs line-clamp-2 mt-1">{post.itemsDescription}</p>
                 </div>
               </div>
             ))}
+            {(!posts || posts.filter(post => post.imageUrl).length === 0) && (
+              <div className="col-span-full py-20 text-center bg-card border border-dashed border-border rounded-2xl">
+                <p className="text-muted-foreground">No item photos shared yet.</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
