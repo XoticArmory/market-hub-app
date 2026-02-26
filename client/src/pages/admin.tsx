@@ -3,13 +3,16 @@ import { useAdminSettings, useAdminUsers, useUpsertSetting, useClaimAdmin } from
 import { useProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShieldCheck, Settings, Users, DollarSign, Loader2, User, BarChart3, CalendarDays, Package, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ShieldCheck, Settings, Users, DollarSign, Loader2, User, BarChart3, CalendarDays, Package, Trash2, TrendingUp, RefreshCw, CreditCard, CheckCircle, XCircle, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -59,73 +62,84 @@ function useAdminRegistrations() {
   });
 }
 
-function StatCard({ label, value, sub }: { label: string; value: any; sub?: string }) {
+function useSquarePayments() {
+  return useQuery<any[]>({
+    queryKey: ["/api/admin/square/payments"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/square/payments", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    retry: false,
+  });
+}
+
+function StatCard({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
   return (
     <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm">
-      <p className="text-sm text-muted-foreground font-medium">{label}</p>
+      <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-3xl font-bold text-foreground mt-1">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }
 
 export default function AdminPage() {
-  const { isAuthenticated } = useAuth();
-  const { data: profileData, isLoading: loadingProfile } = useProfile();
-  const { data: settings, isLoading: loadingSettings } = useAdminSettings();
+  const { user } = useAuth();
+  const { data: profileData } = useProfile();
+  const profile = profileData?.profile;
+  const { data: settings } = useAdminSettings();
   const { data: users, isLoading: loadingUsers } = useAdminUsers();
+  const { mutate: upsertSetting, isPending: savingSetting } = useUpsertSetting();
+  const { mutate: claimAdmin, isPending: claimingAdmin } = useClaimAdmin();
   const { data: stats, isLoading: loadingStats } = useAdminStats();
   const { data: allEvents, isLoading: loadingEvents } = useAdminAllEvents();
   const { data: registrations, isLoading: loadingRegs } = useAdminRegistrations();
-  const { mutate: upsertSetting, isPending: savingSetting } = useUpsertSetting();
-  const { mutate: claimAdmin, isPending: claimingAdmin } = useClaimAdmin();
+  const { data: squarePayments, isLoading: loadingSquare, refetch: refetchPayments } = useSquarePayments();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
 
   const [settingInputs, setSettingInputs] = useState<Record<string, string>>({});
-
-  const isAdmin = profileData?.profile?.isAdmin === true;
-
-  const deleteEvent = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`/api/admin/events/${id}`, { method: "DELETE", credentials: "include" });
-      if (!res.ok) throw new Error("Failed to delete");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/events"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      toast({ title: "Event deleted" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
+  const [refundDialog, setRefundDialog] = useState<{ paymentId: string; amount: number } | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [subDialog, setSubDialog] = useState<any>(null);
+  const [subTier, setSubTier] = useState("free");
+  const [subStatus, setSubStatus] = useState("active");
 
   const toggleAdmin = useMutation({
-    mutationFn: async ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) => {
-      const res = await fetch(`/api/admin/users/${userId}/admin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isAdmin }),
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed");
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] }),
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    mutationFn: ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) =>
+      apiRequest("POST", `/api/admin/users/${userId}/admin`, { isAdmin }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/users"] }); toast({ title: "Admin access updated." }); },
   });
 
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border shadow-lg space-y-6">
-        <ShieldCheck className="w-16 h-16 text-amber-500 mx-auto" />
-        <h2 className="text-3xl font-display font-bold">Admin Panel</h2>
-        <Button asChild size="lg" className="w-full rounded-xl"><a href="/api/login">Sign In</a></Button>
-      </div>
-    );
-  }
+  const deleteEvent = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/events/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/events"] }); toast({ title: "Event deleted." }); },
+  });
 
-  if (loadingProfile) return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+  const issueRefund = useMutation({
+    mutationFn: ({ paymentId, amountCents, reason }: any) =>
+      apiRequest("POST", "/api/admin/square/refund", { paymentId, amountCents, reason }),
+    onSuccess: () => {
+      toast({ title: "Refund issued successfully." });
+      setRefundDialog(null);
+      qc.invalidateQueries({ queryKey: ["/api/admin/square/payments"] });
+    },
+    onError: (e: any) => toast({ title: "Refund failed", description: e.message, variant: "destructive" }),
+  });
 
-  if (!isAdmin) {
+  const updateSubscription = useMutation({
+    mutationFn: ({ userId, tier, status }: any) =>
+      apiRequest("POST", "/api/admin/square/activate-subscription", { userId, tier, status }),
+    onSuccess: () => {
+      toast({ title: "Subscription updated." });
+      setSubDialog(null);
+      qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
+    },
+    onError: (e: any) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  if (!profile?.isAdmin) {
     return (
       <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border shadow-lg space-y-6">
         <ShieldCheck className="w-16 h-16 text-amber-500 mx-auto" />
@@ -140,11 +154,18 @@ export default function AdminPage() {
     );
   }
 
-  const tierKeys = [
-    { key: "stripe_price_event_owner_pro", label: "Event Owner Pro Price ID ($19.95/mo)" },
-    { key: "stripe_price_vendor_pro", label: "Vendor Pro Price ID ($9.95/mo)" },
-    { key: "stripe_price_general_pro", label: "General Pro Price ID ($4.95/mo)" },
+  const squareKeys = [
+    { key: "square_location_id", label: "Square Location ID", placeholder: "LXX...", hint: "Found in Square Dashboard → Account & Settings → Locations" },
+    { key: "square_application_id", label: "Square Application ID (optional)", placeholder: "sq0idp-...", hint: "Found in Square Developer Console → Applications" },
   ];
+
+  const squareTotalRevenue = (squarePayments || [])
+    .filter((p: any) => p.status === 'COMPLETED')
+    .reduce((sum: number, p: any) => sum + (p.amountMoney?.amount || 0), 0);
+
+  const squareTodayRevenue = (squarePayments || [])
+    .filter((p: any) => p.status === 'COMPLETED' && new Date(p.createdAt).toDateString() === new Date().toDateString())
+    .reduce((sum: number, p: any) => sum + (p.amountMoney?.amount || 0), 0);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
@@ -159,12 +180,13 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 rounded-xl h-12 flex-wrap">
-          <TabsTrigger value="dashboard" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><BarChart3 className="w-4 h-4" />Dashboard</TabsTrigger>
-          <TabsTrigger value="users" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Users className="w-4 h-4" />Users</TabsTrigger>
-          <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><CalendarDays className="w-4 h-4" />Events</TabsTrigger>
-          <TabsTrigger value="payments" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><DollarSign className="w-4 h-4" />Payments</TabsTrigger>
-          <TabsTrigger value="settings" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Settings className="w-4 h-4" />Settings</TabsTrigger>
+        <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap gap-1">
+          <TabsTrigger value="dashboard" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><BarChart3 className="w-4 h-4" />Dashboard</TabsTrigger>
+          <TabsTrigger value="financials" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2" data-testid="tab-financials"><DollarSign className="w-4 h-4" />Financials</TabsTrigger>
+          <TabsTrigger value="users" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Users className="w-4 h-4" />Users</TabsTrigger>
+          <TabsTrigger value="events" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><CalendarDays className="w-4 h-4" />Events</TabsTrigger>
+          <TabsTrigger value="payments" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Package className="w-4 h-4" />Registrations</TabsTrigger>
+          <TabsTrigger value="settings" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Settings className="w-4 h-4" />Settings</TabsTrigger>
         </TabsList>
 
         {/* DASHBOARD */}
@@ -227,10 +249,97 @@ export default function AdminPage() {
           )}
         </TabsContent>
 
+        {/* FINANCIALS */}
+        <TabsContent value="financials" className="mt-0 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Square Financials</h2>
+              <p className="text-sm text-muted-foreground">Live data from your Square account. Configure Square in Settings to enable.</p>
+            </div>
+            <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => refetchPayments()} data-testid="button-refresh-payments">
+              <RefreshCw className="w-4 h-4" />Refresh
+            </Button>
+          </div>
+
+          {loadingSquare ? (
+            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+          ) : (squarePayments || []).length === 0 ? (
+            <Card>
+              <CardContent className="py-16 text-center">
+                <CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-40" />
+                <p className="font-semibold text-muted-foreground mb-2">No Square transactions found</p>
+                <p className="text-sm text-muted-foreground">Configure your Square Access Token and Location ID in Settings, then payments will appear here.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard label="Total Revenue" value={`$${(squareTotalRevenue / 100).toFixed(2)}`} />
+                <StatCard label="Today's Revenue" value={`$${(squareTodayRevenue / 100).toFixed(2)}`} />
+                <StatCard label="Total Transactions" value={(squarePayments || []).filter((p: any) => p.status === 'COMPLETED').length} />
+                <StatCard label="Pending" value={(squarePayments || []).filter((p: any) => p.status !== 'COMPLETED').length} />
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-primary" />Transaction History</CardTitle>
+                  <CardDescription>Recent Square payments. Click Refund to issue a refund for any completed payment.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-3 font-semibold text-muted-foreground">Date</th>
+                          <th className="text-left py-3 px-3 font-semibold text-muted-foreground">ID</th>
+                          <th className="text-right py-3 px-3 font-semibold text-muted-foreground">Amount</th>
+                          <th className="text-center py-3 px-3 font-semibold text-muted-foreground">Status</th>
+                          <th className="py-3 px-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(squarePayments || []).map((payment: any) => (
+                          <tr key={payment.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors" data-testid={`payment-row-${payment.id}`}>
+                            <td className="py-3 px-3 text-muted-foreground text-xs">{payment.createdAt ? format(new Date(payment.createdAt), "MMM d, yyyy h:mm a") : "—"}</td>
+                            <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{payment.id?.slice(0, 12)}...</td>
+                            <td className="py-3 px-3 text-right font-semibold">${((payment.amountMoney?.amount || 0) / 100).toFixed(2)}</td>
+                            <td className="py-3 px-3 text-center">
+                              {payment.status === 'COMPLETED' ? (
+                                <Badge className="bg-green-500 text-white gap-1"><CheckCircle className="w-3 h-3" />Completed</Badge>
+                              ) : payment.status === 'CANCELED' ? (
+                                <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" />Canceled</Badge>
+                              ) : (
+                                <Badge variant="outline">{payment.status}</Badge>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              {payment.status === 'COMPLETED' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs rounded-lg gap-1"
+                                  onClick={() => { setRefundDialog({ paymentId: payment.id, amount: payment.amountMoney?.amount || 0 }); setRefundAmount(""); }}
+                                  data-testid={`button-refund-${payment.id}`}
+                                >
+                                  <RotateCcw className="w-3 h-3" />Refund
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
+
         {/* USERS */}
-        <TabsContent value="users" className="mt-0">
+        <TabsContent value="users" className="mt-0 space-y-6">
           <Card>
-            <CardHeader><CardTitle>All Users</CardTitle><CardDescription>View and manage all registered users, their tiers, and admin access.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>All Users</CardTitle><CardDescription>View and manage all registered users, their tiers, and admin access. Use "Set Subscription" to manually activate/change subscription status.</CardDescription></CardHeader>
             <CardContent>
               {loadingUsers ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div> : (
                 <div className="space-y-3">
@@ -249,14 +358,25 @@ export default function AdminPage() {
                         </Badge>
                         {u.isAdmin && <Badge className="bg-amber-500 text-white">Admin</Badge>}
                       </div>
-                      <Button
-                        size="sm"
-                        variant={u.isAdmin ? "destructive" : "outline"}
-                        className="rounded-xl text-xs h-8 shrink-0"
-                        onClick={() => toggleAdmin.mutate({ userId: u.userId, isAdmin: !u.isAdmin })}
-                      >
-                        {u.isAdmin ? "Remove Admin" : "Make Admin"}
-                      </Button>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl text-xs h-8"
+                          onClick={() => { setSubDialog(u); setSubTier(u.subscriptionTier || 'free'); setSubStatus(u.subscriptionStatus === 'active' ? 'active' : 'inactive'); }}
+                          data-testid={`button-sub-${u.userId}`}
+                        >
+                          <CreditCard className="w-3 h-3 mr-1" />Subscription
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={u.isAdmin ? "destructive" : "outline"}
+                          className="rounded-xl text-xs h-8"
+                          onClick={() => toggleAdmin.mutate({ userId: u.userId, isAdmin: !u.isAdmin })}
+                        >
+                          {u.isAdmin ? "Remove Admin" : "Make Admin"}
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   {(users || []).length === 0 && <p className="text-muted-foreground text-sm">No users found.</p>}
@@ -282,12 +402,7 @@ export default function AdminPage() {
                         <p className="text-xs text-muted-foreground">By {e.creatorName} · {e.attendingCount} attending</p>
                       </div>
                       {e.areaCode && <Badge variant="outline">{e.areaCode}</Badge>}
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="rounded-xl h-8 shrink-0"
-                        onClick={() => deleteEvent.mutate(e.id)}
-                      >
+                      <Button size="sm" variant="destructive" className="rounded-xl h-8 shrink-0" onClick={() => deleteEvent.mutate(e.id)}>
                         <Trash2 className="w-3 h-3 mr-1" />Delete
                       </Button>
                     </div>
@@ -299,10 +414,10 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* PAYMENTS */}
+        {/* REGISTRATIONS */}
         <TabsContent value="payments" className="mt-0">
           <Card>
-            <CardHeader><CardTitle>Vendor Registrations</CardTitle><CardDescription>All vendor space bookings and fees collected.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Vendor Space Registrations</CardTitle><CardDescription>All vendor space bookings and platform fees collected.</CardDescription></CardHeader>
             <CardContent>
               {loadingRegs ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div> : (
                 <>
@@ -340,17 +455,26 @@ export default function AdminPage() {
         {/* SETTINGS */}
         <TabsContent value="settings" className="mt-0 space-y-6">
           <Card>
-            <CardHeader><CardTitle>Stripe Price Configuration</CardTitle><CardDescription>Set the Stripe Price IDs for each pro subscription tier. Find these in your Stripe Dashboard under Products.</CardDescription></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-black rounded flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">SQ</span>
+                </div>
+                Square Configuration
+              </CardTitle>
+              <CardDescription>Configure your Square account credentials. The Access Token must be set as the <code className="bg-muted px-1 rounded text-xs">SQUARE_ACCESS_TOKEN</code> secret in environment settings.</CardDescription>
+            </CardHeader>
             <CardContent className="space-y-6">
-              {tierKeys.map(({ key, label }) => {
+              {squareKeys.map(({ key, label, placeholder, hint }) => {
                 const current = (settings || []).find((s: any) => s.key === key)?.value;
                 return (
                   <div key={key} className="space-y-2">
                     <label className="text-sm font-semibold block">{label}</label>
-                    {current && <p className="text-xs font-mono text-muted-foreground bg-muted p-2 rounded-lg">{current}</p>}
+                    {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+                    {current && <p className="text-xs font-mono text-muted-foreground bg-muted p-2 rounded-lg break-all">Current: {current}</p>}
                     <div className="flex gap-3">
                       <Input
-                        placeholder="price_..."
+                        placeholder={placeholder}
                         value={settingInputs[key] || ""}
                         onChange={e => setSettingInputs(p => ({ ...p, [key]: e.target.value }))}
                         className="rounded-xl font-mono text-sm"
@@ -367,26 +491,44 @@ export default function AdminPage() {
                   </div>
                 );
               })}
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200">
-                <p className="font-semibold mb-2">Quick Setup:</p>
-                <ol className="list-decimal list-inside space-y-1 text-amber-700 dark:text-amber-300 text-xs">
-                  <li>Connect your Stripe account via the Replit Stripe integration</li>
-                  <li>Create 3 monthly recurring products in Stripe Dashboard</li>
-                  <li>Copy each Price ID (starts with <code>price_</code>) and paste above</li>
-                  <li>Set <code>STRIPE_WEBHOOK_SECRET</code> in environment secrets</li>
-                  <li>Set <code>ADMIN_EMAILS</code> to your email address (currently controls admin access)</li>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
+                <p className="font-semibold mb-2">Square Setup Steps:</p>
+                <ol className="list-decimal list-inside space-y-1 text-blue-700 dark:text-blue-300 text-xs">
+                  <li>Sign in to <strong>squareup.com/dashboard</strong></li>
+                  <li>Go to <strong>Account & Settings → Locations</strong> and copy your Location ID</li>
+                  <li>Go to <strong>Developer Console → Applications</strong> for your Application ID</li>
+                  <li>Add <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">SQUARE_ACCESS_TOKEN</code> (Production access token) as a secret in environment settings</li>
+                  <li>Optionally configure a Square webhook pointing to <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">/api/square/webhook</code></li>
                 </ol>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Environment Variables</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Pricing</CardTitle><CardDescription>Current subscription prices. These are fixed and applied when generating Square payment links.</CardDescription></CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[
+                  { tier: "Event Owner Pro", price: "$19.95/mo", key: "event_owner_pro" },
+                  { tier: "Vendor Pro", price: "$9.95/mo", key: "vendor_pro" },
+                  { tier: "General Pro", price: "$4.95/mo", key: "general_pro" },
+                ].map(item => (
+                  <div key={item.key} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
+                    <span className="font-medium text-sm">{item.tier}</span>
+                    <Badge variant="secondary" className="font-mono">{item.price}</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Required Environment Secrets</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {[
-                  { key: "STRIPE_SECRET_KEY", desc: "Your Stripe secret key" },
-                  { key: "STRIPE_WEBHOOK_SECRET", desc: "Your Stripe webhook endpoint secret" },
+                  { key: "SQUARE_ACCESS_TOKEN", desc: "Your Square production access token (required for payments)" },
                   { key: "ADMIN_EMAILS", desc: "Comma-separated admin emails (e.g. you@email.com)" },
                   { key: "SESSION_SECRET", desc: "Random session signing secret" },
                 ].map(item => (
@@ -400,6 +542,88 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* REFUND DIALOG */}
+      <Dialog open={!!refundDialog} onOpenChange={() => setRefundDialog(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>Issue Refund</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">Payment ID: <code className="bg-muted px-1 rounded text-xs">{refundDialog?.paymentId}</code></p>
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Refund Amount ($) — leave blank for full refund</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder={`Max: $${((refundDialog?.amount || 0) / 100).toFixed(2)}`}
+                value={refundAmount}
+                onChange={e => setRefundAmount(e.target.value)}
+                className="rounded-xl"
+                data-testid="input-refund-amount"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setRefundDialog(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                className="flex-1 rounded-xl"
+                disabled={issueRefund.isPending}
+                onClick={() => issueRefund.mutate({
+                  paymentId: refundDialog!.paymentId,
+                  amountCents: refundAmount ? Math.round(parseFloat(refundAmount) * 100) : undefined,
+                  reason: "Admin-issued refund",
+                })}
+                data-testid="button-confirm-refund"
+              >
+                {issueRefund.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</> : "Confirm Refund"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* SUBSCRIPTION MANAGEMENT DIALOG */}
+      <Dialog open={!!subDialog} onOpenChange={() => setSubDialog(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>Manage Subscription</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">User: <strong>{subDialog?.user?.firstName} {subDialog?.user?.lastName}</strong> ({subDialog?.user?.email})</p>
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Subscription Tier</label>
+              <Select value={subTier} onValueChange={setSubTier}>
+                <SelectTrigger className="rounded-xl" data-testid="select-sub-tier"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="event_owner_pro">Event Owner Pro ($19.95/mo)</SelectItem>
+                  <SelectItem value="vendor_pro">Vendor Pro ($9.95/mo)</SelectItem>
+                  <SelectItem value="general_pro">General Pro ($4.95/mo)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Status</label>
+              <Select value={subStatus} onValueChange={setSubStatus}>
+                <SelectTrigger className="rounded-xl" data-testid="select-sub-status"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setSubDialog(null)}>Cancel</Button>
+              <Button
+                className="flex-1 rounded-xl"
+                disabled={updateSubscription.isPending}
+                onClick={() => updateSubscription.mutate({ userId: subDialog.userId, tier: subTier, status: subStatus })}
+                data-testid="button-save-subscription"
+              >
+                {updateSubscription.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

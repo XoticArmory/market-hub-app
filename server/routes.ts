@@ -5,11 +5,23 @@ import { api, PRO_TIERS } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
-import Stripe from "stripe";
+import { SquareClient, SquareEnvironment } from "square";
 
-function getStripe(): Stripe | null {
-  if (!process.env.STRIPE_SECRET_KEY) return null;
-  return new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2026-02-25.clover" });
+function getSquare(): SquareClient | null {
+  if (!process.env.SQUARE_ACCESS_TOKEN) return null;
+  return new SquareClient({
+    token: process.env.SQUARE_ACCESS_TOKEN,
+    environment: SquareEnvironment.Production,
+  });
+}
+
+function squareJson(obj: any): any {
+  return JSON.parse(JSON.stringify(obj, (_, v) => (typeof v === 'bigint' ? Number(v) : v)));
+}
+
+async function getSquareLocationId(): Promise<string> {
+  const stored = await storage.getAdminSetting('square_location_id');
+  return stored || process.env.SQUARE_LOCATION_ID || '';
 }
 
 function getHost(req: any): string {
@@ -31,7 +43,7 @@ async function enrichUser(userId: string) {
 }
 
 function tierPriceKey(tier: string): string {
-  return `stripe_price_${tier}`;
+  return `square_plan_${tier}`;
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
@@ -351,17 +363,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     if (spotPriceCents > 0) {
-      const stripe = getStripe();
-      if (stripe) {
+      const square = getSquare();
+      if (square) {
         try {
           const totalCents = spotPriceCents + feeCents;
-          const pi = await stripe.paymentIntents.create({
-            amount: totalCents,
-            currency: 'usd',
-            metadata: { registrationId: reg.id.toString(), eventId: eventId.toString(), vendorId: userId },
+          const locationId = await getSquareLocationId();
+          const response = await square.checkout.paymentLinks.create({
+            idempotencyKey: `reg-${reg.id}-${Date.now()}`,
+            order: {
+              locationId: locationId || 'DEFAULT',
+              lineItems: [{
+                name: `Vendor Space${spotName ? `: ${spotName}` : ''} — ${event.title}`,
+                quantity: "1",
+                basePriceMoney: { amount: BigInt(totalCents), currency: "USD" },
+                note: `registrationId:${reg.id}|eventId:${eventId}|vendorId:${userId}`,
+              }],
+            },
+            checkoutOptions: {
+              redirectUrl: `${getHost(req)}/events/${eventId}?registered=1`,
+            },
           });
-          await storage.updateRegistrationStatus(reg.id, 'pending', pi.id);
-          return res.json({ ...reg, clientSecret: pi.client_secret, totalCents, feeCents });
+          const checkoutUrl = response.paymentLink?.url;
+          const paymentLinkId = response.paymentLink?.id;
+          await storage.updateRegistrationStatus(reg.id, 'pending', paymentLinkId || null);
+          return res.json({ ...reg, checkoutUrl, totalCents, feeCents });
         } catch (e: any) {
           return res.status(500).json({ message: e.message });
         }
@@ -552,65 +577,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
-  // ---- STRIPE ROUTES ----
-  app.get(api.stripe.subscriptionStatus.path, isAuthenticated, async (req: any, res) => {
+  // ---- SQUARE ROUTES ----
+  app.get(api.square.subscriptionStatus.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
     res.json({ status: profile?.subscriptionStatus || 'inactive', tier: profile?.subscriptionTier || 'free', subscriptionId: profile?.stripeSubscriptionId });
   });
 
-  // Upgrade checkout for pro tiers
-  app.post(api.stripe.upgradeCheckout.path, isAuthenticated, async (req: any, res) => {
-    const stripe = getStripe();
-    if (!stripe) return res.status(503).json({ message: "Stripe not configured. Ask the admin to set up payments." });
-    const { tier } = req.body;
-    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
-      return res.status(400).json({ message: "Invalid tier." });
-    }
-    const userId = req.user.claims.sub;
-    const user = await authStorage.getUser(userId);
-    const priceId = await storage.getAdminSetting(tierPriceKey(tier));
-    if (!priceId) return res.status(503).json({ message: `Price not configured for ${tier}. Contact admin to set up ${tierPriceKey(tier)}.` });
-    const profile = await storage.getUserProfile(userId);
-    let customerId = profile?.stripeCustomerId;
-    if (!customerId) {
-      const customer = await stripe.customers.create({ email: user?.email || undefined, metadata: { userId } });
-      customerId = customer.id;
-      await storage.upsertUserProfile(userId, { stripeCustomerId: customerId });
-    }
-    // Accept terms before checkout
-    await storage.acceptTerms(userId, tier);
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
-      mode: 'subscription',
-      success_url: `${getHost(req)}/profile?subscribed=${tier}`,
-      cancel_url: `${getHost(req)}/upgrade?canceled=1`,
-      metadata: { userId, tier },
-    });
-    res.json({ url: session.url });
-  });
-
-  // Legacy checkout (kept for backward compat)
-  app.post(api.stripe.createCheckout.path, isAuthenticated, async (req: any, res) => {
-    return res.redirect(307, '/api/stripe/upgrade');
-  });
-
-  app.post(api.stripe.portalSession.path, isAuthenticated, async (req: any, res) => {
-    const stripe = getStripe();
-    if (!stripe) return res.status(503).json({ message: "Stripe not configured." });
-    const userId = req.user.claims.sub;
-    const profile = await storage.getUserProfile(userId);
-    if (!profile?.stripeCustomerId) return res.status(400).json({ message: "No billing account found." });
-    const session = await stripe.billingPortal.sessions.create({
-      customer: profile.stripeCustomerId,
-      return_url: `${getHost(req)}/profile`,
-    });
-    res.json({ url: session.url });
-  });
-
-  app.post(api.stripe.acceptTerms.path, isAuthenticated, async (req: any, res) => {
+  app.post(api.square.acceptTerms.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { tier } = req.body;
     if (!tier) return res.status(400).json({ message: "Tier required." });
@@ -618,52 +592,178 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
-  // Stripe webhook
-  app.post('/api/stripe/webhook', async (req: any, res) => {
-    const stripe = getStripe();
-    if (!stripe) return res.status(503).end();
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    let event: Stripe.Event;
+  app.post(api.square.upgradeCheckout.path, isAuthenticated, async (req: any, res) => {
+    const square = getSquare();
+    if (!square) return res.status(503).json({ message: "Square not configured. Ask the admin to add SQUARE_ACCESS_TOKEN." });
+    const { tier } = req.body;
+    const tierInfo = PRO_TIERS[tier as keyof typeof PRO_TIERS];
+    if (!tierInfo) return res.status(400).json({ message: "Invalid tier." });
+    const userId = req.user.claims.sub;
+    const user = await authStorage.getUser(userId);
+    const locationId = await getSquareLocationId();
+    if (!locationId) return res.status(503).json({ message: "Square Location ID not configured. Set it in Admin → Settings." });
+    await storage.acceptTerms(userId, tier);
     try {
-      const sig = req.headers['stripe-signature'] as string;
-      event = webhookSecret
-        ? stripe.webhooks.constructEvent(req.rawBody as Buffer, sig, webhookSecret)
-        : JSON.parse(req.rawBody?.toString() || '{}');
+      const response = await square.checkout.paymentLinks.create({
+        idempotencyKey: `upgrade-${userId}-${tier}-${Date.now()}`,
+        order: {
+          locationId,
+          lineItems: [{
+            name: `${tierInfo.label} — Monthly Subscription`,
+            quantity: "1",
+            basePriceMoney: { amount: BigInt(tierInfo.price), currency: "USD" },
+            note: `userId:${userId}|tier:${tier}`,
+          }],
+        },
+        checkoutOptions: {
+          redirectUrl: `${getHost(req)}/profile?subscribed=${tier}`,
+        },
+        prePopulatedData: { buyerEmail: user?.email || undefined },
+      });
+      const url = response.paymentLink?.url;
+      if (!url) return res.status(500).json({ message: "Failed to create Square payment link." });
+      res.json({ url });
     } catch (e: any) {
-      return res.status(400).json({ message: e.message });
+      return res.status(500).json({ message: e.message || "Square error" });
     }
-    const getCustomerProfile = async (customerId: string) => {
-      const profiles = await storage.getAllUserProfiles();
-      return profiles.find(p => p.stripeCustomerId === customerId);
-    };
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const tier = session.metadata?.tier;
-      const userId = session.metadata?.userId;
-      if (tier && userId) {
-        await storage.upsertUserProfile(userId, {
-          subscriptionTier: tier as any,
-          subscriptionStatus: 'active',
-          stripeSubscriptionId: session.subscription as string,
-        });
-      }
+  });
+
+  app.post(api.square.subscriptionComplete.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { tier } = req.body;
+    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+      return res.status(400).json({ message: "Invalid tier." });
     }
-    if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.created') {
-      const sub = event.data.object as Stripe.Subscription;
-      const profile = await getCustomerProfile(sub.customer as string);
-      if (profile) {
-        const status = sub.status === 'active' ? 'active' : 'inactive';
-        await storage.upsertUserProfile(profile.userId, { stripeSubscriptionId: sub.id, subscriptionStatus: status });
-      }
+    await storage.upsertUserProfile(userId, {
+      subscriptionTier: tier as any,
+      subscriptionStatus: 'active',
+    });
+    res.json({ success: true });
+  });
+
+  app.post(api.square.manageSubscription.path, isAuthenticated, async (req: any, res) => {
+    const square = getSquare();
+    if (!square) return res.status(503).json({ message: "Square not configured." });
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    if (!profile?.stripeSubscriptionId) {
+      return res.json({ url: "https://squareup.com/dashboard" });
     }
-    if (event.type === 'customer.subscription.deleted') {
-      const sub = event.data.object as Stripe.Subscription;
-      const profile = await getCustomerProfile(sub.customer as string);
-      if (profile) {
-        await storage.upsertUserProfile(profile.userId, { subscriptionStatus: 'canceled', subscriptionTier: 'free' });
+    res.json({ url: "https://squareup.com/dashboard" });
+  });
+
+  // Square webhook
+  app.post('/api/square/webhook', async (req: any, res) => {
+    try {
+      const body = req.body;
+      const eventType = body?.type;
+      if (eventType === 'payment.completed') {
+        const payment = body?.data?.object?.payment;
+        if (payment) {
+          const square = getSquare();
+          if (square && payment.orderId) {
+            const orderResponse = await square.orders.get({ orderId: payment.orderId });
+            const lineItems = orderResponse.order?.lineItems || [];
+            for (const item of lineItems) {
+              const note = item.note || '';
+              const userIdMatch = note.match(/userId:([^|]+)/);
+              const tierMatch = note.match(/tier:([^|]+)/);
+              if (userIdMatch && tierMatch) {
+                const userId = userIdMatch[1];
+                const tier = tierMatch[1];
+                if (['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+                  await storage.upsertUserProfile(userId, {
+                    subscriptionTier: tier as any,
+                    subscriptionStatus: 'active',
+                    stripeSubscriptionId: payment.id,
+                  });
+                }
+              }
+            }
+          }
+        }
       }
+      if (eventType === 'subscription.created' || eventType === 'subscription.updated') {
+        const subscription = body?.data?.object?.subscription;
+        if (subscription?.subscriberId) {
+          const profiles = await storage.getAllUserProfiles();
+          const profile = profiles.find(p => p.stripeCustomerId === subscription.subscriberId);
+          if (profile) {
+            const status = subscription.status === 'ACTIVE' ? 'active' : 'inactive';
+            await storage.upsertUserProfile(profile.userId, { stripeSubscriptionId: subscription.id, subscriptionStatus: status });
+          }
+        }
+      }
+      if (eventType === 'subscription.deactivated') {
+        const subscription = body?.data?.object?.subscription;
+        if (subscription?.subscriberId) {
+          const profiles = await storage.getAllUserProfiles();
+          const profile = profiles.find(p => p.stripeCustomerId === subscription.subscriberId);
+          if (profile) {
+            await storage.upsertUserProfile(profile.userId, { subscriptionStatus: 'inactive', subscriptionTier: 'free' });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Square webhook error:', e);
     }
     res.json({ received: true });
+  });
+
+  // ---- ADMIN SQUARE FINANCIAL ROUTES ----
+  app.get('/api/admin/square/payments', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const square = getSquare();
+    if (!square) return res.status(503).json({ message: "Square not configured." });
+    const locationId = await getSquareLocationId();
+    try {
+      const response = await square.payments.list({
+        locationId: locationId || undefined,
+        limit: 50,
+      });
+      const allPayments: any[] = [];
+      for await (const item of response) {
+        allPayments.push(item);
+        if (allPayments.length >= 50) break;
+      }
+      res.json(squareJson(allPayments));
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post('/api/admin/square/refund', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const square = getSquare();
+    if (!square) return res.status(503).json({ message: "Square not configured." });
+    const { paymentId, amountCents, reason } = req.body;
+    if (!paymentId) return res.status(400).json({ message: "paymentId required." });
+    try {
+      const payment = await square.payments.get({ paymentId });
+      const amountToRefund = amountCents ? BigInt(amountCents) : payment.payment?.amountMoney?.amount;
+      const response = await square.refunds.refundPayment({
+        idempotencyKey: `refund-${paymentId}-${Date.now()}`,
+        paymentId,
+        amountMoney: { amount: amountToRefund, currency: "USD" },
+        reason: reason || "Admin-initiated refund",
+      });
+      res.json(squareJson(response.refund));
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post('/api/admin/square/activate-subscription', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { userId, tier, status } = req.body;
+    if (!userId || !tier) return res.status(400).json({ message: "userId and tier required." });
+    const validTier = ['event_owner_pro', 'vendor_pro', 'general_pro', 'free'].includes(tier) ? tier : 'free';
+    const validStatus = status === 'active' ? 'active' : 'inactive';
+    await storage.upsertUserProfile(userId, {
+      subscriptionTier: validTier as any,
+      subscriptionStatus: validStatus,
+    });
+    res.json({ success: true });
   });
 
   return httpServer;

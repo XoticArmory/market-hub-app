@@ -3,9 +3,9 @@ import { useToast } from "@/hooks/use-toast";
 
 export function useSubscriptionStatus() {
   return useQuery({
-    queryKey: ["/api/stripe/subscription"],
+    queryKey: ["/api/square/subscription"],
     queryFn: async () => {
-      const res = await fetch("/api/stripe/subscription", { credentials: "include" });
+      const res = await fetch("/api/square/subscription", { credentials: "include" });
       if (res.status === 401) return null;
       if (!res.ok) return null;
       return res.json();
@@ -18,7 +18,7 @@ export function useCreateCheckout() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/stripe/checkout", { method: "POST", credentials: "include" });
+      const res = await fetch("/api/square/upgrade", { method: "POST", credentials: "include" });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json() as Promise<{ url: string }>;
     },
@@ -31,7 +31,7 @@ export function usePortalSession() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/stripe/portal", { method: "POST", credentials: "include" });
+      const res = await fetch("/api/square/manage", { method: "POST", credentials: "include" });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json() as Promise<{ url: string }>;
     },
