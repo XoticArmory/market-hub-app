@@ -8,8 +8,12 @@ Key features:
 - Browse and create artisan market events (all authenticated users, no fee required)
 - 3 Pro subscription tiers: Event Owner Pro ($19.95/mo), Vendor Pro ($9.95/mo), General Pro ($4.95/mo)
 - Event Owner Pro: push notifications to local Vendor Pros, event analytics, interactive map builder, boosted listings
-- Vendor Pro: 0% platform fee on space registrations, notification receipt
-- Vendor space registration with Stripe payment (0.5% platform fee for non-Vendor Pro accounts)
+- Vendor Pro: 0% platform fee on space registrations, notification receipt, full Vendor Analytics dashboard
+- Vendor Analytics (Vendor Pro + Admin): events attended, profile view count, per-event inventory tracking (items brought/sold/price), sales summary, revenue calculation
+- Profile view tracking: automatically logged when authenticated users view another user's profile
+- Vendor inventory management: add/edit/delete items per event with quantities and prices
+- Admin all-access: admin users get all Pro tier features enabled (event owner + vendor + general pro), with all fees waived on vendor space registrations
+- Vendor space registration with Stripe payment (0.5% platform fee for non-Vendor Pro/non-Admin accounts)
 - Interactive event map editor (grid-based vendor spot placement)
 - In-app push notifications (polling, not browser push API)
 - Admin panel with stats by area code, user management, revenue tracking, Stripe price configuration

@@ -115,6 +115,25 @@ export const termsAcceptances = pgTable("terms_acceptances", {
   acceptedAt: timestamp("accepted_at").defaultNow(),
 });
 
+export const profileViews = pgTable("profile_views", {
+  id: serial("id").primaryKey(),
+  profileUserId: varchar("profile_user_id").notNull().references(() => users.id),
+  viewerUserId: varchar("viewer_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const vendorInventory = pgTable("vendor_inventory", {
+  id: serial("id").primaryKey(),
+  vendorId: varchar("vendor_id").notNull().references(() => users.id),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  itemName: text("item_name").notNull(),
+  quantityBrought: integer("quantity_brought").notNull().default(0),
+  quantitySold: integer("quantity_sold").notNull().default(0),
+  priceCents: integer("price_cents").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ---- Schemas ----
 export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
 export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdBy: true, createdAt: true, vendorSpacesUsed: true });
@@ -124,6 +143,7 @@ export const insertVendorPostSchema = createInsertSchema(vendorPosts).omit({ id:
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, senderId: true, createdAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertVendorRegistrationSchema = createInsertSchema(vendorRegistrations).omit({ id: true, createdAt: true });
+export const insertVendorInventorySchema = createInsertSchema(vendorInventory).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
 
 // ---- Types ----
 export type UserProfile = typeof userProfiles.$inferSelect;
@@ -149,6 +169,9 @@ export type Notification = typeof notifications.$inferSelect;
 export type EventMap = typeof eventMaps.$inferSelect;
 export type VendorRegistration = typeof vendorRegistrations.$inferSelect;
 export type TermsAcceptance = typeof termsAcceptances.$inferSelect;
+export type ProfileView = typeof profileViews.$inferSelect;
+export type VendorInventoryItem = typeof vendorInventory.$inferSelect;
+export type InsertVendorInventory = z.infer<typeof insertVendorInventorySchema>;
 
 // ---- API Contract Types ----
 export type EventResponse = Event & {

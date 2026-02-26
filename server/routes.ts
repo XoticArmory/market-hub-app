@@ -48,12 +48,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ profile, user, attendance, unreadCount });
   });
 
-  app.get(api.profile.getById.path, async (req, res) => {
+  app.get(api.profile.getById.path, async (req: any, res) => {
     const { userId } = req.params;
     const profile = await storage.getUserProfile(userId);
     const user = await authStorage.getUser(userId);
     if (!profile && !user) return res.status(404).json({ message: "Profile not found" });
     const attendance = await storage.getUserAttendance(userId);
+    const viewerUserId = req.user?.claims?.sub;
+    if (viewerUserId && viewerUserId !== userId) {
+      storage.recordProfileView(userId, viewerUserId).catch(() => {});
+    }
     res.json({ profile, user, attendance });
   });
 
@@ -331,7 +335,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
     const profile = await storage.getUserProfile(userId);
-    const isPro = profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active';
+    const isPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     const spotPriceCents = event.spotPrice || 0;
     const feeCents = isPro ? 0 : Math.round(spotPriceCents * 0.005);
     const reg = await storage.createVendorRegistration({
@@ -367,6 +371,75 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.updateVendorSpacesUsed(eventId, 1);
     }
     res.json(reg);
+  });
+
+  // ---- PROFILE VIEW TRACKING ----
+  app.post('/api/profile/:userId/view', isAuthenticated, async (req: any, res) => {
+    const viewerUserId = req.user.claims.sub;
+    const { userId } = req.params;
+    await storage.recordProfileView(userId, viewerUserId);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/profile/:userId/views', isAuthenticated, async (req: any, res) => {
+    const requesterId = req.user.claims.sub;
+    const { userId } = req.params;
+    const requesterProfile = await storage.getUserProfile(requesterId);
+    if (userId !== requesterId && !requesterProfile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+    const count = await storage.getProfileViewCount(userId);
+    res.json({ count });
+  });
+
+  // ---- VENDOR ANALYTICS ----
+  app.get('/api/vendor/analytics', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const analytics = await storage.getVendorAnalytics(userId);
+    res.json(analytics);
+  });
+
+  // ---- VENDOR INVENTORY ----
+  app.get('/api/vendor/inventory', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const eventId = req.query.eventId ? Number(req.query.eventId) : undefined;
+    const items = await storage.getVendorInventory(userId, eventId);
+    res.json(items);
+  });
+
+  app.post('/api/vendor/inventory', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const { eventId, itemName, quantityBrought, quantitySold, priceCents } = req.body;
+    if (!eventId || !itemName) return res.status(400).json({ message: "eventId and itemName required" });
+    const item = await storage.createVendorInventoryItem(userId, { eventId: Number(eventId), itemName, quantityBrought: Number(quantityBrought) || 0, quantitySold: Number(quantitySold) || 0, priceCents: Number(priceCents) || 0 });
+    res.json(item);
+  });
+
+  app.patch('/api/vendor/inventory/:id', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const id = Number(req.params.id);
+    const { itemName, quantityBrought, quantitySold, priceCents } = req.body;
+    const item = await storage.updateVendorInventoryItem(id, { itemName, quantityBrought, quantitySold, priceCents });
+    res.json(item);
+  });
+
+  app.delete('/api/vendor/inventory/:id', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    await storage.deleteVendorInventoryItem(Number(req.params.id));
+    res.json({ ok: true });
   });
 
   // ---- ADMIN ROUTES ----

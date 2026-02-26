@@ -2,11 +2,12 @@ import { db } from "./db";
 import { eq, desc, and, inArray, sql, gte } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
-  notifications, eventMaps, vendorRegistrations, termsAcceptances,
+  notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
   type Notification, type EventMap, type VendorRegistration,
+  type VendorInventoryItem, type InsertVendorInventory,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -75,6 +76,17 @@ export interface IStorage {
 
   // Admin Stats
   getAdminStats(): Promise<any>;
+
+  // Profile Views
+  recordProfileView(profileUserId: string, viewerUserId?: string): Promise<void>;
+  getProfileViewCount(profileUserId: string): Promise<number>;
+
+  // Vendor Inventory
+  getVendorInventory(vendorId: string, eventId?: number): Promise<VendorInventoryItem[]>;
+  createVendorInventoryItem(vendorId: string, data: InsertVendorInventory): Promise<VendorInventoryItem>;
+  updateVendorInventoryItem(id: number, data: Partial<InsertVendorInventory>): Promise<VendorInventoryItem>;
+  deleteVendorInventoryItem(id: number): Promise<void>;
+  getVendorAnalytics(vendorId: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -402,6 +414,89 @@ export class DatabaseStorage implements IStorage {
       nonProAccounts: tierCounts['free'],
       totalRevenueCents,
       estimatedMonthlyProRevenueCents: proRevenue,
+    };
+  }
+
+  // ---- Profile Views ----
+  async recordProfileView(profileUserId: string, viewerUserId?: string): Promise<void> {
+    if (viewerUserId === profileUserId) return;
+    await db.insert(profileViews).values({ profileUserId, viewerUserId });
+  }
+
+  async getProfileViewCount(profileUserId: string): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(profileViews)
+      .where(eq(profileViews.profileUserId, profileUserId));
+    return row?.count ?? 0;
+  }
+
+  // ---- Vendor Inventory ----
+  async getVendorInventory(vendorId: string, eventId?: number): Promise<VendorInventoryItem[]> {
+    if (eventId) {
+      return await db.select().from(vendorInventory)
+        .where(and(eq(vendorInventory.vendorId, vendorId), eq(vendorInventory.eventId, eventId)))
+        .orderBy(desc(vendorInventory.createdAt));
+    }
+    return await db.select().from(vendorInventory)
+      .where(eq(vendorInventory.vendorId, vendorId))
+      .orderBy(desc(vendorInventory.createdAt));
+  }
+
+  async createVendorInventoryItem(vendorId: string, data: InsertVendorInventory): Promise<VendorInventoryItem> {
+    const [item] = await db.insert(vendorInventory).values({ vendorId, ...data }).returning();
+    return item;
+  }
+
+  async updateVendorInventoryItem(id: number, data: Partial<InsertVendorInventory>): Promise<VendorInventoryItem> {
+    const [item] = await db.update(vendorInventory)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorInventory.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteVendorInventoryItem(id: number): Promise<void> {
+    await db.delete(vendorInventory).where(eq(vendorInventory.id, id));
+  }
+
+  async getVendorAnalytics(vendorId: string): Promise<any> {
+    const attendance = await db.select().from(eventAttendance)
+      .where(and(eq(eventAttendance.userId, vendorId), eq(eventAttendance.status, 'attending')));
+
+    const eventIds = attendance.map(a => a.eventId);
+    const attendedEvents = eventIds.length > 0
+      ? await db.select().from(events).where(inArray(events.id, eventIds))
+      : [];
+
+    const profileViewCount = await this.getProfileViewCount(vendorId);
+
+    const allInventory = await this.getVendorInventory(vendorId);
+
+    const inventoryByEvent: Record<number, VendorInventoryItem[]> = {};
+    for (const item of allInventory) {
+      if (!inventoryByEvent[item.eventId]) inventoryByEvent[item.eventId] = [];
+      inventoryByEvent[item.eventId].push(item);
+    }
+
+    const itemSummary: Record<string, { totalSold: number; totalRevenueCents: number; events: string[] }> = {};
+    for (const item of allInventory) {
+      if (!itemSummary[item.itemName]) {
+        itemSummary[item.itemName] = { totalSold: 0, totalRevenueCents: 0, events: [] };
+      }
+      itemSummary[item.itemName].totalSold += item.quantitySold;
+      itemSummary[item.itemName].totalRevenueCents += item.quantitySold * item.priceCents;
+      const ev = attendedEvents.find(e => e.id === item.eventId);
+      if (ev && !itemSummary[item.itemName].events.includes(ev.title)) {
+        itemSummary[item.itemName].events.push(ev.title);
+      }
+    }
+
+    return {
+      attendedEvents,
+      profileViewCount,
+      inventoryByEvent,
+      itemSummary,
     };
   }
 }
