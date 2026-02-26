@@ -9,9 +9,11 @@ import { SquareClient, SquareEnvironment } from "square";
 
 function getSquare(): SquareClient | null {
   if (!process.env.SQUARE_ACCESS_TOKEN) return null;
+  const token = process.env.SQUARE_ACCESS_TOKEN;
+  const isSandbox = token.startsWith('EAAAl') || token.startsWith('sandbox-');
   return new SquareClient({
-    token: process.env.SQUARE_ACCESS_TOKEN,
-    environment: SquareEnvironment.Production,
+    token,
+    environment: isSandbox ? SquareEnvironment.Sandbox : SquareEnvironment.Production,
   });
 }
 
@@ -717,10 +719,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!square) return res.status(503).json({ message: "Square not configured." });
     const locationId = await getSquareLocationId();
     try {
-      const response = await square.payments.list({
-        locationId: locationId || undefined,
-        limit: 50,
-      });
+      const listReq: any = { limit: 50, sortField: 'CREATED_AT', sortOrder: 'DESC' };
+      if (locationId) listReq.locationId = locationId;
+      const response = await square.payments.list(listReq);
       const allPayments: any[] = [];
       for await (const item of response) {
         allPayments.push(item);
