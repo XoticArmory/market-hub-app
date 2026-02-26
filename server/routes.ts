@@ -10,7 +10,7 @@ import { SquareClient, SquareEnvironment } from "square";
 function getSquare(): SquareClient | null {
   if (!process.env.SQUARE_ACCESS_TOKEN) return null;
   const token = process.env.SQUARE_ACCESS_TOKEN;
-  const isSandbox = token.startsWith('EAAAl') || token.startsWith('sandbox-');
+  const isSandbox = process.env.SQUARE_ENVIRONMENT === 'sandbox';
   return new SquareClient({
     token,
     environment: isSandbox ? SquareEnvironment.Sandbox : SquareEnvironment.Production,
@@ -765,6 +765,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       subscriptionStatus: validStatus,
     });
     res.json({ success: true });
+  });
+
+  // List Square locations (for admin settings UI)
+  app.get('/api/admin/square/locations', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const square = getSquare();
+    if (!square) return res.status(503).json({ message: "Square not configured." });
+    try {
+      const response = await square.locations.list();
+      res.json(squareJson(response.data || []));
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
   });
 
   return httpServer;

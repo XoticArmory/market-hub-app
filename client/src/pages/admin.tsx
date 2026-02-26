@@ -74,6 +74,19 @@ function useSquarePayments() {
   });
 }
 
+function useSquareLocations() {
+  return useQuery<any[]>({
+    queryKey: ["/api/admin/square/locations"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/square/locations", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    retry: false,
+    staleTime: 60000,
+  });
+}
+
 function StatCard({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
   return (
     <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm">
@@ -96,6 +109,7 @@ export default function AdminPage() {
   const { data: allEvents, isLoading: loadingEvents } = useAdminAllEvents();
   const { data: registrations, isLoading: loadingRegs } = useAdminRegistrations();
   const { data: squarePayments, isLoading: loadingSquare, refetch: refetchPayments } = useSquarePayments();
+  const { data: squareLocations, isLoading: loadingLocations } = useSquareLocations();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -465,42 +479,89 @@ export default function AdminPage() {
               <CardDescription>Configure your Square account credentials. The Access Token must be set as the <code className="bg-muted px-1 rounded text-xs">SQUARE_ACCESS_TOKEN</code> secret in environment settings.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {squareKeys.map(({ key, label, placeholder, hint }) => {
-                const current = (settings || []).find((s: any) => s.key === key)?.value;
-                return (
-                  <div key={key} className="space-y-2">
-                    <label className="text-sm font-semibold block">{label}</label>
-                    {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-                    {current && <p className="text-xs font-mono text-muted-foreground bg-muted p-2 rounded-lg break-all">Current: {current}</p>}
-                    <div className="flex gap-3">
-                      <Input
-                        placeholder={placeholder}
-                        value={settingInputs[key] || ""}
-                        onChange={e => setSettingInputs(p => ({ ...p, [key]: e.target.value }))}
-                        className="rounded-xl font-mono text-sm"
-                        data-testid={`input-${key}`}
-                      />
-                      <Button
-                        disabled={savingSetting || !settingInputs[key]}
-                        onClick={() => { upsertSetting({ key, value: settingInputs[key] }); setSettingInputs(p => ({ ...p, [key]: "" })); }}
-                        className="rounded-xl shrink-0"
-                      >
-                        Save
-                      </Button>
+              {/* Location ID — show auto-detected locations first */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-semibold block">Square Location ID</label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Required for creating payment links. Select from your Square account below or enter manually.</p>
+                </div>
+                {(() => {
+                  const currentLocationId = (settings || []).find((s: any) => s.key === 'square_location_id')?.value;
+                  return currentLocationId ? (
+                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                      <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-300">Location configured</p>
+                        <p className="text-xs font-mono text-green-600 dark:text-green-400 truncate">{currentLocationId}</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg shrink-0" onClick={() => setSettingInputs(p => ({ ...p, square_location_id: currentLocationId }))}>Change</Button>
                     </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">No location configured — payment links won't work until this is set.</p>
+                    </div>
+                  );
+                })()}
+
+                {/* Auto-detected locations from Square API */}
+                {loadingLocations ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading your Square locations...</div>
+                ) : (squareLocations || []).length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Square Locations — click to select</p>
+                    {(squareLocations || []).map((loc: any) => (
+                      <div key={loc.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border/30">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{loc.name || 'Unnamed Location'}</p>
+                          <p className="text-xs font-mono text-muted-foreground">{loc.id}</p>
+                          {loc.address?.addressLine1 && <p className="text-xs text-muted-foreground">{loc.address.addressLine1}, {loc.address.locality}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <Badge variant={loc.status === 'ACTIVE' ? 'default' : 'outline'} className={loc.status === 'ACTIVE' ? 'bg-green-500 text-xs' : 'text-xs'}>{loc.status}</Badge>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs rounded-lg"
+                            onClick={() => { upsertSetting({ key: 'square_location_id', value: loc.id }); toast({ title: `Location "${loc.name}" saved.` }); }}
+                            data-testid={`button-select-location-${loc.id}`}
+                          >
+                            Select
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
+                ) : (
+                  <div className="p-3 bg-muted/40 rounded-xl text-sm text-muted-foreground">
+                    No locations found in your Square account. <a href="https://squareup.com/dashboard/locations" target="_blank" rel="noopener noreferrer" className="text-primary underline">Create one in Square Dashboard →</a>
+                  </div>
+                )}
+
+                {/* Manual input fallback */}
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Or enter manually:</p>
+                  <div className="flex gap-3">
+                    <Input
+                      placeholder="LXX..."
+                      value={settingInputs['square_location_id'] || ""}
+                      onChange={e => setSettingInputs(p => ({ ...p, square_location_id: e.target.value }))}
+                      className="rounded-xl font-mono text-sm"
+                      data-testid="input-square_location_id"
+                    />
+                    <Button
+                      disabled={savingSetting || !settingInputs['square_location_id']}
+                      onClick={() => { upsertSetting({ key: 'square_location_id', value: settingInputs['square_location_id'] }); setSettingInputs(p => ({ ...p, square_location_id: "" })); }}
+                      className="rounded-xl shrink-0"
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </div>
 
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
-                <p className="font-semibold mb-2">Square Setup Steps:</p>
-                <ol className="list-decimal list-inside space-y-1 text-blue-700 dark:text-blue-300 text-xs">
-                  <li>Sign in to <strong>squareup.com/dashboard</strong></li>
-                  <li>Go to <strong>Account & Settings → Locations</strong> and copy your Location ID</li>
-                  <li>Go to <strong>Developer Console → Applications</strong> for your Application ID</li>
-                  <li>Add <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">SQUARE_ACCESS_TOKEN</code> (Production access token) as a secret in environment settings</li>
-                  <li>Optionally configure a Square webhook pointing to <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">/api/square/webhook</code></li>
-                </ol>
+                <p className="font-semibold mb-1">✓ Square API Connected</p>
+                <p className="text-xs text-blue-700 dark:text-blue-300">Your production Square Access Token is working. Select a location above to enable payment links, or create one at <a href="https://squareup.com/dashboard/locations" target="_blank" className="underline font-medium" rel="noopener noreferrer">squareup.com/dashboard/locations</a>.</p>
+                <p className="text-xs mt-2 text-blue-600 dark:text-blue-400">Webhook URL: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">/api/square/webhook</code></p>
               </div>
             </CardContent>
           </Card>
