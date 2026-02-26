@@ -46,3 +46,4 @@ integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:2.0.
 
 [userenv.shared]
 ADMIN_EMAILS = "tbetts84@gmail.com"
+VITE_STRIPE_PUBLIC_KEY = "pk_live_51T59JIJwbgD0TLYxBZoZXY0pV5kWuyCWwwaQMK7JDW8eKD4WtMwoZqE5tJRba0SvOKQtkZrih1CJsOJWJwG2QlAg00XYk79KNV"
