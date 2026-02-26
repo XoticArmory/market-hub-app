@@ -1,13 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
-import type { EventResponse, CreateEventRequest } from "@shared/schema";
+import type { EventResponse } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
-export function useEvents() {
+export function useEvents(areaCode?: string) {
+  const url = areaCode ? `${api.events.list.path}?areaCode=${encodeURIComponent(areaCode)}` : api.events.list.path;
   return useQuery({
-    queryKey: [api.events.list.path],
+    queryKey: [api.events.list.path, areaCode],
     queryFn: async () => {
-      const res = await fetch(api.events.list.path, { credentials: "include" });
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch events");
       return (await res.json()) as EventResponse[];
     },
@@ -31,18 +32,15 @@ export function useEvent(id: number) {
 export function useCreateEvent() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
   return useMutation({
-    mutationFn: async (data: CreateEventRequest) => {
+    mutationFn: async (data: any) => {
       const res = await fetch(api.events.create.path, {
-        method: api.events.create.method,
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
         credentials: "include",
       });
-      
       if (!res.ok) {
-        if (res.status === 401) throw new Error("Please log in to create an event.");
         const error = await res.json();
         throw new Error(error.message || "Failed to create event");
       }
@@ -50,17 +48,8 @@ export function useCreateEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
-      toast({
-        title: "Event created!",
-        description: "Your market event has been successfully added.",
-      });
+      toast({ title: "Event created!", description: "Your market event has been added." });
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to create event",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    onError: (e: Error) => toast({ title: "Failed to create event", description: e.message, variant: "destructive" }),
   });
 }
