@@ -1,10 +1,12 @@
 import { db } from "./db";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, gte } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
+  notifications, eventMaps, vendorRegistrations, termsAcceptances,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
+  type Notification, type EventMap, type VendorRegistration,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -13,11 +15,14 @@ export interface IStorage {
   upsertUserProfile(userId: string, profile: Partial<InsertUserProfile>): Promise<UserProfile>;
   getAllUserProfiles(): Promise<UserProfile[]>;
   setAdminFlag(userId: string, isAdmin: boolean): Promise<void>;
+  completeOnboarding(userId: string): Promise<void>;
 
   // Events
   getEvents(areaCode?: string): Promise<Event[]>;
   getEvent(id: number): Promise<Event | undefined>;
+  getEventsByOwner(ownerId: string): Promise<Event[]>;
   createEvent(event: InsertEvent & { createdBy: string }): Promise<Event>;
+  deleteEvent(id: number): Promise<void>;
   updateVendorSpacesUsed(eventId: number, delta: number): Promise<void>;
 
   // Event Dates
@@ -31,6 +36,7 @@ export interface IStorage {
   setAttendance(eventId: number, userId: string, status: string): Promise<EventAttendance>;
   removeAttendance(eventId: number, userId: string): Promise<void>;
   getUserStatusForEvent(eventId: number, userId: string): Promise<string | null>;
+  getVendorProUsersInAreaOrHistory(areaCode: string, ownerEventIds: number[]): Promise<string[]>;
 
   // Vendor Posts
   getVendorPosts(eventId: number): Promise<VendorPost[]>;
@@ -40,10 +46,35 @@ export interface IStorage {
   getMessages(areaCode?: string): Promise<Message[]>;
   createMessage(message: InsertMessage & { senderId: string }): Promise<Message>;
 
+  // Notifications
+  getNotifications(userId: string): Promise<Notification[]>;
+  createNotification(data: { userId: string; fromUserId?: string; type: string; title: string; message: string; eventId?: number }): Promise<Notification>;
+  markNotificationRead(id: number, userId: string): Promise<void>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  getUnreadCount(userId: string): Promise<number>;
+
+  // Event Maps
+  getEventMap(eventId: number): Promise<EventMap | undefined>;
+  upsertEventMap(eventId: number, mapData: any): Promise<EventMap>;
+
+  // Vendor Registrations
+  getVendorRegistrations(eventId: number): Promise<VendorRegistration[]>;
+  getUserRegistrations(userId: string): Promise<VendorRegistration[]>;
+  createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt'>): Promise<VendorRegistration>;
+  updateRegistrationStatus(id: number, status: string, paymentIntentId?: string): Promise<void>;
+  getAllRegistrations(): Promise<VendorRegistration[]>;
+
+  // Terms
+  acceptTerms(userId: string, tier: string): Promise<void>;
+  hasAcceptedTerms(userId: string, tier: string): Promise<boolean>;
+
   // Admin Settings
   getAdminSettings(): Promise<AdminSetting[]>;
   getAdminSetting(key: string): Promise<string | undefined>;
   upsertAdminSetting(key: string, value: string): Promise<void>;
+
+  // Admin Stats
+  getAdminStats(): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -73,6 +104,13 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoUpdate({ target: userProfiles.userId, set: { isAdmin, updatedAt: new Date() } });
   }
 
+  async completeOnboarding(userId: string): Promise<void> {
+    await db
+      .insert(userProfiles)
+      .values({ userId, onboardingComplete: true })
+      .onConflictDoUpdate({ target: userProfiles.userId, set: { onboardingComplete: true, updatedAt: new Date() } });
+  }
+
   // ---- Events ----
   async getEvents(areaCode?: string): Promise<Event[]> {
     if (areaCode) {
@@ -86,9 +124,17 @@ export class DatabaseStorage implements IStorage {
     return e;
   }
 
+  async getEventsByOwner(ownerId: string): Promise<Event[]> {
+    return await db.select().from(events).where(eq(events.createdBy, ownerId)).orderBy(desc(events.createdAt));
+  }
+
   async createEvent(event: InsertEvent & { createdBy: string }): Promise<Event> {
     const [e] = await db.insert(events).values(event).returning();
     return e;
+  }
+
+  async deleteEvent(id: number): Promise<void> {
+    await db.delete(events).where(eq(events.id, id));
   }
 
   async updateVendorSpacesUsed(eventId: number, delta: number): Promise<void> {
@@ -147,6 +193,37 @@ export class DatabaseStorage implements IStorage {
     return a?.status ?? null;
   }
 
+  async getVendorProUsersInAreaOrHistory(areaCode: string, ownerEventIds: number[]): Promise<string[]> {
+    // Get Vendor Pro users in the same area code
+    const proUsersInArea = await db.select({ userId: userProfiles.userId })
+      .from(userProfiles)
+      .where(and(
+        eq(userProfiles.subscriptionTier, 'vendor_pro'),
+        eq(userProfiles.subscriptionStatus, 'active'),
+        eq(userProfiles.areaCode, areaCode)
+      ));
+
+    // Get Vendor Pro users who attended any of the owner's events in last 3 years
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+
+    let historicUserIds: string[] = [];
+    if (ownerEventIds.length > 0) {
+      const historic = await db.select({ userId: eventAttendance.userId })
+        .from(eventAttendance)
+        .innerJoin(userProfiles, eq(eventAttendance.userId, userProfiles.userId))
+        .where(and(
+          inArray(eventAttendance.eventId, ownerEventIds),
+          eq(userProfiles.subscriptionTier, 'vendor_pro'),
+          gte(eventAttendance.createdAt, threeYearsAgo)
+        ));
+      historicUserIds = historic.map(h => h.userId);
+    }
+
+    const areaUserIds = proUsersInArea.map(u => u.userId);
+    return Array.from(new Set([...areaUserIds, ...historicUserIds]));
+  }
+
   // ---- Vendor Posts ----
   async getVendorPosts(eventId: number): Promise<VendorPost[]> {
     return await db.select().from(vendorPosts).where(eq(vendorPosts.eventId, eventId)).orderBy(desc(vendorPosts.createdAt));
@@ -170,6 +247,89 @@ export class DatabaseStorage implements IStorage {
     return m;
   }
 
+  // ---- Notifications ----
+  async getNotifications(userId: string): Promise<Notification[]> {
+    return await db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(data: { userId: string; fromUserId?: string; type: string; title: string; message: string; eventId?: number }): Promise<Notification> {
+    const [n] = await db.insert(notifications).values(data).returning();
+    return n;
+  }
+
+  async markNotificationRead(id: number, userId: string): Promise<void> {
+    await db.update(notifications).set({ read: true })
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications).set({ read: true }).where(eq(notifications.userId, userId));
+  }
+
+  async getUnreadCount(userId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.read, false)));
+    return Number(result[0]?.count || 0);
+  }
+
+  // ---- Event Maps ----
+  async getEventMap(eventId: number): Promise<EventMap | undefined> {
+    const [m] = await db.select().from(eventMaps).where(eq(eventMaps.eventId, eventId));
+    return m;
+  }
+
+  async upsertEventMap(eventId: number, mapData: any): Promise<EventMap> {
+    const [m] = await db.insert(eventMaps)
+      .values({ eventId, mapData })
+      .onConflictDoUpdate({ target: eventMaps.eventId, set: { mapData, updatedAt: new Date() } })
+      .returning();
+    return m;
+  }
+
+  // ---- Vendor Registrations ----
+  async getVendorRegistrations(eventId: number): Promise<VendorRegistration[]> {
+    return await db.select().from(vendorRegistrations)
+      .where(eq(vendorRegistrations.eventId, eventId))
+      .orderBy(desc(vendorRegistrations.createdAt));
+  }
+
+  async getUserRegistrations(userId: string): Promise<VendorRegistration[]> {
+    return await db.select().from(vendorRegistrations)
+      .where(eq(vendorRegistrations.vendorId, userId))
+      .orderBy(desc(vendorRegistrations.createdAt));
+  }
+
+  async createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt'>): Promise<VendorRegistration> {
+    const [r] = await db.insert(vendorRegistrations).values(data).returning();
+    return r;
+  }
+
+  async updateRegistrationStatus(id: number, status: string, paymentIntentId?: string): Promise<void> {
+    const update: any = { status };
+    if (paymentIntentId) update.stripePaymentIntentId = paymentIntentId;
+    await db.update(vendorRegistrations).set(update).where(eq(vendorRegistrations.id, id));
+  }
+
+  async getAllRegistrations(): Promise<VendorRegistration[]> {
+    return await db.select().from(vendorRegistrations).orderBy(desc(vendorRegistrations.createdAt));
+  }
+
+  // ---- Terms ----
+  async acceptTerms(userId: string, tier: string): Promise<void> {
+    await db.insert(termsAcceptances).values({ userId, tier });
+    await db.update(userProfiles).set({ termsAcceptedAt: new Date(), updatedAt: new Date() })
+      .where(eq(userProfiles.userId, userId));
+  }
+
+  async hasAcceptedTerms(userId: string, tier: string): Promise<boolean> {
+    const [t] = await db.select().from(termsAcceptances)
+      .where(and(eq(termsAcceptances.userId, userId), eq(termsAcceptances.tier, tier)));
+    return !!t;
+  }
+
   // ---- Admin Settings ----
   async getAdminSettings(): Promise<AdminSetting[]> {
     return await db.select().from(adminSettings);
@@ -185,6 +345,64 @@ export class DatabaseStorage implements IStorage {
       .insert(adminSettings)
       .values({ key, value })
       .onConflictDoUpdate({ target: adminSettings.key, set: { value, updatedAt: new Date() } });
+  }
+
+  // ---- Admin Stats ----
+  async getAdminStats(): Promise<any> {
+    const allEvents = await db.select().from(events);
+    const allProfiles = await db.select().from(userProfiles);
+    const allRegistrations = await db.select().from(vendorRegistrations);
+
+    // Events by area code
+    const eventsByArea: Record<string, number> = {};
+    for (const e of allEvents) {
+      const key = e.areaCode || 'No area';
+      eventsByArea[key] = (eventsByArea[key] || 0) + 1;
+    }
+
+    // Vendors by area code
+    const vendorsByArea: Record<string, number> = {};
+    for (const p of allProfiles.filter(p => p.profileType === 'vendor' || p.profileType === 'event_owner')) {
+      const key = p.areaCode || 'No area';
+      vendorsByArea[key] = (vendorsByArea[key] || 0) + 1;
+    }
+
+    // Pro tier counts
+    const tierCounts: Record<string, number> = { event_owner_pro: 0, vendor_pro: 0, general_pro: 0, free: 0 };
+    for (const p of allProfiles) {
+      const tier = p.subscriptionTier || 'free';
+      if (p.subscriptionStatus === 'active' && tier !== 'free') {
+        tierCounts[tier] = (tierCounts[tier] || 0) + 1;
+      } else {
+        tierCounts['free'] = (tierCounts['free'] || 0) + 1;
+      }
+    }
+
+    // Revenue estimate from registrations
+    const totalRevenueCents = allRegistrations
+      .filter(r => r.status === 'paid')
+      .reduce((sum, r) => sum + (r.feeCents || 0), 0);
+
+    // Monthly revenue estimate from pro subscriptions
+    const proRevenue =
+      tierCounts['event_owner_pro'] * 1995 +
+      tierCounts['vendor_pro'] * 995 +
+      tierCounts['general_pro'] * 495;
+
+    return {
+      totalEvents: allEvents.length,
+      eventsByArea,
+      vendorsByArea,
+      totalUsers: allProfiles.length,
+      totalGeneralUsers: allProfiles.filter(p => p.profileType === 'general').length,
+      totalVendors: allProfiles.filter(p => p.profileType === 'vendor').length,
+      totalEventOwners: allProfiles.filter(p => p.profileType === 'event_owner').length,
+      tierCounts,
+      totalProAccounts: tierCounts['event_owner_pro'] + tierCounts['vendor_pro'] + tierCounts['general_pro'],
+      nonProAccounts: tierCounts['free'],
+      totalRevenueCents,
+      estimatedMonthlyProRevenueCents: proRevenue,
+    };
   }
 }
 

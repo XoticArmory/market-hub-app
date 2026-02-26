@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
-import { api } from "@shared/routes";
+import { api, PRO_TIERS } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -30,6 +30,10 @@ async function enrichUser(userId: string) {
   };
 }
 
+function tierPriceKey(tier: string): string {
+  return `stripe_price_${tier}`;
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -40,7 +44,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.getUserProfile(userId);
     const user = await authStorage.getUser(userId);
     const attendance = await storage.getUserAttendance(userId);
-    res.json({ profile, user, attendance });
+    const unreadCount = await storage.getUnreadCount(userId);
+    res.json({ profile, user, attendance, unreadCount });
   });
 
   app.get(api.profile.getById.path, async (req, res) => {
@@ -48,7 +53,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.getUserProfile(userId);
     const user = await authStorage.getUser(userId);
     if (!profile && !user) return res.status(404).json({ message: "Profile not found" });
-    // Get events this user attends or owns
     const attendance = await storage.getUserAttendance(userId);
     res.json({ profile, user, attendance });
   });
@@ -65,12 +69,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.post(api.profile.completeOnboarding.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    await storage.completeOnboarding(userId);
+    res.json({ success: true });
+  });
+
   // ---- EVENT ROUTES ----
   app.get(api.events.list.path, async (req: any, res) => {
     const areaCode = req.query.areaCode as string | undefined;
     const allEvents = await storage.getEvents(areaCode);
     const enriched = await Promise.all(allEvents.map(async (e) => {
       const creator = await enrichUser(e.createdBy);
+      const creatorProfile = await storage.getUserProfile(e.createdBy);
       const attendance = await storage.getEventAttendance(e.id);
       const extraDates = await storage.getEventDates(e.id);
       const attendingCount = attendance.filter(a => a.status === 'attending').length;
@@ -79,8 +90,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.user) {
         userStatus = await storage.getUserStatusForEvent(e.id, req.user.claims?.sub);
       }
-      return { ...e, creatorName: creator.name, extraDates, attendingCount, interestedCount, userStatus };
+      const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
+      return { ...e, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
     }));
+    // Sort: featured (pro) events in the area at top, then by date
+    enriched.sort((a, b) => {
+      if (a.isFeatured && !b.isFeatured) return -1;
+      if (!a.isFeatured && b.isFeatured) return 1;
+      return new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime();
+    });
     res.json(enriched);
   });
 
@@ -89,6 +107,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
     const creator = await enrichUser(event.createdBy);
+    const creatorProfile = await storage.getUserProfile(event.createdBy);
     const attendance = await storage.getEventAttendance(eventId);
     const extraDates = await storage.getEventDates(eventId);
     const attendingCount = attendance.filter(a => a.status === 'attending').length;
@@ -97,29 +116,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (req.user) {
       userStatus = await storage.getUserStatusForEvent(eventId, req.user.claims?.sub);
     }
-    const vendorPosts = await storage.getVendorPosts(eventId);
-    const vendorAttendees = await Promise.all(vendorPosts.map(async (p) => {
+    const posts = await storage.getVendorPosts(eventId);
+    const vendorAttendees = await Promise.all(posts.map(async (p) => {
       const u = await enrichUser(p.vendorId);
       return { ...p, vendorName: u.name, vendorAvatar: u.avatar };
     }));
-    res.json({ ...event, creatorName: creator.name, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees });
+    const registrations = await storage.getVendorRegistrations(eventId);
+    const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
+    res.json({ ...event, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
   });
 
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      // Check if user is event_owner and has active subscription
-      const profile = await storage.getUserProfile(userId);
-      if (profile?.profileType === 'event_owner' && profile?.subscriptionStatus !== 'active') {
-        return res.status(403).json({ message: "Active subscription required to post events." });
-      }
       const input = api.events.create.input.parse(req.body);
       const { extraDates, ...eventData } = input;
-      const created = await storage.createEvent({
-        ...eventData,
-        date: new Date(eventData.date),
-        createdBy: userId,
-      });
+      const created = await storage.createEvent({ ...eventData, date: new Date(eventData.date as any), createdBy: userId });
       if (extraDates && extraDates.length > 0) {
         for (const d of extraDates) {
           await storage.createEventDate({ eventId: created.id, date: new Date(d) });
@@ -132,6 +144,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.delete(api.events.delete.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const isAdmin = await isAdminUser(userId);
+    if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteEvent(eventId);
+    res.status(204).end();
+  });
+
   // ---- ATTENDANCE ROUTES ----
   app.post(api.attendance.setStatus.path, isAuthenticated, async (req: any, res) => {
     try {
@@ -140,7 +163,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { status } = api.attendance.setStatus.input.parse(req.body);
       const existing = await storage.getUserStatusForEvent(eventId, userId);
       const result = await storage.setAttendance(eventId, userId, status);
-      // Update vendor space count
       if (status === 'attending') {
         const profile = await storage.getUserProfile(userId);
         if (profile?.profileType === 'vendor' && existing !== 'attending') {
@@ -219,6 +241,134 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ---- NOTIFICATIONS ----
+  app.get(api.notifications.list.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const notes = await storage.getNotifications(userId);
+    res.json(notes);
+  });
+
+  app.get(api.notifications.unreadCount.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const count = await storage.getUnreadCount(userId);
+    res.json({ count });
+  });
+
+  app.post(api.notifications.send.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    if (profile?.subscriptionTier !== 'event_owner_pro' || profile?.subscriptionStatus !== 'active') {
+      return res.status(403).json({ message: "Event Owner Pro subscription required to send push notifications." });
+    }
+    const { title, message, eventId } = req.body;
+    if (!title || !message) return res.status(400).json({ message: "Title and message required." });
+
+    const ownerEvents = await storage.getEventsByOwner(userId);
+    const ownerEventIds = ownerEvents.map(e => e.id);
+    const areaCode = profile.areaCode || '';
+    const targetUserIds = await storage.getVendorProUsersInAreaOrHistory(areaCode, ownerEventIds);
+
+    const results = await Promise.all(
+      targetUserIds.map(uid =>
+        storage.createNotification({ userId: uid, fromUserId: userId, type: 'event', title, message, eventId })
+      )
+    );
+    res.json({ sent: results.length });
+  });
+
+  app.patch(api.notifications.markRead.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const id = Number(req.params.id);
+    await storage.markNotificationRead(id, userId);
+    res.json({ success: true });
+  });
+
+  app.post(api.notifications.markAllRead.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    await storage.markAllNotificationsRead(userId);
+    res.json({ success: true });
+  });
+
+  // ---- EVENT MAPS ----
+  app.get(api.eventMap.get.path, async (req, res) => {
+    const eventId = Number(req.params.id);
+    const map = await storage.getEventMap(eventId);
+    res.json(map || { eventId, mapData: { spots: [] } });
+  });
+
+  app.put(api.eventMap.save.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const profile = await storage.getUserProfile(userId);
+    if (event.createdBy !== userId && !profile?.isAdmin) {
+      return res.status(403).json({ message: "Only the event owner can edit the map." });
+    }
+    if (profile?.subscriptionTier !== 'event_owner_pro' && !profile?.isAdmin) {
+      return res.status(403).json({ message: "Event Owner Pro required to create event maps." });
+    }
+    const { mapData } = req.body;
+    const saved = await storage.upsertEventMap(eventId, mapData);
+    res.json(saved);
+  });
+
+  // ---- VENDOR REGISTRATIONS ----
+  app.get(api.vendorRegistrations.listByEvent.path, async (req, res) => {
+    const eventId = Number(req.params.eventId);
+    const regs = await storage.getVendorRegistrations(eventId);
+    const enriched = await Promise.all(regs.map(async r => {
+      const u = await enrichUser(r.vendorId);
+      return { ...r, vendorName: u.name, vendorAvatar: u.avatar };
+    }));
+    res.json(enriched);
+  });
+
+  app.post(api.vendorRegistrations.create.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.eventId);
+    const { spotId, spotName } = req.body;
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const profile = await storage.getUserProfile(userId);
+    const isPro = profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active';
+    const spotPriceCents = event.spotPrice || 0;
+    const feeCents = isPro ? 0 : Math.round(spotPriceCents * 0.005);
+    const reg = await storage.createVendorRegistration({
+      eventId,
+      vendorId: userId,
+      spotId: spotId || null,
+      spotName: spotName || null,
+      amountCents: spotPriceCents,
+      feeCents,
+      isPro,
+      status: spotPriceCents === 0 ? 'paid' : 'pending',
+      stripePaymentIntentId: null,
+    });
+
+    if (spotPriceCents > 0) {
+      const stripe = getStripe();
+      if (stripe) {
+        try {
+          const totalCents = spotPriceCents + feeCents;
+          const pi = await stripe.paymentIntents.create({
+            amount: totalCents,
+            currency: 'usd',
+            metadata: { registrationId: reg.id.toString(), eventId: eventId.toString(), vendorId: userId },
+          });
+          await storage.updateRegistrationStatus(reg.id, 'pending', pi.id);
+          return res.json({ ...reg, clientSecret: pi.client_secret, totalCents, feeCents });
+        } catch (e: any) {
+          return res.status(500).json({ message: e.message });
+        }
+      }
+    }
+    if (spotPriceCents === 0) {
+      await storage.updateVendorSpacesUsed(eventId, 1);
+    }
+    res.json(reg);
+  });
+
   // ---- ADMIN ROUTES ----
   app.get(api.admin.getSettings.path, isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
@@ -251,7 +401,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
-  // Promote self to admin via env var ADMIN_EMAILS
+  app.get(api.admin.getStats.path, isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const stats = await storage.getAdminStats();
+    res.json(stats);
+  });
+
+  app.get(api.admin.getEvents.path, isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const allEvents = await storage.getEvents();
+    const enriched = await Promise.all(allEvents.map(async e => {
+      const creator = await enrichUser(e.createdBy);
+      const attendance = await storage.getEventAttendance(e.id);
+      return { ...e, creatorName: creator.name, attendingCount: attendance.filter(a => a.status === 'attending').length };
+    }));
+    res.json(enriched);
+  });
+
+  app.delete(api.admin.deleteEvent.path, isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    await storage.deleteEvent(id);
+    res.status(204).end();
+  });
+
+  app.get(api.admin.getRegistrations.path, isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const regs = await storage.getAllRegistrations();
+    const enriched = await Promise.all(regs.map(async r => {
+      const u = await enrichUser(r.vendorId);
+      const event = await storage.getEvent(r.eventId);
+      return { ...r, vendorName: u.name, eventTitle: event?.title };
+    }));
+    res.json(enriched);
+  });
+
+  app.get(api.admin.getAnalytics.path, isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { userId } = req.params;
+    const ownerEvents = await storage.getEventsByOwner(userId);
+    if (ownerEvents.length === 0) return res.json({ vendors: [], repeatVendors: [], avgAttending: 0, avgInterested: 0 });
+    const vendorCounts: Record<string, { count: number; name: string }> = {};
+    let totalAttending = 0, totalInterested = 0;
+    for (const event of ownerEvents) {
+      const posts = await storage.getVendorPosts(event.id);
+      const attendance = await storage.getEventAttendance(event.id);
+      totalAttending += attendance.filter(a => a.status === 'attending').length;
+      totalInterested += attendance.filter(a => a.status === 'interested').length;
+      for (const p of posts) {
+        if (!vendorCounts[p.vendorId]) {
+          const u = await enrichUser(p.vendorId);
+          vendorCounts[p.vendorId] = { count: 0, name: u.name || 'Unknown' };
+        }
+        vendorCounts[p.vendorId].count++;
+      }
+    }
+    const vendors = Object.entries(vendorCounts).map(([id, v]) => ({ id, name: v.name, eventCount: v.count }));
+    const repeatVendors = vendors.filter(v => v.eventCount >= 2);
+    res.json({
+      vendors,
+      repeatVendors,
+      totalEvents: ownerEvents.length,
+      avgAttending: ownerEvents.length ? Math.round(totalAttending / ownerEvents.length * 10) / 10 : 0,
+      avgInterested: ownerEvents.length ? Math.round(totalInterested / ownerEvents.length * 10) / 10 : 0,
+    });
+  });
+
+  // Claim admin via ADMIN_EMAILS env var
   app.post('/api/admin/claim', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const user = await authStorage.getUser(userId);
@@ -267,16 +483,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get(api.stripe.subscriptionStatus.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    res.json({ status: profile?.subscriptionStatus || 'inactive', subscriptionId: profile?.stripeSubscriptionId });
+    res.json({ status: profile?.subscriptionStatus || 'inactive', tier: profile?.subscriptionTier || 'free', subscriptionId: profile?.stripeSubscriptionId });
   });
 
-  app.post(api.stripe.createCheckout.path, isAuthenticated, async (req: any, res) => {
+  // Upgrade checkout for pro tiers
+  app.post(api.stripe.upgradeCheckout.path, isAuthenticated, async (req: any, res) => {
     const stripe = getStripe();
     if (!stripe) return res.status(503).json({ message: "Stripe not configured. Ask the admin to set up payments." });
+    const { tier } = req.body;
+    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+      return res.status(400).json({ message: "Invalid tier." });
+    }
     const userId = req.user.claims.sub;
     const user = await authStorage.getUser(userId);
-    const priceId = await storage.getAdminSetting('stripe_price_id');
-    if (!priceId) return res.status(503).json({ message: "Subscription price not configured yet. Contact admin." });
+    const priceId = await storage.getAdminSetting(tierPriceKey(tier));
+    if (!priceId) return res.status(503).json({ message: `Price not configured for ${tier}. Contact admin to set up ${tierPriceKey(tier)}.` });
     const profile = await storage.getUserProfile(userId);
     let customerId = profile?.stripeCustomerId;
     if (!customerId) {
@@ -284,15 +505,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       customerId = customer.id;
       await storage.upsertUserProfile(userId, { stripeCustomerId: customerId });
     }
+    // Accept terms before checkout
+    await storage.acceptTerms(userId, tier);
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${getHost(req)}/profile?subscribed=1`,
-      cancel_url: `${getHost(req)}/profile?canceled=1`,
+      success_url: `${getHost(req)}/profile?subscribed=${tier}`,
+      cancel_url: `${getHost(req)}/upgrade?canceled=1`,
+      metadata: { userId, tier },
     });
     res.json({ url: session.url });
+  });
+
+  // Legacy checkout (kept for backward compat)
+  app.post(api.stripe.createCheckout.path, isAuthenticated, async (req: any, res) => {
+    return res.redirect(307, '/api/stripe/upgrade');
   });
 
   app.post(api.stripe.portalSession.path, isAuthenticated, async (req: any, res) => {
@@ -308,6 +537,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ url: session.url });
   });
 
+  app.post(api.stripe.acceptTerms.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { tier } = req.body;
+    if (!tier) return res.status(400).json({ message: "Tier required." });
+    await storage.acceptTerms(userId, tier);
+    res.json({ success: true });
+  });
+
   // Stripe webhook
   app.post('/api/stripe/webhook', async (req: any, res) => {
     const stripe = getStripe();
@@ -317,8 +554,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const sig = req.headers['stripe-signature'] as string;
       event = webhookSecret
-        ? stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
-        : JSON.parse(req.body.toString());
+        ? stripe.webhooks.constructEvent(req.rawBody as Buffer, sig, webhookSecret)
+        : JSON.parse(req.rawBody?.toString() || '{}');
     } catch (e: any) {
       return res.status(400).json({ message: e.message });
     }
@@ -326,6 +563,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const profiles = await storage.getAllUserProfiles();
       return profiles.find(p => p.stripeCustomerId === customerId);
     };
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const tier = session.metadata?.tier;
+      const userId = session.metadata?.userId;
+      if (tier && userId) {
+        await storage.upsertUserProfile(userId, {
+          subscriptionTier: tier as any,
+          subscriptionStatus: 'active',
+          stripeSubscriptionId: session.subscription as string,
+        });
+      }
+    }
     if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.created') {
       const sub = event.data.object as Stripe.Subscription;
       const profile = await getCustomerProfile(sub.customer as string);
@@ -338,7 +587,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sub = event.data.object as Stripe.Subscription;
       const profile = await getCustomerProfile(sub.customer as string);
       if (profile) {
-        await storage.upsertUserProfile(profile.userId, { subscriptionStatus: 'canceled' });
+        await storage.upsertUserProfile(profile.userId, { subscriptionStatus: 'canceled', subscriptionTier: 'free' });
       }
     }
     res.json({ received: true });

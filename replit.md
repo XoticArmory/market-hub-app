@@ -2,16 +2,19 @@
 
 ## Overview
 
-Artisan Collective is a community platform for local artisan markets and vendors. It allows event owners to create and manage market events, vendors to claim spots and post what they're bringing, and community members to browse events, track attendance, and chat with fellow artisans. The app supports area-code-based filtering so users can find events relevant to their local community.
+Artisan Collective is a comprehensive multi-tier subscription marketplace for local artisan markets and vendors. It allows event owners to create and manage market events with interactive vendor maps, vendors to register for event spaces and post what they're bringing, and community members to browse events, track attendance, and chat. The platform features three Pro subscription tiers and a full super-admin control panel.
 
 Key features:
-- Browse and create artisan market events
-- Vendor posts (what vendors are bringing to each event)
-- Attendance tracking (attending / interested)
-- Community chat with area code filtering
-- User profiles with role types: Event Owner, Vendor, General
-- Stripe subscription integration (Event Owners require an active subscription)
-- Admin panel for managing users and app settings
+- Browse and create artisan market events (all authenticated users, no fee required)
+- 3 Pro subscription tiers: Event Owner Pro ($19.95/mo), Vendor Pro ($9.95/mo), General Pro ($4.95/mo)
+- Event Owner Pro: push notifications to local Vendor Pros, event analytics, interactive map builder, boosted listings
+- Vendor Pro: 0% platform fee on space registrations, notification receipt
+- Vendor space registration with Stripe payment (0.5% platform fee for non-Vendor Pro accounts)
+- Interactive event map editor (grid-based vendor spot placement)
+- In-app push notifications (polling, not browser push API)
+- Admin panel with stats by area code, user management, revenue tracking, Stripe price configuration
+- Account onboarding flow (/setup) for new users to select their role
+- Area-code-based filtering and community chat
 
 ## User Preferences
 
@@ -21,24 +24,18 @@ Preferred communication style: Simple, everyday language.
 
 ### Full-Stack Monorepo Layout
 
-The project is a single repository with three main areas:
-
 - `client/` — React frontend (Vite)
 - `server/` — Express backend (Node.js/TypeScript)
 - `shared/` — Shared TypeScript types, Zod schemas, and route definitions
-
-This co-location lets the frontend and backend share schema types and API route definitions, reducing duplication and keeping types in sync.
 
 ### Frontend Architecture
 
 - **Framework:** React 18 with TypeScript, bundled by Vite
 - **Routing:** `wouter` (lightweight client-side routing)
-- **State/Data Fetching:** TanStack React Query v5 — all server state is managed via query hooks in `client/src/hooks/`. Polling is used for the chat feature (`refetchInterval: 5000ms`) instead of WebSockets.
-- **UI Components:** shadcn/ui (New York style) built on Radix UI primitives with Tailwind CSS
-- **Forms:** `react-hook-form` + `@hookform/resolvers` with Zod validation
-- **Animations:** Framer Motion for page transitions
-- **Fonts:** DM Sans (body), Playfair Display (headings), loaded from Google Fonts
-- **Theme:** Warm artisan palette using CSS custom properties (HSL variables), dark mode supported via Tailwind `darkMode: ["class"]`
+- **State/Data Fetching:** TanStack React Query v5
+- **UI Components:** shadcn/ui (New York style) on Radix UI + Tailwind CSS
+- **Forms:** `react-hook-form` + Zod validation
+- **Fonts:** DM Sans (body), Playfair Display (headings)
 
 Pages (`client/src/pages/`):
 | Page | Route |
@@ -47,91 +44,66 @@ Pages (`client/src/pages/`):
 | Event Detail | `/events/:id` |
 | Add Event | `/events/new` |
 | Community Chat | `/chat` |
-| Profile | `/profile` |
+| Profile (with Pro tabs) | `/profile` |
 | Admin Panel | `/admin` |
+| Account Setup / Onboarding | `/setup` |
+| Upgrade to Pro | `/upgrade` |
+
+### Onboarding Flow
+
+New users are redirected to `/setup` if their profile has `onboardingComplete: false`. They choose a role (Event Owner / Vendor / General), enter area code, business name, and bio. After completion, they land on the home page.
 
 ### Backend Architecture
 
-- **Framework:** Express.js on Node.js with TypeScript (`tsx` for development)
-- **Entry point:** `server/index.ts` → `server/routes.ts`
-- **Storage layer:** `server/storage.ts` defines an `IStorage` interface (`DatabaseStorage` implementation) that wraps all DB operations via Drizzle ORM
-- **Build:** esbuild bundles the server for production, Vite handles the client. The `script/build.ts` script orchestrates both.
-- **Dev server:** Vite middleware runs inside the Express server in development (`server/vite.ts`)
+- **Framework:** Express.js / TypeScript
+- **Storage layer:** `server/storage.ts` → `DatabaseStorage` implementation via Drizzle ORM
+- **Dev server:** Vite middleware embedded inside Express
 
 ### Database
 
-- **Database:** PostgreSQL via `drizzle-orm/node-postgres` (connection pool from `pg`)
-- **ORM:** Drizzle ORM with Drizzle Kit for migrations (`drizzle.config.ts`)
-- **Schema location:** `shared/schema.ts` (app tables) + `shared/models/auth.ts` (auth tables)
-- **Migrations output:** `./migrations/`
+- **Database:** PostgreSQL via Drizzle ORM
+- **Schema:** `shared/schema.ts`
 
 **Core tables:**
 | Table | Purpose |
 |-------|---------|
 | `users` | Auth user records (Replit Auth) |
-| `sessions` | Session storage (connect-pg-simple) |
-| `user_profiles` | Extended profile: type, area code, bio, Stripe IDs, admin flag |
-| `events` | Market events with location, date, vendor space capacity |
-| `event_dates` | Extra/recurring dates for an event |
-| `event_attendance` | User → event attendance status (attending / interested) |
-| `vendor_posts` | Vendor announcements per event (what they're bringing) |
-| `messages` | Community chat messages, optionally scoped by area code |
-| `admin_settings` | Key/value store for admin-configurable settings |
+| `sessions` | Session storage |
+| `user_profiles` | Role, area code, bio, Stripe IDs, subscriptionTier, subscriptionStatus, isAdmin, onboardingComplete |
+| `events` | Market events with vendor space capacity and spot price |
+| `event_dates` | Extra/recurring dates |
+| `event_attendance` | Attendance status (attending / interested) |
+| `vendor_posts` | Vendor announcements per event |
+| `messages` | Community chat |
+| `admin_settings` | Key/value store (Stripe price IDs stored here) |
+| `notifications` | In-app push notifications (polled every 30s) |
+| `event_maps` | JSONB vendor spot layouts per event |
+| `vendor_registrations` | Vendor space bookings with payment tracking |
+| `terms_acceptances` | Subscription terms acceptance log |
 
-### Authentication
+### Authentication & Authorization
 
-- **Provider:** Replit Auth (OpenID Connect via `openid-client` + Passport.js)
-- **Sessions:** Stored in PostgreSQL using `connect-pg-simple` with a 7-day TTL
-- **Middleware:** `isAuthenticated` middleware in `server/replit_integrations/auth/replitAuth.ts` guards protected routes
-- **Auth storage:** Separate `AuthStorage` class handles `users` table CRUD; app logic uses `storage.ts` for everything else
-- **Frontend:** `useAuth` hook queries `/api/auth/user`; login/logout redirect to `/api/login` and `/api/logout`
+- **Provider:** Replit Auth (OIDC)
+- **Admin access:** `user_profiles.isAdmin` boolean; claimed via `/api/admin/claim` using `ADMIN_EMAILS` env var
+- **Subscription tiers:** `free`, `event_owner_pro`, `vendor_pro`, `general_pro` stored in `user_profiles.subscriptionTier`
 
-### Authorization / Roles
+### Subscription Tiers
 
-- **Profile types:** `event_owner`, `vendor`, `general` — stored in `user_profiles.profileType`
-- **Admin flag:** `user_profiles.isAdmin` boolean; admin routes check this server-side
-- **Subscription gate:** Event owners must have an active Stripe subscription to create events
+| Tier | Price | Key Features |
+|------|-------|-------------|
+| `event_owner_pro` | $19.95/mo | Push notifications, featured listings, analytics, event maps |
+| `vendor_pro` | $9.95/mo | No platform fees, receive notifications |
+| `general_pro` | $4.95/mo | Badge, community perks |
 
-### API Structure
+### Stripe Integration
 
-All API routes are defined as typed constants in `shared/routes.ts` using the `api` object. This is used on both the server (route registration) and client (URL building). Routes are grouped by resource:
-- `/api/profile` — user profile CRUD
-- `/api/events` — event list, detail, create
-- `/api/events/:eventId/attendance` — set/remove attendance
-- `/api/events/:eventId/posts` — vendor posts per event
-- `/api/messages` — community chat
-- `/api/admin/settings`, `/api/admin/users` — admin panel
-- `/api/stripe/*` — Stripe checkout, portal, subscription status
-- `/api/auth/user`, `/api/login`, `/api/logout` — Replit Auth
-
-### Shared Code
-
-`shared/` is imported by both client and server via TypeScript path aliases (`@shared/*`). It contains:
-- `schema.ts` — Drizzle table definitions + Zod insert schemas (via `drizzle-zod`)
-- `routes.ts` — Typed API route map + `buildUrl` helper
-- `models/auth.ts` — Auth-specific Drizzle tables (`users`, `sessions`)
-
-## External Dependencies
-
-### Replit Auth (OpenID Connect)
-- Used for user authentication; requires `REPL_ID` and `ISSUER_URL` env vars (defaults to `https://replit.com/oidc`)
-- Sessions stored in Postgres; requires `SESSION_SECRET` env var
-
-### PostgreSQL
-- Required via `DATABASE_URL` env var
-- Used for all data storage including sessions
-
-### Stripe
-- Used for subscription billing (Event Owners need a paid subscription to create events)
-- Required env vars: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` (configured via admin panel), `STRIPE_WEBHOOK_SECRET`
-- Webhook endpoint handles subscription status updates
-- Frontend hooks: `useSubscriptionStatus`, `useCreateCheckout`, `usePortalSession`
-
-### Google Fonts
-- DM Sans and Playfair Display loaded via `<link>` in `client/index.html`
-
-### Unsplash
-- Used for placeholder/hero images throughout the UI (no API key needed for embed URLs)
+- Tier price IDs stored in `admin_settings` table with keys:
+  - `stripe_price_event_owner_pro`
+  - `stripe_price_vendor_pro`
+  - `stripe_price_general_pro`
+- Checkout: POST `/api/stripe/upgrade` with `{ tier }` body
+- Terms accepted in DB before Stripe checkout redirect
+- Webhook updates `subscriptionTier` and `subscriptionStatus` from `checkout.session.completed`
 
 ### Required Environment Variables
 
@@ -139,7 +111,7 @@ All API routes are defined as typed constants in `shared/routes.ts` using the `a
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SESSION_SECRET` | Express session signing secret |
-| `REPL_ID` | Replit app ID for OpenID Connect |
-| `ISSUER_URL` | OIDC issuer (defaults to `https://replit.com/oidc`) |
+| `REPL_ID` | Replit app ID for OIDC |
 | `STRIPE_SECRET_KEY` | Stripe API secret key |
-| `ADMIN_EMAILS` | Comma-separated emails allowed to claim admin |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook endpoint secret |
+| `ADMIN_EMAILS` | Comma-separated admin emails (e.g. `tbetts84@gmail.com`) |

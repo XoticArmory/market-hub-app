@@ -4,8 +4,10 @@ import { useVendorPosts, useCreateVendorPost } from "@/hooks/use-vendor-posts";
 import { useSetAttendance, useRemoveAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
+import { useEventRegistrations, useRegisterVendorSpace } from "@/hooks/use-registrations";
+import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, PlusCircle } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, PlusCircle, Map, DollarSign, ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +20,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { EventMapEditor } from "@/components/EventMapEditor";
 
 const postSchema = z.object({
   itemsDescription: z.string().min(5, "Please tell us a bit more about what you're bringing."),
@@ -35,13 +38,31 @@ export default function EventDetail() {
   const { mutate: removeAttendance, isPending: isRemoving } = useRemoveAttendance(eventId);
   const { isAuthenticated, user } = useAuth();
   const { data: profileData } = useProfile();
+  const { data: registrations } = useEventRegistrations(eventId);
+  const { data: mapData } = useEventMap(eventId);
+  const { mutate: registerSpace, isPending: isRegistering } = useRegisterVendorSpace(eventId);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
 
   const profile = profileData?.profile;
   const userStatus = event?.userStatus;
   const isVendor = profile?.profileType === "vendor";
   const isEventOwner = profile?.profileType === "event_owner";
   const isOwner = event?.createdBy === user?.id;
+  const isVendorPro = profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active";
+  const hasVendorSpaces = (event?.vendorSpaces || 0) > 0;
+  const spotPrice = event?.spotPrice || 0;
+  const spotPriceDollars = (spotPrice / 100).toFixed(2);
+  const platformFee = isVendorPro ? 0 : Math.round(spotPrice * 0.005);
+  const platformFeeDollars = (platformFee / 100).toFixed(2);
+  const totalDollars = ((spotPrice + platformFee) / 100).toFixed(2);
+
+  const mapSpots: any[] = (mapData?.mapData as any)?.spots || [];
+  const bookedSpotIds = (registrations || []).filter((r: any) => r.status === 'paid').map((r: any) => r.spotId);
+  const availableSpots = mapSpots.filter((s: any) => !bookedSpotIds.includes(s.id));
+  const hasEventMap = mapSpots.length > 0;
+  const alreadyRegistered = (registrations || []).some((r: any) => r.vendorId === user?.id && r.status !== 'canceled');
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
@@ -63,6 +84,8 @@ export default function EventDetail() {
     if (userStatus === "interested") removeAttendance();
     else setAttendance("interested");
   };
+
+  const [selectedSpot, setSelectedSpot] = useState<any>(null);
 
   if (isLoadingEvent) {
     return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
@@ -91,6 +114,11 @@ export default function EventDetail() {
           <img src={`https://images.unsplash.com/photo-1519999482648-25049ddd37b1?q=80&w=2000&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
           <div className="absolute bottom-6 left-6 md:left-10 text-white">
+            {event.isFeatured && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/90 text-xs font-semibold text-white mb-2 w-fit">
+                <Star className="w-3 h-3" />Featured
+              </div>
+            )}
             <h1 className="text-3xl md:text-5xl font-display font-bold mb-2">{event.title}</h1>
             <p className="text-white/80 max-w-2xl line-clamp-2">{event.description}</p>
           </div>
@@ -116,18 +144,26 @@ export default function EventDetail() {
                 <div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Area</p><p className="font-medium text-foreground">{event.areaCode}</p></div>
               </div>
             )}
-            {(event.vendorSpaces || 0) > 0 && (
+            {hasVendorSpaces && (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><Package className="w-5 h-5" /></div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Vendor Spaces</p>
-                  <p className="font-medium text-foreground">{event.vendorSpacesUsed || 0} / {event.vendorSpaces} used · <span className={vendorSpacesLeft > 0 ? "text-green-600" : "text-destructive"}>{vendorSpacesLeft} available</span></p>
+                  <p className="font-medium text-foreground">{event.vendorSpacesUsed || 0}/{event.vendorSpaces} used · <span className={vendorSpacesLeft > 0 ? "text-green-600" : "text-destructive"}>{vendorSpacesLeft} available</span></p>
+                </div>
+              </div>
+            )}
+            {hasVendorSpaces && spotPrice > 0 && (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><DollarSign className="w-5 h-5" /></div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Spot Price</p>
+                  <p className="font-medium text-foreground">${spotPriceDollars} per space</p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Extra dates */}
           {(event.extraDates || []).length > 0 && (
             <div className="mb-6">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Additional Dates</p>
@@ -139,7 +175,6 @@ export default function EventDetail() {
             </div>
           )}
 
-          {/* Stats */}
           <div className="flex flex-wrap gap-4 mb-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Users className="w-4 h-4 text-primary" />
@@ -149,9 +184,15 @@ export default function EventDetail() {
               <Star className="w-4 h-4 text-amber-500" />
               <span><strong className="text-foreground">{event.interestedCount || 0}</strong> interested</span>
             </div>
+            {event.creatorName && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <User className="w-4 h-4" />
+                <span>By <strong className="text-foreground">{event.creatorName}</strong></span>
+                {event.isFeatured && <Badge className="text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300"><Star className="w-3 h-3 mr-1" />Featured</Badge>}
+              </div>
+            )}
           </div>
 
-          {/* Action Buttons */}
           {isAuthenticated ? (
             <div className="flex flex-wrap gap-3">
               <Button
@@ -208,6 +249,77 @@ export default function EventDetail() {
                   </DialogContent>
                 </Dialog>
               )}
+
+              {/* Vendor Space Registration */}
+              {hasVendorSpaces && !isOwner && !isEventOwner && vendorSpacesLeft > 0 && (
+                <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      size="default"
+                      variant={alreadyRegistered ? "outline" : "default"}
+                      className={`rounded-xl gap-2 ${alreadyRegistered ? '' : 'bg-gradient-to-r from-blue-500 to-cyan-500 border-0 text-white'}`}
+                      disabled={alreadyRegistered}
+                      data-testid="button-register-space"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      {alreadyRegistered ? "Already Registered" : "Register for Space"}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md rounded-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-display">Register for Vendor Space</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-2">
+                      {isVendorPro && (
+                        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300">
+                          <ShieldCheck className="w-4 h-4 shrink-0" />
+                          <span>Vendor Pro — no platform fees applied!</span>
+                        </div>
+                      )}
+                      <div className="p-4 bg-muted/50 rounded-xl space-y-2 text-sm">
+                        <div className="flex justify-between"><span>Space price:</span><strong>${spotPriceDollars}</strong></div>
+                        {!isVendorPro && platformFee > 0 && <div className="flex justify-between text-amber-600"><span>Platform fee (0.5%):</span><strong>${platformFeeDollars}</strong></div>}
+                        <div className="flex justify-between font-bold border-t border-border/50 pt-2"><span>Total:</span><strong>${isVendorPro ? spotPriceDollars : totalDollars}</strong></div>
+                      </div>
+
+                      {hasEventMap && availableSpots.length > 0 && (
+                        <div>
+                          <label className="text-sm font-semibold mb-2 block">Select a spot</label>
+                          <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                            {availableSpots.map((spot: any) => (
+                              <button
+                                key={spot.id}
+                                onClick={() => setSelectedSpot(spot)}
+                                className={`p-2 text-xs rounded-xl border-2 transition-all ${selectedSpot?.id === spot.id ? 'border-primary bg-primary/10 font-bold' : 'border-border hover:border-primary/50'}`}
+                                data-testid={`spot-${spot.id}`}
+                              >
+                                {spot.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!hasEventMap && (
+                        <p className="text-sm text-muted-foreground">You'll be assigned a space by the event organizer.</p>
+                      )}
+
+                      <Button
+                        className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 border-0 text-white"
+                        disabled={isRegistering || (hasEventMap && availableSpots.length > 0 && !selectedSpot)}
+                        onClick={() => {
+                          registerSpace({ spotId: selectedSpot?.id, spotName: selectedSpot?.name }, {
+                            onSuccess: () => { setRegisterDialogOpen(false); setSelectedSpot(null); }
+                          });
+                        }}
+                        data-testid="button-confirm-registration"
+                      >
+                        {isRegistering ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Registering...</> : spotPrice > 0 ? "Reserve & Pay" : "Register (Free)"}
+                      </Button>
+                      {!isAuthenticated && <p className="text-xs text-center text-muted-foreground">Please log in to register.</p>}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           ) : (
             <Button asChild variant="outline" className="rounded-xl" data-testid="button-login-to-attend">
@@ -219,13 +331,22 @@ export default function EventDetail() {
 
       {/* Content Tabs */}
       <Tabs defaultValue="vendors" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 rounded-xl h-12">
-          <TabsTrigger value="vendors" className="rounded-lg px-6 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+        <TabsList className="bg-muted/50 p-1 rounded-xl h-12 flex-wrap gap-1">
+          <TabsTrigger value="vendors" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
             Vendors <Badge variant="secondary" className="ml-2 text-xs">{posts?.length || 0}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="gallery" className="rounded-lg px-6 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            Item Gallery
-          </TabsTrigger>
+          <TabsTrigger value="gallery" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Gallery</TabsTrigger>
+          {hasVendorSpaces && (
+            <TabsTrigger value="spaces" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Package className="w-4 h-4 mr-1.5" />Vendor Spaces
+              <Badge variant="secondary" className="ml-2 text-xs">{(registrations || []).filter((r: any) => r.status === 'paid').length}</Badge>
+            </TabsTrigger>
+          )}
+          {hasEventMap && (
+            <TabsTrigger value="map" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+              <Map className="w-4 h-4 mr-1.5" />Layout Map
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="vendors" className="mt-0">
@@ -281,6 +402,43 @@ export default function EventDetail() {
             )}
           </div>
         </TabsContent>
+
+        {hasVendorSpaces && (
+          <TabsContent value="spaces" className="mt-0">
+            <div className="space-y-4">
+              {(registrations || []).length === 0 ? (
+                <div className="text-center py-12 bg-card rounded-2xl border border-dashed">
+                  <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-muted-foreground">No vendors registered yet.</p>
+                </div>
+              ) : (
+                (registrations || []).map((r: any) => (
+                  <div key={r.id} className="flex items-center gap-4 p-4 bg-card rounded-2xl border border-border/50 shadow-sm" data-testid={`registration-${r.id}`}>
+                    <Avatar className="w-10 h-10"><AvatarImage src={r.vendorAvatar || ""} /><AvatarFallback><User className="w-4 h-4" /></AvatarFallback></Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{r.vendorName || "Vendor"}</p>
+                      {r.spotName && <p className="text-sm text-muted-foreground">Spot: {r.spotName}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      {r.amountCents > 0 && <p className="text-sm font-medium">${(r.amountCents / 100).toFixed(2)}</p>}
+                    </div>
+                    <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className={r.status === 'paid' ? 'bg-green-500' : ''}>{r.status}</Badge>
+                    {r.isPro && <Badge variant="outline" className="text-blue-600 border-blue-300 text-xs">Pro</Badge>}
+                  </div>
+                ))
+              )}
+            </div>
+          </TabsContent>
+        )}
+
+        {hasEventMap && (
+          <TabsContent value="map" className="mt-0">
+            <div className="bg-card rounded-2xl border border-border/50 p-6">
+              <h3 className="font-bold text-lg mb-4">Vendor Layout Map</h3>
+              <EventMapEditor eventId={eventId} readOnly={true} registrations={registrations || []} />
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

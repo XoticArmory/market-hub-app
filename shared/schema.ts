@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, varchar, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, varchar, boolean, jsonb, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -6,14 +6,17 @@ import { users } from "./models/auth";
 export const userProfiles = pgTable("user_profiles", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().unique().references(() => users.id),
-  profileType: text("profile_type").notNull().default("general"), // 'event_owner' | 'vendor' | 'general'
+  profileType: text("profile_type").notNull().default("general"),
+  subscriptionTier: text("subscription_tier").notNull().default("free"),
   areaCode: text("area_code"),
   bio: text("bio"),
   businessName: text("business_name"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
-  subscriptionStatus: text("subscription_status").default("inactive"), // 'active' | 'inactive' | 'canceled'
+  subscriptionStatus: text("subscription_status").default("inactive"),
   isAdmin: boolean("is_admin").default(false),
+  onboardingComplete: boolean("onboarding_complete").default(false),
+  termsAcceptedAt: timestamp("terms_accepted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -27,6 +30,7 @@ export const events = pgTable("events", {
   date: timestamp("date").notNull(),
   vendorSpaces: integer("vendor_spaces").default(0),
   vendorSpacesUsed: integer("vendor_spaces_used").default(0),
+  spotPrice: integer("spot_price_cents").default(0),
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -42,7 +46,7 @@ export const eventAttendance = pgTable("event_attendance", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id").notNull().references(() => events.id),
   userId: varchar("user_id").notNull().references(() => users.id),
-  status: text("status").notNull(), // 'attending' | 'interested'
+  status: text("status").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -70,6 +74,47 @@ export const adminSettings = pgTable("admin_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  fromUserId: varchar("from_user_id").references(() => users.id),
+  type: text("type").notNull().default("event"),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  eventId: integer("event_id").references(() => events.id),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const eventMaps = pgTable("event_maps", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().unique().references(() => events.id),
+  mapData: jsonb("map_data").notNull().default("{}"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const vendorRegistrations = pgTable("vendor_registrations", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  vendorId: varchar("vendor_id").notNull().references(() => users.id),
+  spotId: text("spot_id"),
+  spotName: text("spot_name"),
+  amountCents: integer("amount_cents").default(0),
+  feeCents: integer("fee_cents").default(0),
+  isPro: boolean("is_pro").default(false),
+  status: text("status").notNull().default("pending"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const termsAcceptances = pgTable("terms_acceptances", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  tier: text("tier").notNull(),
+  acceptedAt: timestamp("accepted_at").defaultNow(),
+});
+
 // ---- Schemas ----
 export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
 export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdBy: true, createdAt: true, vendorSpacesUsed: true });
@@ -77,6 +122,8 @@ export const insertEventDateSchema = createInsertSchema(eventDates).omit({ id: t
 export const insertEventAttendanceSchema = createInsertSchema(eventAttendance).omit({ id: true, userId: true, createdAt: true });
 export const insertVendorPostSchema = createInsertSchema(vendorPosts).omit({ id: true, vendorId: true, createdAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, senderId: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertVendorRegistrationSchema = createInsertSchema(vendorRegistrations).omit({ id: true, createdAt: true });
 
 // ---- Types ----
 export type UserProfile = typeof userProfiles.$inferSelect;
@@ -98,15 +145,21 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type CreateMessageRequest = InsertMessage;
 
 export type AdminSetting = typeof adminSettings.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type EventMap = typeof eventMaps.$inferSelect;
+export type VendorRegistration = typeof vendorRegistrations.$inferSelect;
+export type TermsAcceptance = typeof termsAcceptances.$inferSelect;
 
 // ---- API Contract Types ----
 export type EventResponse = Event & {
   creatorName?: string | null;
+  creatorTier?: string | null;
   extraDates?: EventDate[];
   attendingCount?: number;
   interestedCount?: number;
   vendorAttendees?: VendorPostResponse[];
   userStatus?: string | null;
+  isFeatured?: boolean;
 };
 export type VendorPostResponse = VendorPost & { vendorName?: string | null; vendorAvatar?: string | null };
 export type MessageResponse = Message & { senderName?: string | null; senderAvatar?: string | null };
