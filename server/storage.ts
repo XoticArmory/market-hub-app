@@ -42,6 +42,8 @@ export interface IStorage {
   // Vendor Posts
   getVendorPosts(eventId: number): Promise<VendorPost[]>;
   createVendorPost(post: InsertVendorPost & { vendorId: string }): Promise<VendorPost>;
+  deleteVendorPost(postId: number, vendorId?: string): Promise<void>;
+  updateVendorPostImages(postId: number, vendorId: string, imageUrls: string[]): Promise<VendorPost>;
 
   // Messages
   getMessages(areaCode?: string): Promise<Message[]>;
@@ -64,6 +66,7 @@ export interface IStorage {
   createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt'>): Promise<VendorRegistration>;
   updateRegistrationStatus(id: number, status: string, paymentIntentId?: string): Promise<void>;
   getAllRegistrations(): Promise<VendorRegistration[]>;
+  cancelVendorRegistration(eventId: number, vendorId: string): Promise<void>;
 
   // Terms
   acceptTerms(userId: string, tier: string): Promise<void>;
@@ -246,6 +249,22 @@ export class DatabaseStorage implements IStorage {
     return p;
   }
 
+  async deleteVendorPost(postId: number, vendorId?: string): Promise<void> {
+    if (vendorId) {
+      await db.delete(vendorPosts).where(and(eq(vendorPosts.id, postId), eq(vendorPosts.vendorId, vendorId)));
+    } else {
+      await db.delete(vendorPosts).where(eq(vendorPosts.id, postId));
+    }
+  }
+
+  async updateVendorPostImages(postId: number, vendorId: string, imageUrls: string[]): Promise<VendorPost> {
+    const [p] = await db.update(vendorPosts)
+      .set({ imageUrls })
+      .where(and(eq(vendorPosts.id, postId), eq(vendorPosts.vendorId, vendorId)))
+      .returning();
+    return p;
+  }
+
   // ---- Messages ----
   async getMessages(areaCode?: string): Promise<Message[]> {
     if (areaCode) {
@@ -327,6 +346,12 @@ export class DatabaseStorage implements IStorage {
 
   async getAllRegistrations(): Promise<VendorRegistration[]> {
     return await db.select().from(vendorRegistrations).orderBy(desc(vendorRegistrations.createdAt));
+  }
+
+  async cancelVendorRegistration(eventId: number, vendorId: string): Promise<void> {
+    await db.update(vendorRegistrations)
+      .set({ status: 'canceled' })
+      .where(and(eq(vendorRegistrations.eventId, eventId), eq(vendorRegistrations.vendorId, vendorId)));
   }
 
   // ---- Terms ----

@@ -52,3 +52,27 @@ export function useUserRegistrations() {
     retry: false,
   });
 }
+
+export function useUnregisterVendorSpace(eventId: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/unregister`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ message: "Failed to unregister" }));
+        throw new Error(e.message);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      toast({ title: "Unregistered", description: "Your space registration has been canceled." });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+}

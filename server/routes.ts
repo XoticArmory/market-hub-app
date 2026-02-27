@@ -228,12 +228,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const eventId = Number(req.params.eventId);
       const input = api.vendorPosts.create.input.parse(req.body);
       const userId = req.user.claims.sub;
-      const created = await storage.createVendorPost({ ...input, eventId, vendorId: userId });
+      const profile = await storage.getUserProfile(userId);
+      const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+      const created = await storage.createVendorPost({ ...input, eventId, vendorId: userId, isVendorPro });
       res.status(201).json(created);
     } catch (e) {
       if (e instanceof z.ZodError) return res.status(400).json({ message: e.errors[0].message });
       throw e;
     }
+  });
+
+  app.delete('/api/events/:eventId/posts/:postId', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const postId = Number(req.params.postId);
+    const profile = await storage.getUserProfile(userId);
+    await storage.deleteVendorPost(postId, profile?.isAdmin ? undefined as any : userId);
+    res.status(204).end();
+  });
+
+  app.patch('/api/events/:eventId/posts/:postId/images', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const postId = Number(req.params.postId);
+    const { imageUrls } = req.body;
+    if (!Array.isArray(imageUrls)) return res.status(400).json({ message: "imageUrls must be an array" });
+    const profile = await storage.getUserProfile(userId);
+    const maxPhotos = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin ? 10 : 3;
+    const limited = (imageUrls as string[]).slice(0, maxPhotos);
+    const updated = await storage.updateVendorPostImages(postId, userId, limited);
+    res.json(updated);
+  });
+
+  app.delete('/api/events/:eventId/unregister', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.eventId);
+    await storage.cancelVendorRegistration(eventId, userId);
+    await storage.updateVendorSpacesUsed(eventId, -1);
+    res.json({ success: true });
   });
 
   // ---- MESSAGES ----
@@ -387,7 +417,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           });
           const checkoutUrl = response.paymentLink?.url;
           const paymentLinkId = response.paymentLink?.id;
-          await storage.updateRegistrationStatus(reg.id, 'pending', paymentLinkId || null);
+          await storage.updateRegistrationStatus(reg.id, 'pending', paymentLinkId || undefined);
           return res.json({ ...reg, checkoutUrl, totalCents, feeCents });
         } catch (e: any) {
           return res.status(500).json({ message: e.message });
@@ -774,7 +804,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!square) return res.status(503).json({ message: "Square not configured." });
     try {
       const response = await square.locations.list();
-      res.json(squareJson(response.data || []));
+      const locations = (response as any).locations || (response as any).data || [];
+      res.json(squareJson(locations));
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }

@@ -56,6 +56,8 @@ export const vendorPosts = pgTable("vendor_posts", {
   vendorId: varchar("vendor_id").notNull().references(() => users.id),
   itemsDescription: text("items_description").notNull(),
   imageUrl: text("image_url"),
+  imageUrls: text("image_urls").array().default([]),
+  isVendorPro: boolean("is_vendor_pro").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
