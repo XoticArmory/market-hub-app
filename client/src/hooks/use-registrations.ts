@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@shared/routes";
 
 export function useEventRegistrations(eventId: number) {
   return useQuery({
@@ -29,7 +30,8 @@ export function useRegisterVendorSpace(eventId: number) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
       if (data.clientSecret) {
         toast({ title: "Space reserved!", description: "Complete payment to confirm your spot." });
       } else {
@@ -70,7 +72,8 @@ export function useUnregisterVendorSpace(eventId: number) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
       toast({ title: "Unregistered", description: "Your space registration has been canceled." });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
