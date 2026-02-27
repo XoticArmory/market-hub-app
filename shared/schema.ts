@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, varchar, boolean, jsonb, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, varchar, boolean, jsonb, numeric, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -48,7 +48,7 @@ export const eventAttendance = pgTable("event_attendance", {
   userId: varchar("user_id").notNull().references(() => users.id),
   status: text("status").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (t) => [unique("event_attendance_event_user_unique").on(t.eventId, t.userId)]);
 
 export const vendorPosts = pgTable("vendor_posts", {
   id: serial("id").primaryKey(),
