@@ -123,10 +123,16 @@ export default function Home() {
                     <Link href={`/events/${event.id}`} className="group block h-full bg-card rounded-2xl overflow-hidden border border-border/50 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
                       <div className="h-48 bg-muted relative overflow-hidden">
                         <img src={`https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        <div className="absolute top-4 right-4 bg-background/90 backdrop-blur text-foreground px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center">
-                          <span className="text-primary">{format(new Date(event.date), 'MMM')}</span>
-                          <span className="text-xl leading-none">{format(new Date(event.date), 'dd')}</span>
-                        </div>
+                        {event.canceledAt ? (
+                          <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
+                            CANCELED
+                          </div>
+                        ) : (
+                          <div className="absolute top-4 right-4 bg-background/90 backdrop-blur text-foreground px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center">
+                            <span className="text-primary">{format(new Date(event.date), 'MMM')}</span>
+                            <span className="text-xl leading-none">{format(new Date(event.date), 'dd')}</span>
+                          </div>
+                        )}
                         {event.areaCode && (
                           <div className="absolute top-4 left-4 bg-background/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-semibold text-foreground flex items-center gap-1">
                             <Hash className="w-3 h-3" />{event.areaCode}

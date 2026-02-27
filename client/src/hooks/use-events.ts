@@ -29,6 +29,27 @@ export function useEvent(id: number) {
   });
 }
 
+export function useCancelEvent(eventId: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/cancel`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+      toast({ title: "Event canceled", description: `${data.notified} attendee(s) have been notified.` });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+}
+
 export function useCreateEvent() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

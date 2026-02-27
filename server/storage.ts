@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, and, inArray, sql, gte } from "drizzle-orm";
+import { eq, desc, and, inArray, sql, gte, or, isNull, lt } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
@@ -24,6 +24,7 @@ export interface IStorage {
   getEventsByOwner(ownerId: string): Promise<Event[]>;
   createEvent(event: InsertEvent & { createdBy: string }): Promise<Event>;
   deleteEvent(id: number): Promise<void>;
+  cancelEvent(id: number): Promise<void>;
   updateVendorSpacesUsed(eventId: number, delta: number): Promise<void>;
 
   // Event Dates
@@ -128,10 +129,12 @@ export class DatabaseStorage implements IStorage {
 
   // ---- Events ----
   async getEvents(areaCode?: string): Promise<Event[]> {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const notExpired = or(isNull(events.canceledAt), gte(events.canceledAt, threeDaysAgo));
     if (areaCode) {
-      return await db.select().from(events).where(eq(events.areaCode, areaCode)).orderBy(desc(events.createdAt));
+      return await db.select().from(events).where(and(eq(events.areaCode, areaCode), notExpired!)).orderBy(desc(events.createdAt));
     }
-    return await db.select().from(events).orderBy(desc(events.createdAt));
+    return await db.select().from(events).where(notExpired!).orderBy(desc(events.createdAt));
   }
 
   async getEvent(id: number): Promise<Event | undefined> {
@@ -150,6 +153,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEvent(id: number): Promise<void> {
     await db.delete(events).where(eq(events.id, id));
+  }
+
+  async cancelEvent(id: number): Promise<void> {
+    await db.update(events).set({ canceledAt: new Date() }).where(eq(events.id, id));
   }
 
   async updateVendorSpacesUsed(eventId: number, delta: number): Promise<void> {

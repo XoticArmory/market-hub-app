@@ -33,6 +33,7 @@ export const events = pgTable("events", {
   spotPrice: integer("spot_price_cents").default(0),
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
+  canceledAt: timestamp("canceled_at"),
 });
 
 export const eventDates = pgTable("event_dates", {

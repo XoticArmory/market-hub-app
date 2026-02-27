@@ -1,5 +1,5 @@
 import { useParams, Link } from "wouter";
-import { useEvent } from "@/hooks/use-events";
+import { useEvent, useCancelEvent } from "@/hooks/use-events";
 import { useVendorPosts, useCreateVendorPost, useDeleteVendorPost, useUpdateVendorPostImages } from "@/hooks/use-vendor-posts";
 import { useSetAttendance, useRemoveAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
@@ -45,10 +45,13 @@ export default function EventDetail() {
   const { mutate: registerSpace, isPending: isRegistering } = useRegisterVendorSpace(eventId);
   const { mutate: unregisterSpace, isPending: isUnregistering } = useUnregisterVendorSpace(eventId);
 
+  const { mutate: cancelEvent, isPending: isCanceling } = useCancelEvent(eventId);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
   const [unregisterDialogOpen, setUnregisterDialogOpen] = useState(false);
   const [unregisterPostDialogOpen, setUnregisterPostDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [addPhotoDialogOpen, setAddPhotoDialogOpen] = useState(false);
   const [addPhotoUrl, setAddPhotoUrl] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<any>(null);
@@ -150,6 +153,15 @@ export default function EventDetail() {
         </div>
 
         <div className="p-6 md:p-10 bg-card">
+          {event.canceledAt && (
+            <div className="flex items-center gap-3 mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-2xl text-destructive">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <div>
+                <p className="font-bold">This event has been canceled</p>
+                <p className="text-sm opacity-80">All attendees and registered vendors have been notified.</p>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-6 text-muted-foreground mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><Calendar className="w-5 h-5" /></div>
@@ -240,6 +252,35 @@ export default function EventDetail() {
                 <Star className="w-4 h-4" />
                 {userStatus === "interested" ? "Interested" : "Mark Interested"}
               </Button>
+
+              {/* Cancel Event — owner only */}
+              {(isOwner || isAdmin) && !event.canceledAt && (
+                <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="default" variant="outline" className="rounded-xl gap-2 border-destructive/50 text-destructive hover:bg-destructive/10 ml-auto" data-testid="button-cancel-event">
+                      <AlertTriangle className="w-4 h-4" />Cancel Event
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md rounded-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-xl font-display">Cancel This Event?</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground text-sm mt-1">Push notifications will be sent to all attending vendors and users. Continue?</p>
+                    <div className="flex gap-3 mt-4">
+                      <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCancelDialogOpen(false)}>No</Button>
+                      <Button
+                        variant="destructive"
+                        className="flex-1 rounded-xl"
+                        disabled={isCanceling}
+                        onClick={() => { cancelEvent(undefined, { onSuccess: () => setCancelDialogOpen(false) }); }}
+                        data-testid="button-confirm-cancel-event"
+                      >
+                        {isCanceling ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Canceling...</> : "Yes, Cancel Event"}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
 
               {/* I'm Vending Here / Unregister Post */}
               {(isVendor || isVendorPro || isAdmin || (!isEventOwner && !isOwner)) && (
