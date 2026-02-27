@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@shared/routes";
 
 export function useAttendance(eventId: number) {
   return useQuery({
@@ -28,8 +29,8 @@ export function useSetAttendance(eventId: number) {
       return res.json();
     },
     onSuccess: (_, status) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
       toast({ title: status === "attending" ? "You're attending!" : "Marked as interested!" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -48,8 +49,8 @@ export function useRemoveAttendance(eventId: number) {
       if (!res.ok) throw new Error("Failed to remove");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
       toast({ title: "Attendance removed" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
