@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useCreateEvent } from "@/hooks/use-events";
 import { useProfile } from "@/hooks/use-profile";
-import { useSubscriptionStatus } from "@/hooks/use-stripe";
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -28,15 +27,12 @@ type FormValues = z.infer<typeof formSchema>;
 export default function AddEvent() {
   const { isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
-  const { data: subStatus } = useSubscriptionStatus();
   const { mutate: createEvent, isPending } = useCreateEvent();
   const [, setLocation] = useLocation();
   const [extraDates, setExtraDates] = useState<string[]>([]);
   const [newDate, setNewDate] = useState("");
 
   const profile = profileData?.profile;
-  const isEventOwner = profile?.profileType === "event_owner";
-  const hasSubscription = profile?.subscriptionStatus === "active";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -73,23 +69,6 @@ export default function AddEvent() {
         <Store className="w-16 h-16 text-primary mx-auto mb-6" />
         <h2 className="text-3xl font-display font-bold mb-4">Login Required</h2>
         <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><a href="/api/login">Login to Continue</a></Button>
-      </div>
-    );
-  }
-
-  if (isEventOwner && !hasSubscription) {
-    return (
-      <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg space-y-6">
-        <Store className="w-16 h-16 text-primary mx-auto" />
-        <div>
-          <h2 className="text-3xl font-display font-bold mb-2">Subscription Required</h2>
-          <p className="text-muted-foreground">Market Owners need an active $5/month subscription to post events.</p>
-        </div>
-        <Link href="/profile">
-          <Button size="lg" className="w-full rounded-xl bg-gradient-to-r from-primary to-amber-500" data-testid="button-go-to-billing">
-            Subscribe to Post Events
-          </Button>
-        </Link>
       </div>
     );
   }
