@@ -231,6 +231,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const profile = await storage.getUserProfile(userId);
       const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
       const created = await storage.createVendorPost({ ...input, eventId, vendorId: userId, isVendorPro });
+      const ev = await storage.getEvent(eventId);
+      if (ev && (ev.vendorSpaces || 0) > 0) await storage.updateVendorSpacesUsed(eventId, 1);
       res.status(201).json(created);
     } catch (e) {
       if (e instanceof z.ZodError) return res.status(400).json({ message: e.errors[0].message });
@@ -240,9 +242,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete('/api/events/:eventId/posts/:postId', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
+    const eventId = Number(req.params.eventId);
     const postId = Number(req.params.postId);
     const profile = await storage.getUserProfile(userId);
     await storage.deleteVendorPost(postId, profile?.isAdmin ? undefined as any : userId);
+    const ev = await storage.getEvent(eventId);
+    if (ev && (ev.vendorSpaces || 0) > 0) await storage.updateVendorSpacesUsed(eventId, -1);
     res.status(204).end();
   });
 

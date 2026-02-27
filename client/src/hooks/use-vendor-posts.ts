@@ -38,6 +38,8 @@ export function useCreateVendorPost(eventId: number) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.vendorPosts.listByEvent.path, eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
       toast({ title: "Post added!", description: "Your items have been listed for this event." });
     },
     onError: (error: Error) => {
@@ -63,6 +65,8 @@ export function useDeleteVendorPost(eventId: number) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.vendorPosts.listByEvent.path, eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+      queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
       toast({ title: "Unregistered", description: "Your vendor listing has been removed." });
     },
     onError: (error: Error) => {
