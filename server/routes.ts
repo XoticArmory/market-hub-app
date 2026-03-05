@@ -7,6 +7,12 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integra
 import { authStorage } from "./replit_integrations/auth/storage";
 import { SquareClient, SquareEnvironment } from "square";
 
+function tierToProfileType(tier: string): string {
+  if (tier === 'event_owner_pro') return 'event_owner';
+  if (tier === 'vendor_pro') return 'vendor';
+  return 'general';
+}
+
 function getSquare(): SquareClient | null {
   if (!process.env.SQUARE_ACCESS_TOKEN) return null;
   const token = process.env.SQUARE_ACCESS_TOKEN;
@@ -712,6 +718,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     await storage.upsertUserProfile(userId, {
       subscriptionTier: tier as any,
       subscriptionStatus: 'active',
+      profileType: tierToProfileType(tier) as any,
     });
     res.json({ success: true });
   });
@@ -751,6 +758,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                     subscriptionTier: tier as any,
                     subscriptionStatus: 'active',
                     stripeSubscriptionId: payment.id,
+                    profileType: tierToProfileType(tier) as any,
                   });
                 }
               }
@@ -775,7 +783,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const profiles = await storage.getAllUserProfiles();
           const profile = profiles.find(p => p.stripeCustomerId === subscription.subscriberId);
           if (profile) {
-            await storage.upsertUserProfile(profile.userId, { subscriptionStatus: 'inactive', subscriptionTier: 'free' });
+            await storage.upsertUserProfile(profile.userId, { subscriptionStatus: 'inactive', subscriptionTier: 'free', profileType: 'general' as any });
           }
         }
       }
@@ -836,6 +844,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     await storage.upsertUserProfile(userId, {
       subscriptionTier: validTier as any,
       subscriptionStatus: validStatus,
+      profileType: (validStatus === 'active' ? tierToProfileType(validTier) : 'general') as any,
     });
     res.json({ success: true });
   });

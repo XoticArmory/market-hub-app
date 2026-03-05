@@ -34,6 +34,14 @@ const TIER_LABELS: Record<string, string> = {
   free: "Free",
 };
 
+function tierToProfileType(tier?: string | null, status?: string | null): string {
+  if (status === "active") {
+    if (tier === "event_owner_pro") return "event_owner";
+    if (tier === "vendor_pro") return "vendor";
+  }
+  return "general";
+}
+
 function VendorAnalyticsTab({ userId }: { userId: string }) {
   const { toast } = useToast();
   const [selectedEventId, setSelectedEventId] = useState<number | "">("");
@@ -371,7 +379,7 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-display font-bold text-foreground">{user?.firstName} {user?.lastName}</h1>
           <p className="text-muted-foreground">{user?.email}</p>
           <div className="flex flex-wrap gap-2 mt-2">
-            {profile && <Badge variant="secondary" className="capitalize">{profile.profileType?.replace("_", " ")}</Badge>}
+            {profile && <Badge variant="secondary" className="capitalize">{tierToProfileType(profile.subscriptionTier, profile.subscriptionStatus).replace("_", " ")}</Badge>}
             {profile?.areaCode && <Badge variant="outline"><MapPin className="w-3 h-3 mr-1" />{profile.areaCode}</Badge>}
             {isAdmin && <Badge className="bg-amber-500 text-white"><ShieldCheck className="w-3 h-3 mr-1" />Admin — All Access</Badge>}
             {hasActivePro && !isAdmin && (
@@ -429,7 +437,7 @@ export default function ProfilePage() {
               <div>
                 <label className="text-sm font-semibold mb-3 block">Account Type</label>
                 {(() => {
-                  const current = PROFILE_TYPES.find(t => t.value === (profile?.profileType || "general"));
+                  const current = PROFILE_TYPES.find(t => t.value === tierToProfileType(profile?.subscriptionTier, profile?.subscriptionStatus));
                   const Icon = current?.icon || Users;
                   return (
                     <div className="flex items-center gap-4 p-5 rounded-2xl border-2 border-primary bg-primary/5 w-fit" data-testid="display-account-type">
@@ -447,7 +455,7 @@ export default function ProfilePage() {
                   <label className="text-sm font-semibold mb-2 block">Area Code / ZIP</label>
                   <Input data-testid="input-area-code" placeholder="e.g. 90210" value={form.areaCode} onChange={e => setForm(f => ({ ...f, areaCode: e.target.value }))} className="rounded-xl" />
                 </div>
-                {(form.profileType === "event_owner" || form.profileType === "vendor") && (
+                {(tierToProfileType(profile?.subscriptionTier, profile?.subscriptionStatus) === "event_owner" || tierToProfileType(profile?.subscriptionTier, profile?.subscriptionStatus) === "vendor") && (
                   <div>
                     <label className="text-sm font-semibold mb-2 block">Business Name</label>
                     <Input data-testid="input-business-name" placeholder="Your market or vendor name" value={form.businessName} onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))} className="rounded-xl" />
