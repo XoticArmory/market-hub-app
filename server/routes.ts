@@ -10,7 +10,6 @@ import { SquareClient, SquareEnvironment } from "square";
 function tierToProfileType(tier: string): string {
   if (tier === 'event_owner_pro') return 'event_owner';
   if (tier === 'vendor_pro') return 'vendor';
-  if (tier === 'general_pro') return 'general';
   return 'general';
 }
 
@@ -723,7 +722,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.square.subscriptionComplete.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { tier } = req.body;
-    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+    if (!tier || !['event_owner_pro', 'vendor_pro'].includes(tier)) {
       return res.status(400).json({ message: "Invalid tier." });
     }
     await storage.upsertUserProfile(userId, {
@@ -764,7 +763,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               if (userIdMatch && tierMatch) {
                 const userId = userIdMatch[1];
                 const tier = tierMatch[1];
-                if (['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+                if (['event_owner_pro', 'vendor_pro'].includes(tier)) {
                   await storage.upsertUserProfile(userId, {
                     subscriptionTier: tier as any,
                     subscriptionStatus: 'active',

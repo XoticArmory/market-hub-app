@@ -80,23 +80,6 @@ const TIERS = [
     features: VENDOR_PRO_FEATURES,
     includedFeatures: [],
   },
-  {
-    id: "general_pro",
-    label: "General Pro",
-    price: "$4.95",
-    period: "/month",
-    icon: Crown,
-    color: "from-violet-500 to-purple-600",
-    badge: "Best Value",
-    features: [
-      "Community Pro badge on your profile",
-      "Priority placement in community board",
-      "Access to exclusive community chat channels",
-      "Early access to new platform features",
-      "Support the artisan community",
-    ],
-    includedFeatures: [],
-  },
 ];
 
 export default function UpgradePage() {
@@ -180,7 +163,7 @@ export default function UpgradePage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
         {TIERS.map(({ id, label, price, period, icon: Icon, color, badge, features, includedFeatures }) => {
           const isCurrentPlan = currentTier === id && hasActivePro;
           return (

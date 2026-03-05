@@ -31,7 +31,6 @@ const PROFILE_TYPES = [
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
-  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -39,7 +38,6 @@ function tierToProfileType(tier?: string | null, status?: string | null): string
   if (status === "active") {
     if (tier === "event_owner_pro") return "event_owner";
     if (tier === "vendor_pro") return "vendor";
-    if (tier === "general_pro") return "general";
   }
   return "general";
 }

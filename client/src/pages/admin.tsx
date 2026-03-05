@@ -19,7 +19,6 @@ import { format } from "date-fns";
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
-  general_pro: "General Pro",
   free: "Free",
 };
 

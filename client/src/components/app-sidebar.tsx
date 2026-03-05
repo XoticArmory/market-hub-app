@@ -13,7 +13,6 @@ import { useUnreadCount } from "@/hooks/use-notifications";
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
-  general_pro: "General Pro",
 };
 
 export function AppSidebar() {
