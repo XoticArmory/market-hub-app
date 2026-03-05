@@ -9,8 +9,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { useLocation, Link, Redirect } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Crown } from "lucide-react";
+import { useLocation } from "wouter";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -27,14 +27,11 @@ type FormValues = z.infer<typeof formSchema>;
 export default function AddEvent() {
   const { isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
+  const profile = profileData?.profile;
   const { mutate: createEvent, isPending } = useCreateEvent();
   const [, setLocation] = useLocation();
   const [extraDates, setExtraDates] = useState<string[]>([]);
   const [newDate, setNewDate] = useState("");
-
-  const profile = profileData?.profile;
-  const isAdmin = profile?.isAdmin === true;
-  const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -75,18 +72,6 @@ export default function AddEvent() {
     );
   }
 
-  if (profileData && !isEventOwnerPro) {
-    return (
-      <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
-        <Crown className="w-16 h-16 text-amber-500 mx-auto mb-6" />
-        <h2 className="text-3xl font-display font-bold mb-3">Event Owner Pro Required</h2>
-        <p className="text-muted-foreground mb-8">Only Event Owner Pro subscribers can post events. Upgrade to start hosting markets, craft fairs, and pop-ups.</p>
-        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full bg-gradient-to-r from-primary to-amber-500 border-0 text-white shadow-lg">
-          <Link href="/upgrade">View Pro Plans</Link>
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-2xl mx-auto">

@@ -3,6 +3,7 @@ import { eq, desc, and, inArray, sql, gte, or, isNull, lt } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
+  promoCodes, promoCodeUses,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -91,6 +92,14 @@ export interface IStorage {
   updateVendorInventoryItem(id: number, data: Partial<InsertVendorInventory>): Promise<VendorInventoryItem>;
   deleteVendorInventoryItem(id: number): Promise<void>;
   getVendorAnalytics(vendorId: string): Promise<any>;
+
+  // Promo Codes
+  getAllPromoCodes(): Promise<any[]>;
+  createPromoCode(createdBy: string, data: any): Promise<any>;
+  deactivatePromoCode(id: number): Promise<void>;
+  validatePromoCode(code: string, tier: string): Promise<{ valid: boolean; promoCode?: any; error?: string }>;
+  redeemPromoCode(code: string, userId: string, tier: string): Promise<any>;
+  revokePromoCodeAccess(promoCodeId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -529,6 +538,61 @@ export class DatabaseStorage implements IStorage {
       inventoryByEvent,
       itemSummary,
     };
+  }
+
+  // ---- Promo Codes ----
+  async getAllPromoCodes(): Promise<any[]> {
+    const codes = await db.select().from(promoCodes).orderBy(desc(promoCodes.createdAt));
+    const uses = await db.select().from(promoCodeUses);
+    return codes.map(c => ({
+      ...c,
+      uses: uses.filter(u => u.promoCodeId === c.id),
+    }));
+  }
+
+  async createPromoCode(createdBy: string, data: any): Promise<any> {
+    const [code] = await db.insert(promoCodes).values({
+      code: data.code.toUpperCase().trim(),
+      type: data.type,
+      discountPercent: data.discountPercent || null,
+      applicableTier: data.applicableTier || null,
+      expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+      maxUses: data.maxUses || null,
+      createdBy,
+    }).returning();
+    return code;
+  }
+
+  async deactivatePromoCode(id: number): Promise<void> {
+    await db.update(promoCodes).set({ isActive: false }).where(eq(promoCodes.id, id));
+  }
+
+  async validatePromoCode(code: string, tier: string): Promise<{ valid: boolean; promoCode?: any; error?: string }> {
+    const [pc] = await db.select().from(promoCodes)
+      .where(and(eq(promoCodes.code, code.toUpperCase().trim()), eq(promoCodes.isActive, true)));
+    if (!pc) return { valid: false, error: "Invalid or inactive promo code." };
+    if (pc.expiresAt && pc.expiresAt < new Date()) return { valid: false, error: "This promo code has expired." };
+    if (pc.maxUses !== null && pc.usesCount >= pc.maxUses) return { valid: false, error: "This promo code has reached its maximum uses." };
+    if (pc.applicableTier && pc.applicableTier !== tier && pc.type === 'discount') return { valid: false, error: `This code is only valid for ${pc.applicableTier.replace(/_/g, ' ')}.` };
+    return { valid: true, promoCode: pc };
+  }
+
+  async redeemPromoCode(code: string, userId: string, tier: string): Promise<any> {
+    const [pc] = await db.select().from(promoCodes)
+      .where(and(eq(promoCodes.code, code.toUpperCase().trim()), eq(promoCodes.isActive, true)));
+    if (!pc) throw new Error("Invalid promo code.");
+    await db.update(promoCodes).set({ usesCount: pc.usesCount + 1 }).where(eq(promoCodes.id, pc.id));
+    await db.insert(promoCodeUses).values({ promoCodeId: pc.id, userId, tier });
+    return pc;
+  }
+
+  async revokePromoCodeAccess(promoCodeId: number): Promise<void> {
+    const uses = await db.select().from(promoCodeUses).where(eq(promoCodeUses.promoCodeId, promoCodeId));
+    const userIds = [...new Set(uses.map(u => u.userId))];
+    for (const uid of userIds) {
+      await db.update(userProfiles).set({ isAdmin: false }).where(eq(userProfiles.userId, uid));
+    }
+    await db.update(promoCodes).set({ isActive: false }).where(eq(promoCodes.id, promoCodeId));
   }
 }
 

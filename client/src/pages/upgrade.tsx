@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { useUpgradeCheckout } from "@/hooks/use-upgrade";
+import { useUpgradeCheckout, useValidatePromo, useRedeemAdminCode } from "@/hooks/use-upgrade";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 import { usePortalSession } from "@/hooks/use-stripe";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CheckCircle, Store, Package, Zap, Bell, BarChart3, Map, Crown, ArrowRight } from "lucide-react";
-import { useLocation } from "wouter";
+import { CheckCircle, Store, Package, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X } from "lucide-react";
 
 const TERMS = `ARTISAN COLLECTIVE PRO — SUBSCRIPTION TERMS OF SERVICE
 
@@ -53,11 +53,11 @@ const TIERS = [
   {
     id: "event_owner_pro",
     label: "Event Owner Pro",
-    price: "$9.95",
+    price: "$19.95",
     period: "/month",
     icon: Store,
     color: "from-primary to-amber-500",
-    badge: "Best Value",
+    badge: "Most Popular",
     features: [
       "Post unlimited events to the community board",
       "Featured placement at the top of your area's board",
@@ -72,12 +72,29 @@ const TIERS = [
   {
     id: "vendor_pro",
     label: "Vendor Pro",
-    price: "$4.95",
+    price: "$9.95",
     period: "/month",
     icon: Package,
     color: "from-blue-500 to-cyan-500",
     badge: null,
     features: VENDOR_PRO_FEATURES,
+    includedFeatures: [],
+  },
+  {
+    id: "general_pro",
+    label: "General Pro",
+    price: "$4.95",
+    period: "/month",
+    icon: Crown,
+    color: "from-violet-500 to-purple-600",
+    badge: "Best Value",
+    features: [
+      "Community Pro badge on your profile",
+      "Priority placement in community board",
+      "Access to exclusive community chat channels",
+      "Early access to new platform features",
+      "Support the artisan community",
+    ],
     includedFeatures: [],
   },
 ];
@@ -86,33 +103,64 @@ export default function UpgradePage() {
   const { isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
   const { mutate: upgrade, isPending } = useUpgradeCheckout();
+  const { mutate: validatePromo, isPending: isValidating } = useValidatePromo();
+  const { mutate: redeemAdmin, isPending: isRedeemingAdmin } = useRedeemAdminCode();
   const { mutate: portal } = usePortalSession();
-  const [, setLocation] = useLocation();
 
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsScrolled, setTermsScrolled] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
+  // Promo code state per tier dialog
+  const [promoInput, setPromoInput] = useState("");
+  const [promoResult, setPromoResult] = useState<{ valid?: boolean; discount?: number; error?: string } | null>(null);
+
+  // Admin code dialog
+  const [adminCodeOpen, setAdminCodeOpen] = useState(false);
+  const [adminCode, setAdminCode] = useState("");
+
   const profile = profileData?.profile;
   const currentTier = profile?.subscriptionTier || "free";
   const hasActivePro = profile?.subscriptionStatus === "active" && currentTier !== "free";
 
   const handleUpgrade = (tierId: string) => {
-    if (!isAuthenticated) {
-      window.location.href = "/api/login";
-      return;
-    }
+    if (!isAuthenticated) { window.location.href = "/api/login"; return; }
     setSelectedTier(tierId);
+    setPromoInput("");
+    setPromoResult(null);
     setTermsOpen(true);
     setTermsScrolled(false);
     setTermsAccepted(false);
   };
 
+  const handleValidatePromo = () => {
+    if (!promoInput.trim() || !selectedTier) return;
+    validatePromo({ code: promoInput.trim(), tier: selectedTier }, {
+      onSuccess: (data) => {
+        if (data.valid && data.promoCode?.type === 'discount') {
+          setPromoResult({ valid: true, discount: data.promoCode.discountPercent });
+        } else if (data.valid && data.promoCode?.type === 'temp_admin') {
+          setPromoResult({ valid: false, error: "That code is a temporary admin access code. Use it in the admin access field below." });
+        } else {
+          setPromoResult({ valid: false, error: data.error || "Invalid code." });
+        }
+      },
+      onError: (e: any) => setPromoResult({ valid: false, error: e.message }),
+    });
+  };
+
   const handleAcceptAndSubscribe = () => {
     if (!selectedTier || !termsAccepted) return;
     setTermsOpen(false);
-    upgrade(selectedTier);
+    upgrade({ tier: selectedTier, promoCode: promoResult?.valid ? promoInput.trim() : undefined });
+  };
+
+  const discountedPrice = (basePrice: string) => {
+    if (!promoResult?.valid || !promoResult.discount) return null;
+    const num = parseFloat(basePrice.replace("$", ""));
+    const discounted = num * (1 - promoResult.discount / 100);
+    return `$${discounted.toFixed(2)}`;
   };
 
   return (
@@ -126,13 +174,13 @@ export default function UpgradePage() {
         {hasActivePro && (
           <div className="mt-6 p-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 inline-flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-green-500" />
-            <span className="text-green-700 dark:text-green-300 font-medium">You have an active {TIERS.find(t => t.id === currentTier)?.label} subscription.</span>
+            <span className="text-green-700 dark:text-green-300 font-medium">You have an active {TIERS.find(t => t.id === currentTier)?.label || currentTier} subscription.</span>
             <Button size="sm" variant="outline" onClick={() => portal()} className="rounded-xl ml-2">Manage</Button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
         {TIERS.map(({ id, label, price, period, icon: Icon, color, badge, features, includedFeatures }) => {
           const isCurrentPlan = currentTier === id && hasActivePro;
           return (
@@ -193,7 +241,40 @@ export default function UpgradePage() {
         })}
       </div>
 
-      {/* Terms Modal */}
+      {/* Admin Access Code */}
+      {isAuthenticated && (
+        <div className="max-w-3xl mx-auto">
+          <button
+            onClick={() => setAdminCodeOpen(v => !v)}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
+            data-testid="button-have-admin-code"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Have a temporary admin access code?
+          </button>
+          {adminCodeOpen && (
+            <div className="mt-3 flex gap-2 max-w-sm">
+              <Input
+                placeholder="Enter admin access code"
+                value={adminCode}
+                onChange={e => setAdminCode(e.target.value.toUpperCase())}
+                className="rounded-xl font-mono"
+                data-testid="input-admin-code"
+              />
+              <Button
+                onClick={() => redeemAdmin(adminCode, { onSuccess: () => { setAdminCode(""); setAdminCodeOpen(false); } })}
+                disabled={!adminCode.trim() || isRedeemingAdmin}
+                className="rounded-xl shrink-0"
+                data-testid="button-redeem-admin-code"
+              >
+                {isRedeemingAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Terms + Promo Code Modal */}
       <Dialog open={termsOpen} onOpenChange={setTermsOpen}>
         <DialogContent className="max-w-2xl rounded-3xl">
           <DialogHeader>
@@ -201,7 +282,7 @@ export default function UpgradePage() {
             <DialogDescription>Please read and accept before subscribing to {TIERS.find(t => t.id === selectedTier)?.label}.</DialogDescription>
           </DialogHeader>
           <div
-            className="max-h-64 overflow-y-auto border border-border rounded-xl p-4 text-sm text-muted-foreground font-mono leading-relaxed bg-muted/30 whitespace-pre-wrap"
+            className="max-h-48 overflow-y-auto border border-border rounded-xl p-4 text-sm text-muted-foreground font-mono leading-relaxed bg-muted/30 whitespace-pre-wrap"
             onScroll={e => {
               const el = e.currentTarget;
               if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setTermsScrolled(true);
@@ -210,6 +291,44 @@ export default function UpgradePage() {
             {TERMS}
           </div>
           {!termsScrolled && <p className="text-xs text-amber-600 text-center">Please scroll to the bottom to accept.</p>}
+
+          {/* Promo Code */}
+          <div className="mt-1">
+            <p className="text-sm font-semibold mb-2 flex items-center gap-2"><Tag className="w-4 h-4 text-primary" />Promo Code (optional)</p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter promo code"
+                value={promoInput}
+                onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoResult(null); }}
+                className="rounded-xl font-mono uppercase"
+                data-testid="input-promo-code"
+              />
+              <Button
+                variant="outline"
+                onClick={handleValidatePromo}
+                disabled={!promoInput.trim() || isValidating}
+                className="rounded-xl shrink-0"
+                data-testid="button-apply-promo"
+              >
+                {isValidating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+              </Button>
+              {promoResult?.valid && (
+                <Button variant="ghost" size="icon" className="shrink-0 rounded-xl" onClick={() => { setPromoResult(null); setPromoInput(""); }}>
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+            {promoResult?.valid && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400" data-testid="promo-success">
+                <CheckCircle className="w-4 h-4" />
+                <span>{promoResult.discount}% discount applied — {discountedPrice(TIERS.find(t => t.id === selectedTier)?.price || "$0")}/mo</span>
+              </div>
+            )}
+            {promoResult?.valid === false && (
+              <p className="mt-2 text-sm text-destructive" data-testid="promo-error">{promoResult.error}</p>
+            )}
+          </div>
+
           <div className="flex items-start gap-3 mt-2">
             <input
               type="checkbox"
@@ -232,7 +351,7 @@ export default function UpgradePage() {
               onClick={handleAcceptAndSubscribe}
               data-testid="button-accept-subscribe"
             >
-              Accept & Subscribe
+              {isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Redirecting...</> : "Accept & Subscribe"}
             </Button>
           </div>
         </DialogContent>

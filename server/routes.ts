@@ -10,6 +10,7 @@ import { SquareClient, SquareEnvironment } from "square";
 function tierToProfileType(tier: string): string {
   if (tier === 'event_owner_pro') return 'event_owner';
   if (tier === 'vendor_pro') return 'vendor';
+  if (tier === 'general_pro') return 'general';
   return 'general';
 }
 
@@ -153,12 +154,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const creatorProfile = await storage.getUserProfile(userId);
-      const isAdmin = creatorProfile?.isAdmin === true;
-      const isEventOwnerPro = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-      if (!isAdmin && !isEventOwnerPro) {
-        return res.status(403).json({ message: "Event Owner Pro subscription required to post events." });
-      }
       const input = api.events.create.input.parse(req.body);
       const { extraDates, ...eventData } = input;
       const created = await storage.createEvent({ ...eventData, date: new Date(eventData.date as any), createdBy: userId });
@@ -676,7 +671,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.square.upgradeCheckout.path, isAuthenticated, async (req: any, res) => {
     const square = getSquare();
     if (!square) return res.status(503).json({ message: "Square not configured. Ask the admin to add SQUARE_ACCESS_TOKEN." });
-    const { tier } = req.body;
+    const { tier, promoCode } = req.body;
     const tierInfo = PRO_TIERS[tier as keyof typeof PRO_TIERS];
     if (!tierInfo) return res.status(400).json({ message: "Invalid tier." });
     const userId = req.user.claims.sub;
@@ -684,15 +679,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const locationId = await getSquareLocationId();
     if (!locationId) return res.status(503).json({ message: "Square Location ID not configured. Set it in Admin → Settings." });
     await storage.acceptTerms(userId, tier);
+
+    let finalPrice = tierInfo.price;
+    let promoLabel = '';
+    let redeemedPromo: any = null;
+    if (promoCode) {
+      const validation = await storage.validatePromoCode(promoCode, tier);
+      if (!validation.valid) return res.status(400).json({ message: validation.error });
+      if (validation.promoCode?.type === 'discount') {
+        const discount = validation.promoCode.discountPercent || 0;
+        finalPrice = Math.round(tierInfo.price * (1 - discount / 100));
+        promoLabel = ` (${discount}% off — code: ${promoCode.toUpperCase()})`;
+        redeemedPromo = validation.promoCode;
+      }
+    }
+
     try {
       const response = await square.checkout.paymentLinks.create({
         idempotencyKey: `upgrade-${userId}-${tier}-${Date.now()}`,
         order: {
           locationId,
           lineItems: [{
-            name: `${tierInfo.label} — Monthly Subscription`,
+            name: `${tierInfo.label} — Monthly Subscription${promoLabel}`,
             quantity: "1",
-            basePriceMoney: { amount: BigInt(tierInfo.price), currency: "USD" },
+            basePriceMoney: { amount: BigInt(finalPrice), currency: "USD" },
             note: `userId:${userId}|tier:${tier}`,
           }],
         },
@@ -703,6 +713,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       const url = response.paymentLink?.url;
       if (!url) return res.status(500).json({ message: "Failed to create Square payment link." });
+      if (redeemedPromo) await storage.redeemPromoCode(promoCode, userId, tier);
       res.json({ url });
     } catch (e: any) {
       return res.status(500).json({ message: e.message || "Square error" });
@@ -712,7 +723,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.square.subscriptionComplete.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { tier } = req.body;
-    if (!tier || !['event_owner_pro', 'vendor_pro'].includes(tier)) {
+    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
       return res.status(400).json({ message: "Invalid tier." });
     }
     await storage.upsertUserProfile(userId, {
@@ -753,7 +764,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               if (userIdMatch && tierMatch) {
                 const userId = userIdMatch[1];
                 const tier = tierMatch[1];
-                if (['event_owner_pro', 'vendor_pro'].includes(tier)) {
+                if (['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
                   await storage.upsertUserProfile(userId, {
                     subscriptionTier: tier as any,
                     subscriptionStatus: 'active',
@@ -861,6 +872,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
+  });
+
+  // ---- Promo Codes ----
+  app.get('/api/admin/promo-codes', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const codes = await storage.getAllPromoCodes();
+    res.json(codes);
+  });
+
+  app.post('/api/admin/promo-codes', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { code, type, discountPercent, applicableTier, expiresAt, maxUses } = req.body;
+    if (!code || !type) return res.status(400).json({ message: "Code and type are required." });
+    if (type === 'discount' && (!discountPercent || discountPercent < 1 || discountPercent > 100)) {
+      return res.status(400).json({ message: "Discount percent must be 1–100 for discount codes." });
+    }
+    try {
+      const promo = await storage.createPromoCode(req.user.claims.sub, { code, type, discountPercent, applicableTier: applicableTier || null, expiresAt: expiresAt || null, maxUses: maxUses || null });
+      res.json(promo);
+    } catch (e: any) {
+      if (e.message?.includes('unique')) return res.status(409).json({ message: "A promo code with that name already exists." });
+      throw e;
+    }
+  });
+
+  app.delete('/api/admin/promo-codes/:id', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = parseInt(req.params.id);
+    const code = (await storage.getAllPromoCodes()).find(c => c.id === id);
+    if (code?.type === 'temp_admin') {
+      await storage.revokePromoCodeAccess(id);
+    } else {
+      await storage.deactivatePromoCode(id);
+    }
+    res.json({ success: true });
+  });
+
+  app.post('/api/promo-codes/validate', isAuthenticated, async (req: any, res) => {
+    const { code, tier } = req.body;
+    if (!code || !tier) return res.status(400).json({ message: "Code and tier required." });
+    const result = await storage.validatePromoCode(code, tier);
+    res.json(result);
+  });
+
+  app.post('/api/promo-codes/redeem-admin', isAuthenticated, async (req: any, res) => {
+    const { code } = req.body;
+    const userId = req.user.claims.sub;
+    if (!code) return res.status(400).json({ message: "Code required." });
+    const result = await storage.validatePromoCode(code, 'temp_admin');
+    if (!result.valid || result.promoCode?.type !== 'temp_admin') {
+      return res.status(400).json({ message: result.error || "Invalid temp admin code." });
+    }
+    await storage.redeemPromoCode(code, userId, 'temp_admin');
+    await storage.upsertUserProfile(userId, { isAdmin: true });
+    res.json({ success: true });
   });
 
   return httpServer;

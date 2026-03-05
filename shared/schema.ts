@@ -137,6 +137,28 @@ export const vendorInventory = pgTable("vendor_inventory", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const promoCodes = pgTable("promo_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  type: text("type").notNull(), // "discount" | "temp_admin"
+  discountPercent: integer("discount_percent"), // 1-100, only for discount type
+  applicableTier: text("applicable_tier"), // "event_owner_pro" | "vendor_pro" | null = all tiers
+  expiresAt: timestamp("expires_at"),
+  maxUses: integer("max_uses"), // null = unlimited
+  usesCount: integer("uses_count").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const promoCodeUses = pgTable("promo_code_uses", {
+  id: serial("id").primaryKey(),
+  promoCodeId: integer("promo_code_id").notNull().references(() => promoCodes.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  tier: text("tier"),
+  usedAt: timestamp("used_at").defaultNow().notNull(),
+});
+
 // ---- Schemas ----
 export const insertUserProfileSchema = createInsertSchema(userProfiles).omit({ id: true, userId: true, createdAt: true, updatedAt: true });
 export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdBy: true, createdAt: true, vendorSpacesUsed: true });
@@ -147,6 +169,10 @@ export const insertMessageSchema = createInsertSchema(messages).omit({ id: true,
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertVendorRegistrationSchema = createInsertSchema(vendorRegistrations).omit({ id: true, createdAt: true });
 export const insertVendorInventorySchema = createInsertSchema(vendorInventory).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
+export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({ id: true, createdBy: true, usesCount: true, createdAt: true });
+export type PromoCode = typeof promoCodes.$inferSelect;
+export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
+export type PromoCodeUse = typeof promoCodeUses.$inferSelect;
 
 // ---- Types ----
 export type UserProfile = typeof userProfiles.$inferSelect;

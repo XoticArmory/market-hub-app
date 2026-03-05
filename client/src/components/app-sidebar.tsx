@@ -13,6 +13,7 @@ import { useUnreadCount } from "@/hooks/use-notifications";
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
+  general_pro: "General Pro",
 };
 
 export function AppSidebar() {
@@ -23,10 +24,9 @@ export function AppSidebar() {
   const profile = profileData?.profile;
   const isAdmin = profile?.isAdmin === true;
   const hasActivePro = profile?.subscriptionStatus === "active" && profile?.subscriptionTier && profile.subscriptionTier !== "free";
-  const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
   const unreadCount = unreadData?.count || 0;
 
-  const addEventUrl = isEventOwnerPro ? "/events/new" : "/upgrade";
+  const addEventUrl = "/events/new";
 
   const navItems = [
     { title: "Market Events", url: "/", icon: CalendarDays },

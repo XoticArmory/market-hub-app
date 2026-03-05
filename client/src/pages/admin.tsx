@@ -12,13 +12,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck, Settings, Users, DollarSign, Loader2, User, BarChart3, CalendarDays, Package, Trash2, TrendingUp, RefreshCw, CreditCard, CheckCircle, XCircle, RotateCcw } from "lucide-react";
+import { ShieldCheck, Settings, Users, DollarSign, Loader2, User, BarChart3, CalendarDays, Package, Trash2, TrendingUp, RefreshCw, CreditCard, CheckCircle, XCircle, RotateCcw, Tag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
+  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -92,6 +93,143 @@ function StatCard({ label, value, sub }: { label: string; value: number | string
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-3xl font-bold text-foreground mt-1">{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function PromoCodesTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ code: "", type: "discount", discountPercent: "", applicableTier: "", expiresAt: "", maxUses: "" });
+
+  const { data: codes = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/promo-codes"],
+    queryFn: async () => { const r = await fetch("/api/admin/promo-codes", { credentials: "include" }); return r.json(); },
+  });
+
+  const createCode = useMutation({
+    mutationFn: async (data: any) => {
+      const r = await fetch("/api/admin/promo-codes", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      return r.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] }); setForm({ code: "", type: "discount", discountPercent: "", applicableTier: "", expiresAt: "", maxUses: "" }); toast({ title: "Promo code created" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const revokeCode = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`/api/admin/promo-codes/${id}`, { method: "DELETE", credentials: "include" });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      return r.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] }); toast({ title: "Code revoked" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const handleCreate = () => {
+    if (!form.code || !form.type) return;
+    createCode.mutate({
+      code: form.code,
+      type: form.type,
+      discountPercent: form.type === "discount" ? parseInt(form.discountPercent) || undefined : undefined,
+      applicableTier: form.applicableTier || undefined,
+      expiresAt: form.expiresAt || undefined,
+      maxUses: form.maxUses ? parseInt(form.maxUses) : undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Create Form */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Tag className="w-5 h-5 text-primary" />Create Promo Code</CardTitle><CardDescription>Discount codes reduce subscription price at checkout. Temporary admin codes grant admin access until revoked.</CardDescription></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Code</label>
+              <Input placeholder="e.g. LAUNCH50" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} className="rounded-xl font-mono" data-testid="input-new-promo-code" />
+            </div>
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Type</label>
+              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
+                <SelectTrigger className="rounded-xl" data-testid="select-promo-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="discount">Discount (% off subscription)</SelectItem>
+                  <SelectItem value="temp_admin">Temporary Admin Access</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.type === "discount" && (
+              <>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Discount %</label>
+                  <Input type="number" min={1} max={100} placeholder="e.g. 50" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className="rounded-xl" data-testid="input-discount-percent" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Applicable Tier (optional)</label>
+                  <Select value={form.applicableTier || "all"} onValueChange={v => setForm(f => ({ ...f, applicableTier: v === "all" ? "" : v }))}>
+                    <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All tiers</SelectItem>
+                      <SelectItem value="event_owner_pro">Event Owner Pro only</SelectItem>
+                      <SelectItem value="vendor_pro">Vendor Pro only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Expires At (optional)</label>
+              <Input type="datetime-local" value={form.expiresAt} onChange={e => setForm(f => ({ ...f, expiresAt: e.target.value }))} className="rounded-xl" data-testid="input-expires-at" />
+            </div>
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Max Uses (optional, blank = unlimited)</label>
+              <Input type="number" min={1} placeholder="e.g. 100" value={form.maxUses} onChange={e => setForm(f => ({ ...f, maxUses: e.target.value }))} className="rounded-xl" data-testid="input-max-uses" />
+            </div>
+          </div>
+          <Button onClick={handleCreate} disabled={createCode.isPending || !form.code} className="rounded-xl" data-testid="button-create-promo">
+            {createCode.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : <><Tag className="w-4 h-4 mr-2" />Create Code</>}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Existing Codes */}
+      <Card>
+        <CardHeader><CardTitle>Active Promo Codes</CardTitle><CardDescription>Revoking a code immediately deactivates it. Revoking a temp admin code also removes admin access from all users who used it.</CardDescription></CardHeader>
+        <CardContent>
+          {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div> : codes.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">No promo codes yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {codes.map((c: any) => (
+                <div key={c.id} className={`flex items-center justify-between p-4 rounded-2xl border ${c.isActive ? 'border-border bg-card' : 'border-border/30 bg-muted/30 opacity-60'}`} data-testid={`promo-code-row-${c.id}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center ${c.type === 'temp_admin' ? 'bg-amber-500/10' : 'bg-primary/10'}`}>
+                      {c.type === 'temp_admin' ? <ShieldCheck className="w-4 h-4 text-amber-500" /> : <Tag className="w-4 h-4 text-primary" />}
+                    </div>
+                    <div>
+                      <p className="font-mono font-bold text-foreground">{c.code}</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        <Badge variant="secondary" className="text-xs">{c.type === 'temp_admin' ? 'Temp Admin' : `${c.discountPercent}% off`}</Badge>
+                        {c.applicableTier && <Badge variant="outline" className="text-xs">{TIER_LABELS[c.applicableTier] || c.applicableTier}</Badge>}
+                        {c.expiresAt && <Badge variant="outline" className="text-xs">Expires {format(new Date(c.expiresAt), 'MMM d, yyyy')}</Badge>}
+                        <Badge variant="outline" className="text-xs">{c.usesCount}{c.maxUses ? `/${c.maxUses}` : ''} uses</Badge>
+                        {!c.isActive && <Badge variant="destructive" className="text-xs">Revoked</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                  {c.isActive && (
+                    <Button size="sm" variant="outline" className="rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 shrink-0" onClick={() => revokeCode.mutate(c.id)} disabled={revokeCode.isPending} data-testid={`button-revoke-${c.id}`}>
+                      <XCircle className="w-4 h-4 mr-1" />Revoke
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -200,6 +338,7 @@ export default function AdminPage() {
           <TabsTrigger value="events" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><CalendarDays className="w-4 h-4" />Events</TabsTrigger>
           <TabsTrigger value="payments" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Package className="w-4 h-4" />Registrations</TabsTrigger>
           <TabsTrigger value="settings" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Settings className="w-4 h-4" />Settings</TabsTrigger>
+          <TabsTrigger value="promo-codes" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2" data-testid="tab-promo-codes"><Tag className="w-4 h-4" />Promo Codes</TabsTrigger>
         </TabsList>
 
         {/* DASHBOARD */}
@@ -599,6 +738,11 @@ export default function AdminPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* PROMO CODES */}
+        <TabsContent value="promo-codes" className="mt-0 space-y-6">
+          <PromoCodesTab />
         </TabsContent>
       </Tabs>
 
