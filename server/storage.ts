@@ -412,7 +412,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Pro tier counts
-    const tierCounts: Record<string, number> = { event_owner_pro: 0, vendor_pro: 0, general_pro: 0, free: 0 };
+    const tierCounts: Record<string, number> = { event_owner_pro: 0, vendor_pro: 0, free: 0 };
     for (const p of allProfiles) {
       const tier = p.subscriptionTier || 'free';
       if (p.subscriptionStatus === 'active' && tier !== 'free') {
@@ -429,9 +429,8 @@ export class DatabaseStorage implements IStorage {
 
     // Monthly revenue estimate from pro subscriptions
     const proRevenue =
-      tierCounts['event_owner_pro'] * 1995 +
-      tierCounts['vendor_pro'] * 995 +
-      tierCounts['general_pro'] * 495;
+      tierCounts['event_owner_pro'] * 995 +
+      tierCounts['vendor_pro'] * 495;
 
     return {
       totalEvents: allEvents.length,
@@ -442,7 +441,7 @@ export class DatabaseStorage implements IStorage {
       totalVendors: allProfiles.filter(p => p.profileType === 'vendor').length,
       totalEventOwners: allProfiles.filter(p => p.profileType === 'event_owner').length,
       tierCounts,
-      totalProAccounts: tierCounts['event_owner_pro'] + tierCounts['vendor_pro'] + tierCounts['general_pro'],
+      totalProAccounts: tierCounts['event_owner_pro'] + tierCounts['vendor_pro'],
       nonProAccounts: tierCounts['free'],
       totalRevenueCents,
       estimatedMonthlyProRevenueCents: proRevenue,

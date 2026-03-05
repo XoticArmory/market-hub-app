@@ -31,7 +31,6 @@ const PROFILE_TYPES = [
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
-  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -732,7 +731,7 @@ export default function ProfilePage() {
                 </div>
                 {isAdmin && (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {["Event Owner Pro", "Vendor Pro", "General Pro"].map(tier => (
+                    {["Event Owner Pro", "Vendor Pro"].map(tier => (
                       <Badge key={tier} className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                         <CheckCircle className="w-3 h-3 mr-1" />{tier}
                       </Badge>

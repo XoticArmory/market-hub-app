@@ -147,6 +147,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const creatorProfile = await storage.getUserProfile(userId);
+      const isAdmin = creatorProfile?.isAdmin === true;
+      const isEventOwnerPro = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
+      if (!isAdmin && !isEventOwnerPro) {
+        return res.status(403).json({ message: "Event Owner Pro subscription required to post events." });
+      }
       const input = api.events.create.input.parse(req.body);
       const { extraDates, ...eventData } = input;
       const created = await storage.createEvent({ ...eventData, date: new Date(eventData.date as any), createdBy: userId });
@@ -700,7 +706,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.square.subscriptionComplete.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { tier } = req.body;
-    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+    if (!tier || !['event_owner_pro', 'vendor_pro'].includes(tier)) {
       return res.status(400).json({ message: "Invalid tier." });
     }
     await storage.upsertUserProfile(userId, {
@@ -740,7 +746,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               if (userIdMatch && tierMatch) {
                 const userId = userIdMatch[1];
                 const tier = tierMatch[1];
-                if (['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+                if (['event_owner_pro', 'vendor_pro'].includes(tier)) {
                   await storage.upsertUserProfile(userId, {
                     subscriptionTier: tier as any,
                     subscriptionStatus: 'active',
@@ -825,7 +831,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
     const { userId, tier, status } = req.body;
     if (!userId || !tier) return res.status(400).json({ message: "userId and tier required." });
-    const validTier = ['event_owner_pro', 'vendor_pro', 'general_pro', 'free'].includes(tier) ? tier : 'free';
+    const validTier = ['event_owner_pro', 'vendor_pro', 'free'].includes(tier) ? tier : 'free';
     const validStatus = status === 'active' ? 'active' : 'inactive';
     await storage.upsertUserProfile(userId, {
       subscriptionTier: validTier as any,

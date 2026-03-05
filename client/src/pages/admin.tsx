@@ -19,7 +19,6 @@ import { format } from "date-fns";
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
-  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -571,9 +570,8 @@ export default function AdminPage() {
             <CardContent>
               <div className="space-y-3">
                 {[
-                  { tier: "Event Owner Pro", price: "$19.95/mo", key: "event_owner_pro" },
-                  { tier: "Vendor Pro", price: "$9.95/mo", key: "vendor_pro" },
-                  { tier: "General Pro", price: "$4.95/mo", key: "general_pro" },
+                  { tier: "Event Owner Pro", price: "$9.95/mo", key: "event_owner_pro" },
+                  { tier: "Vendor Pro", price: "$4.95/mo", key: "vendor_pro" },
                 ].map(item => (
                   <div key={item.key} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
                     <span className="font-medium text-sm">{item.tier}</span>
@@ -655,9 +653,8 @@ export default function AdminPage() {
                 <SelectTrigger className="rounded-xl" data-testid="select-sub-tier"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="event_owner_pro">Event Owner Pro ($19.95/mo)</SelectItem>
-                  <SelectItem value="vendor_pro">Vendor Pro ($9.95/mo)</SelectItem>
-                  <SelectItem value="general_pro">General Pro ($4.95/mo)</SelectItem>
+                  <SelectItem value="event_owner_pro">Event Owner Pro ($9.95/mo)</SelectItem>
+                  <SelectItem value="vendor_pro">Vendor Pro ($4.95/mo)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

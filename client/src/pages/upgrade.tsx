@@ -6,7 +6,7 @@ import { usePortalSession } from "@/hooks/use-stripe";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CheckCircle, Store, Package, Users, Zap, Bell, BarChart3, Map, Star, Crown, ArrowRight, X } from "lucide-react";
+import { CheckCircle, Store, Package, Zap, Bell, BarChart3, Map, Crown, ArrowRight } from "lucide-react";
 import { useLocation } from "wouter";
 
 const TERMS = `ARTISAN COLLECTIVE PRO — SUBSCRIPTION TERMS OF SERVICE
@@ -45,11 +45,11 @@ const TIERS = [
   {
     id: "event_owner_pro",
     label: "Event Owner Pro",
-    price: "$19.95",
+    price: "$9.95",
     period: "/month",
     icon: Store,
     color: "from-primary to-amber-500",
-    badge: "Most Popular",
+    badge: "Best Value",
     features: [
       "Post unlimited events",
       "Featured placement at top of community board",
@@ -63,7 +63,7 @@ const TIERS = [
   {
     id: "vendor_pro",
     label: "Vendor Pro",
-    price: "$9.95",
+    price: "$4.95",
     period: "/month",
     icon: Package,
     color: "from-blue-500 to-cyan-500",
@@ -74,21 +74,6 @@ const TIERS = [
       "Vendor Pro badge on your profile",
       "Priority listing in vendor search",
       "Book event spaces at no added cost",
-    ],
-  },
-  {
-    id: "general_pro",
-    label: "General Pro",
-    price: "$4.95",
-    period: "/month",
-    icon: Users,
-    color: "from-purple-500 to-pink-500",
-    badge: null,
-    features: [
-      "General Pro badge on your profile",
-      "Priority community chat visibility",
-      "Early access to new features",
-      "Support the artisan community",
     ],
   },
 ];
@@ -127,7 +112,7 @@ export default function UpgradePage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto pb-12 space-y-10">
+    <div className="max-w-4xl mx-auto pb-12 space-y-10">
       <div className="text-center">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 text-amber-600 text-sm font-medium mb-6 border border-amber-500/20">
           <Crown className="w-4 h-4" /> Pro Plans
@@ -143,7 +128,7 @@ export default function UpgradePage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
         {TIERS.map(({ id, label, price, period, icon: Icon, color, badge, features }) => {
           const isCurrentPlan = currentTier === id && hasActivePro;
           return (
