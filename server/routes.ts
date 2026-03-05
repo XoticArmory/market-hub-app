@@ -354,16 +354,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.notifications.send.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    if (profile?.subscriptionTier !== 'event_owner_pro' || profile?.subscriptionStatus !== 'active') {
+    const isAdmin = profile?.isAdmin === true;
+    const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
+    if (!isAdmin && !isEventOwnerPro) {
       return res.status(403).json({ message: "Event Owner Pro subscription required to send push notifications." });
     }
-    const { title, message, eventId } = req.body;
+    const { title, message, eventId, targetAudience = 'vendor_pro' } = req.body;
     if (!title || !message) return res.status(400).json({ message: "Title and message required." });
+    const validAudiences = ['vendor_pro', 'event_owner_pro', 'general', 'all'];
+    if (!validAudiences.includes(targetAudience)) return res.status(400).json({ message: "Invalid target audience." });
 
     const ownerEvents = await storage.getEventsByOwner(userId);
     const ownerEventIds = ownerEvents.map(e => e.id);
-    const areaCode = profile.areaCode || '';
-    const targetUserIds = await storage.getVendorProUsersInAreaOrHistory(areaCode, ownerEventIds);
+    const areaCode = profile?.areaCode || '';
+    const targetUserIds = await storage.getUsersForNotification(targetAudience, areaCode, ownerEventIds, userId);
 
     const results = await Promise.all(
       targetUserIds.map(uid =>

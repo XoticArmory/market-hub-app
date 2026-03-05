@@ -59,11 +59,17 @@ export function useMarkAllRead() {
   });
 }
 
+const AUDIENCE_LABELS: Record<string, string> = {
+  vendor_pro: "Vendor Pro accounts",
+  event_owner_pro: "Event Owner Pro accounts",
+  general: "General accounts",
+  all: "all accounts",
+};
+
 export function useSendNotification() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (data: { title: string; message: string; eventId?: number }) => {
+    mutationFn: async (data: { title: string; message: string; eventId?: number; targetAudience?: string }) => {
       const res = await fetch("/api/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,8 +79,9 @@ export function useSendNotification() {
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       return res.json();
     },
-    onSuccess: (data) => {
-      toast({ title: "Notification sent!", description: `Sent to ${data.sent} Vendor Pro accounts.` });
+    onSuccess: (data, variables) => {
+      const audience = AUDIENCE_LABELS[variables.targetAudience || 'vendor_pro'] || 'users';
+      toast({ title: "Notification sent!", description: `Sent to ${data.sent} ${audience}.` });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });

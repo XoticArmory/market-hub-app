@@ -40,6 +40,7 @@ export interface IStorage {
   removeAttendance(eventId: number, userId: string): Promise<void>;
   getUserStatusForEvent(eventId: number, userId: string): Promise<string | null>;
   getVendorProUsersInAreaOrHistory(areaCode: string, ownerEventIds: number[]): Promise<string[]>;
+  getUsersForNotification(targetAudience: string, areaCode: string, ownerEventIds: number[], excludeUserId: string): Promise<string[]>;
 
   // Vendor Posts
   getVendorPosts(eventId: number): Promise<VendorPost[]>;
@@ -253,6 +254,37 @@ export class DatabaseStorage implements IStorage {
 
     const areaUserIds = proUsersInArea.map(u => u.userId);
     return Array.from(new Set([...areaUserIds, ...historicUserIds]));
+  }
+
+  async getUsersForNotification(targetAudience: string, areaCode: string, ownerEventIds: number[], excludeUserId: string): Promise<string[]> {
+    let profiles: { userId: string }[] = [];
+
+    if (targetAudience === 'vendor_pro') {
+      // Vendor Pro in area + historic attendees
+      const inArea = await db.select({ userId: userProfiles.userId }).from(userProfiles)
+        .where(and(eq(userProfiles.subscriptionTier, 'vendor_pro'), eq(userProfiles.subscriptionStatus, 'active'), eq(userProfiles.areaCode, areaCode)));
+      profiles = [...inArea];
+      if (ownerEventIds.length > 0) {
+        const historic = await db.select({ userId: eventAttendance.userId }).from(eventAttendance)
+          .innerJoin(userProfiles, eq(eventAttendance.userId, userProfiles.userId))
+          .where(and(inArray(eventAttendance.eventId, ownerEventIds), eq(userProfiles.subscriptionTier, 'vendor_pro')));
+        profiles = [...profiles, ...historic];
+      }
+    } else if (targetAudience === 'event_owner_pro') {
+      profiles = await db.select({ userId: userProfiles.userId }).from(userProfiles)
+        .where(and(eq(userProfiles.subscriptionTier, 'event_owner_pro'), eq(userProfiles.subscriptionStatus, 'active'), eq(userProfiles.areaCode, areaCode)));
+    } else if (targetAudience === 'general') {
+      // Free/general users in area
+      profiles = await db.select({ userId: userProfiles.userId }).from(userProfiles)
+        .where(and(eq(userProfiles.subscriptionTier, 'free'), eq(userProfiles.areaCode, areaCode)));
+    } else {
+      // 'all' — everyone in area
+      profiles = await db.select({ userId: userProfiles.userId }).from(userProfiles)
+        .where(eq(userProfiles.areaCode, areaCode));
+    }
+
+    const ids = Array.from(new Set(profiles.map(p => p.userId))).filter(id => id !== excludeUserId);
+    return ids;
   }
 
   // ---- Vendor Posts ----

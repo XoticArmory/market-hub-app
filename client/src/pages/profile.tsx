@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Store, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, BarChart3, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign } from "lucide-react";
+import { User, Store, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, BarChart3, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useEvents } from "@/hooks/use-events";
 import { format } from "date-fns";
@@ -308,6 +308,131 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
   );
 }
 
+const TIER_LABELS_PROMO: Record<string, string> = {
+  event_owner_pro: "Event Owner Pro",
+  vendor_pro: "Vendor Pro",
+};
+
+function AdminPromoSection({ userId }: { userId: string }) {
+  const { toast } = useToast();
+  const [promoForm, setPromoForm] = useState({ code: "", discountPercent: "", applicableTier: "all", expiresAt: "", maxUses: "" });
+
+  const { data: codes = [], isLoading: loadingCodes } = useQuery<any[]>({
+    queryKey: ["/api/admin/promo-codes"],
+    queryFn: async () => { const r = await fetch("/api/admin/promo-codes", { credentials: "include" }); return r.json(); },
+    enabled: !!userId,
+  });
+
+  const createCode = useMutation({
+    mutationFn: async (data: any) => {
+      const r = await fetch("/api/admin/promo-codes", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
+      setPromoForm({ code: "", discountPercent: "", applicableTier: "all", expiresAt: "", maxUses: "" });
+      toast({ title: "Promo code created" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const revokeCode = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`/api/admin/promo-codes/${id}`, { method: "DELETE", credentials: "include" });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      return r.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] }); toast({ title: "Code revoked" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const handleCreate = () => {
+    if (!promoForm.code || !promoForm.discountPercent) return;
+    createCode.mutate({
+      code: promoForm.code,
+      type: "discount",
+      discountPercent: parseInt(promoForm.discountPercent),
+      applicableTier: promoForm.applicableTier === "all" ? undefined : promoForm.applicableTier,
+      expiresAt: promoForm.expiresAt || undefined,
+      maxUses: promoForm.maxUses ? parseInt(promoForm.maxUses) : undefined,
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Tag className="w-5 h-5 text-primary" />Promotion Codes</CardTitle>
+        <CardDescription>Create discount codes to share with users for reduced subscription pricing.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Create Form */}
+        <div className="space-y-4 p-5 bg-muted/40 rounded-2xl border border-border/50">
+          <p className="text-sm font-semibold text-foreground">New Promo Code</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Code</label>
+              <Input placeholder="e.g. SPRING50" value={promoForm.code} onChange={e => setPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} className="rounded-xl font-mono" data-testid="input-billing-promo-code" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Discount %</label>
+              <Input type="number" min={1} max={100} placeholder="e.g. 50" value={promoForm.discountPercent} onChange={e => setPromoForm(f => ({ ...f, discountPercent: e.target.value }))} className="rounded-xl" data-testid="input-billing-discount" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Applicable Tier</label>
+              <select className="w-full h-10 rounded-xl border border-border px-3 bg-background text-foreground text-sm" value={promoForm.applicableTier} onChange={e => setPromoForm(f => ({ ...f, applicableTier: e.target.value }))}>
+                <option value="all">Both tiers</option>
+                <option value="event_owner_pro">Event Owner Pro only</option>
+                <option value="vendor_pro">Vendor Pro only</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Max Uses (blank = unlimited)</label>
+              <Input type="number" min={1} placeholder="e.g. 100" value={promoForm.maxUses} onChange={e => setPromoForm(f => ({ ...f, maxUses: e.target.value }))} className="rounded-xl" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Expiry Date (optional)</label>
+              <Input type="datetime-local" value={promoForm.expiresAt} onChange={e => setPromoForm(f => ({ ...f, expiresAt: e.target.value }))} className="rounded-xl" />
+            </div>
+          </div>
+          <Button onClick={handleCreate} disabled={createCode.isPending || !promoForm.code || !promoForm.discountPercent} className="rounded-xl" data-testid="button-billing-create-promo">
+            {createCode.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : <><Tag className="w-4 h-4 mr-2" />Create Code</>}
+          </Button>
+        </div>
+
+        {/* Existing Codes */}
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-foreground">Active Codes</p>
+          {loadingCodes ? <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            : codes.filter((c: any) => c.isActive).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No active promo codes.</p>
+            ) : (
+              codes.filter((c: any) => c.isActive).map((c: any) => (
+                <div key={c.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-card" data-testid={`billing-promo-${c.id}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Tag className="w-4 h-4 text-primary shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-mono font-bold text-sm text-foreground">{c.code}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-0.5">
+                        <Badge variant="secondary" className="text-xs">{c.discountPercent}% off</Badge>
+                        {c.applicableTier && <Badge variant="outline" className="text-xs">{TIER_LABELS_PROMO[c.applicableTier] || c.applicableTier}</Badge>}
+                        <Badge variant="outline" className="text-xs">{c.usesCount}{c.maxUses ? `/${c.maxUses}` : ''} uses</Badge>
+                        {c.expiresAt && <Badge variant="outline" className="text-xs">Expires {format(new Date(c.expiresAt), "MMM d, yyyy")}</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" className="rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10 shrink-0 ml-3" onClick={() => revokeCode.mutate(c.id)} disabled={revokeCode.isPending} data-testid={`button-billing-revoke-${c.id}`}>
+                    <XCircle className="w-4 h-4 mr-1" />Revoke
+                  </Button>
+                </div>
+              ))
+            )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ProfilePage() {
   const { user, isAuthenticated } = useAuth();
   const { data: profileData, isLoading: isLoadingProfile } = useProfile();
@@ -343,7 +468,7 @@ export default function ProfilePage() {
     bio: profile?.bio || "",
     businessName: profile?.businessName || "",
   });
-  const [notifForm, setNotifForm] = useState({ title: "", message: "" });
+  const [notifForm, setNotifForm] = useState({ title: "", message: "", targetAudience: "vendor_pro" });
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
 
   if (profile && form.profileType === "general" && !form.areaCode && !form.bio) {
@@ -636,9 +761,23 @@ export default function ProfilePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5 text-primary" />Send Push Notification</CardTitle>
-                <CardDescription>Send a notification to Vendor Pro accounts in your area code or who have attended your events in the last 3 years.</CardDescription>
+                <CardDescription>Send an in-app push notification to users in your area. Recipients must share your area code or have attended your events.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Target Audience</label>
+                  <select
+                    className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
+                    value={notifForm.targetAudience}
+                    onChange={e => setNotifForm(f => ({ ...f, targetAudience: e.target.value }))}
+                    data-testid="select-target-audience"
+                  >
+                    <option value="vendor_pro">Vendor Pro accounts</option>
+                    <option value="event_owner_pro">Event Owner Pro accounts</option>
+                    <option value="general">General (free) accounts</option>
+                    <option value="all">All accounts</option>
+                  </select>
+                </div>
                 <div>
                   <label className="text-sm font-semibold mb-2 block">Notification Title</label>
                   <Input
@@ -653,7 +792,7 @@ export default function ProfilePage() {
                   <label className="text-sm font-semibold mb-2 block">Message</label>
                   <Textarea
                     data-testid="input-notif-message"
-                    placeholder="Tell vendors what's happening..."
+                    placeholder="Write your message..."
                     value={notifForm.message}
                     onChange={e => setNotifForm(f => ({ ...f, message: e.target.value }))}
                     className="rounded-xl resize-none"
@@ -678,15 +817,15 @@ export default function ProfilePage() {
                   className="rounded-xl w-full bg-gradient-to-r from-primary to-amber-500"
                   disabled={!notifForm.title || !notifForm.message || isSendingNotif}
                   onClick={() => {
-                    sendNotification({ title: notifForm.title, message: notifForm.message, eventId: selectedEventId || undefined });
-                    setNotifForm({ title: "", message: "" });
+                    sendNotification({ title: notifForm.title, message: notifForm.message, eventId: selectedEventId || undefined, targetAudience: notifForm.targetAudience });
+                    setNotifForm({ title: "", message: "", targetAudience: "vendor_pro" });
                     setSelectedEventId(null);
                   }}
                   data-testid="button-send-notification"
                 >
-                  {isSendingNotif ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Send className="w-4 h-4 mr-2" />Send to Vendor Pros</>}
+                  {isSendingNotif ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Send className="w-4 h-4 mr-2" />Send Notification</>}
                 </Button>
-                <p className="text-xs text-muted-foreground text-center">Notifications will be sent to Vendor Pro accounts in your area code and those who've attended your events.</p>
+                <p className="text-xs text-muted-foreground text-center">Recipients must be in your area code or have attended one of your events.</p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -730,7 +869,7 @@ export default function ProfilePage() {
         )}
 
         {/* BILLING */}
-        <TabsContent value="billing" className="mt-0">
+        <TabsContent value="billing" className="mt-0 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-primary" />Subscription</CardTitle>
@@ -771,6 +910,9 @@ export default function ProfilePage() {
               ) : null}
             </CardContent>
           </Card>
+
+          {/* ADMIN: Promo Code Management */}
+          {isAdmin && <AdminPromoSection userId={userId || ""} />}
         </TabsContent>
       </Tabs>
     </div>
