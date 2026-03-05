@@ -424,21 +424,23 @@ export default function ProfilePage() {
         {/* PROFILE */}
         <TabsContent value="profile" className="space-y-6 mt-0">
           <Card>
-            <CardHeader><CardTitle>Profile Settings</CardTitle><CardDescription>Choose your role and area code to connect with your local community.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Profile Settings</CardTitle><CardDescription>Manage your area code, business name, and bio.</CardDescription></CardHeader>
             <CardContent className="space-y-6">
               <div>
                 <label className="text-sm font-semibold mb-3 block">Account Type</label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {PROFILE_TYPES.map(({ value, label, icon: Icon, description }) => (
-                    <button key={value} type="button" data-testid={`profile-type-${value}`}
-                      onClick={() => setForm(f => ({ ...f, profileType: value }))}
-                      className={`p-5 rounded-2xl border-2 text-left transition-all ${form.profileType === value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}>
-                      <Icon className={`w-7 h-7 mb-3 ${form.profileType === value ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <p className="font-semibold text-foreground">{label}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{description}</p>
-                    </button>
-                  ))}
-                </div>
+                {(() => {
+                  const current = PROFILE_TYPES.find(t => t.value === (profile?.profileType || "general"));
+                  const Icon = current?.icon || Users;
+                  return (
+                    <div className="flex items-center gap-4 p-5 rounded-2xl border-2 border-primary bg-primary/5 w-fit" data-testid="display-account-type">
+                      <Icon className="w-7 h-7 text-primary shrink-0" />
+                      <div>
+                        <p className="font-semibold text-foreground">{current?.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{current?.description}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
