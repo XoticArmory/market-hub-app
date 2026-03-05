@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useProfile, useUpsertProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { usePortalSession } from "@/hooks/use-stripe";
@@ -317,7 +317,15 @@ export default function ProfilePage() {
   const { data: notifications } = useNotifications();
   const { mutate: markAllRead } = useMarkAllRead();
   const { mutate: sendNotification, isPending: isSendingNotif } = useSendNotification();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const [activeTab, setActiveTab] = useState("profile");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const validTabs = ["profile", "events", "notifications", "analytics", "map"];
+    if (tab && validTabs.includes(tab)) setActiveTab(tab);
+  }, [location]);
 
   const profile = profileData?.profile;
   const userId = user?.id;
@@ -396,7 +404,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap gap-1">
           <TabsTrigger value="profile" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">My Profile</TabsTrigger>
           <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Events</TabsTrigger>
