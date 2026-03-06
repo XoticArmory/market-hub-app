@@ -137,7 +137,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         userStatus = await storage.getUserStatusForEvent(e.id, req.user.claims?.sub);
       }
       const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-      return { ...e, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
+      const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
+      return { ...e, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
     }));
     // Sort: featured (pro) events in the area at top, then by date
     enriched.sort((a, b) => {
@@ -169,18 +170,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }));
     const registrations = await storage.getVendorRegistrations(eventId);
     const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-    res.json({ ...event, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
+    const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
+    res.json({ ...event, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
   });
 
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const creatorProfile = await storage.getUserProfile(userId);
-      const isAdmin = creatorProfile?.isAdmin === true;
-      const isEventOwnerPro = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-      if (!isAdmin && !isEventOwnerPro) {
-        return res.status(403).json({ message: "Event Owner Pro subscription required to post events." });
-      }
       const input = api.events.create.input.parse(req.body);
       const { extraDates, ...eventData } = input;
       const created = await storage.createEvent({ ...eventData, date: new Date(eventData.date as any), createdBy: userId });
@@ -284,7 +280,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const posts = await storage.getVendorPosts(eventId);
     const enriched = await Promise.all(posts.map(async (p) => {
       const u = await enrichUser(p.vendorId);
-      return { ...p, vendorName: u.name, vendorAvatar: u.avatar };
+      const vendorProfile = await storage.getUserProfile(p.vendorId);
+      const isVendorProAccount = vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active';
+      const vendorWebsiteUrl = (isVendorProAccount || vendorProfile?.isAdmin) ? (vendorProfile?.websiteUrl || null) : null;
+      return { ...p, vendorName: u.name, vendorAvatar: u.avatar, vendorWebsiteUrl };
     }));
     res.json(enriched);
   });
@@ -711,7 +710,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!locationId) return res.status(503).json({ message: "Square Location ID not configured. Set it in Admin → Settings." });
     await storage.acceptTerms(userId, tier);
 
-    let finalPrice = tierInfo.price;
+    let finalPrice: number = tierInfo.price;
     let promoLabel = '';
     let redeemedPromo: any = null;
     if (promoCode) {
@@ -754,7 +753,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.square.subscriptionComplete.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { tier } = req.body;
-    if (!tier || !['event_owner_pro', 'vendor_pro'].includes(tier)) {
+    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
       return res.status(400).json({ message: "Invalid tier." });
     }
     await storage.upsertUserProfile(userId, {
@@ -881,7 +880,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
     const { userId, tier, status } = req.body;
     if (!userId || !tier) return res.status(400).json({ message: "userId and tier required." });
-    const validTier = ['event_owner_pro', 'vendor_pro', 'free'].includes(tier) ? tier : 'free';
+    const validTier = ['event_owner_pro', 'vendor_pro', 'general_pro', 'free'].includes(tier) ? tier : 'free';
     const validStatus = status === 'active' ? 'active' : 'inactive';
     await storage.upsertUserProfile(userId, {
       subscriptionTier: validTier as any,

@@ -19,6 +19,7 @@ import { format } from "date-fns";
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
+  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -173,6 +174,7 @@ function PromoCodesTab() {
                       <SelectItem value="all">All tiers</SelectItem>
                       <SelectItem value="event_owner_pro">Event Owner Pro only</SelectItem>
                       <SelectItem value="vendor_pro">Vendor Pro only</SelectItem>
+                      <SelectItem value="general_pro">General Pro only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -290,18 +292,8 @@ export default function AdminPage() {
   });
 
   if (!profile?.isAdmin) {
-    return (
-      <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border shadow-lg space-y-6">
-        <ShieldCheck className="w-16 h-16 text-amber-500 mx-auto" />
-        <div>
-          <h2 className="text-3xl font-display font-bold mb-2">Admin Panel</h2>
-          <p className="text-muted-foreground text-sm">Your email must be in the <code className="bg-muted px-1 rounded">ADMIN_EMAILS</code> environment variable.</p>
-        </div>
-        <Button onClick={() => claimAdmin()} disabled={claimingAdmin} className="w-full rounded-xl" data-testid="button-claim-admin">
-          {claimingAdmin ? "Verifying..." : "Claim Admin Access"}
-        </Button>
-      </div>
-    );
+    window.location.href = "/";
+    return null;
   }
 
   const squareKeys = [
@@ -332,12 +324,10 @@ export default function AdminPage() {
       <Tabs defaultValue="dashboard" className="space-y-6">
         <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap gap-1">
           <TabsTrigger value="dashboard" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><BarChart3 className="w-4 h-4" />Dashboard</TabsTrigger>
-          <TabsTrigger value="financials" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2" data-testid="tab-financials"><DollarSign className="w-4 h-4" />Financials</TabsTrigger>
           <TabsTrigger value="users" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Users className="w-4 h-4" />Users</TabsTrigger>
           <TabsTrigger value="events" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><CalendarDays className="w-4 h-4" />Events</TabsTrigger>
-          <TabsTrigger value="payments" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Package className="w-4 h-4" />Registrations</TabsTrigger>
+          <TabsTrigger value="payments" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Package className="w-4 h-4" />Payments</TabsTrigger>
           <TabsTrigger value="settings" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Settings className="w-4 h-4" />Settings</TabsTrigger>
-          <TabsTrigger value="promo-codes" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2" data-testid="tab-promo-codes"><Tag className="w-4 h-4" />Promo Codes</TabsTrigger>
         </TabsList>
 
         {/* DASHBOARD */}
@@ -350,7 +340,7 @@ export default function AdminPage() {
                 <StatCard label="Total Events" value={stats.totalEvents} />
                 <StatCard label="Total Users" value={stats.totalUsers} />
                 <StatCard label="Pro Accounts" value={stats.totalProAccounts} sub="active subscriptions" />
-                <StatCard label="Free Accounts" value={stats.nonProAccounts} />
+                <StatCard label="Total Revenue" value={`$${((stats.totalRevenueCents || 0) / 100).toFixed(2)}`} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard label="General Users" value={stats.totalGeneralUsers} />
@@ -400,12 +390,47 @@ export default function AdminPage() {
           )}
         </TabsContent>
 
-        {/* FINANCIALS */}
-        <TabsContent value="financials" className="mt-0 space-y-6">
+        {/* PAYMENTS */}
+        <TabsContent value="payments" className="mt-0 space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Vendor Space Registrations</CardTitle><CardDescription>All vendor space bookings and platform fees collected.</CardDescription></CardHeader>
+            <CardContent>
+              {loadingRegs ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div> : (
+                <>
+                  {registrations && registrations.length > 0 && (
+                    <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                      <p className="font-semibold text-green-700 dark:text-green-300">
+                        Total platform fees collected: ${(((registrations || []).filter((r: any) => r.status === 'paid').reduce((s: number, r: any) => s + (r.feeCents || 0), 0)) / 100).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    {(registrations || []).map((r: any) => (
+                      <div key={r.id} className="flex items-center gap-4 p-4 bg-muted/40 rounded-xl">
+                        <Package className="w-8 h-8 text-primary/50 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold truncate">{r.vendorName}</p>
+                          <p className="text-sm text-muted-foreground truncate">{r.eventTitle} · {r.spotName || r.spotId || 'General'}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-medium">${((r.amountCents || 0) / 100).toFixed(2)}</p>
+                          {(r.feeCents || 0) > 0 && <p className="text-xs text-amber-600">fee: ${(r.feeCents / 100).toFixed(2)}</p>}
+                        </div>
+                        <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className={r.status === 'paid' ? 'bg-green-500' : ''}>{r.status}</Badge>
+                        {r.isPro && <Badge variant="outline" className="text-blue-600 border-blue-300">Pro</Badge>}
+                      </div>
+                    ))}
+                    {(registrations || []).length === 0 && <p className="text-muted-foreground text-sm">No registrations yet.</p>}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold">Square Financials</h2>
-              <p className="text-sm text-muted-foreground">Live data from your Square account. Configure Square in Settings to enable.</p>
+              <h2 className="text-xl font-bold">Square Payments</h2>
+              <p className="text-sm text-muted-foreground">Live transaction data from your Square account.</p>
             </div>
             <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => refetchPayments()} data-testid="button-refresh-payments">
               <RefreshCw className="w-4 h-4" />Refresh
@@ -425,9 +450,9 @@ export default function AdminPage() {
           ) : (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="Total Revenue" value={`$${(squareTotalRevenue / 100).toFixed(2)}`} />
-                <StatCard label="Today's Revenue" value={`$${(squareTodayRevenue / 100).toFixed(2)}`} />
-                <StatCard label="Total Transactions" value={(squarePayments || []).filter((p: any) => p.status === 'COMPLETED').length} />
+                <StatCard label="Square Revenue" value={`$${(squareTotalRevenue / 100).toFixed(2)}`} />
+                <StatCard label="Today's Square" value={`$${(squareTodayRevenue / 100).toFixed(2)}`} />
+                <StatCard label="Square Txns" value={(squarePayments || []).filter((p: any) => p.status === 'COMPLETED').length} />
                 <StatCard label="Pending" value={(squarePayments || []).filter((p: any) => p.status !== 'COMPLETED').length} />
               </div>
 
@@ -606,15 +631,7 @@ export default function AdminPage() {
         {/* SETTINGS */}
         <TabsContent value="settings" className="mt-0 space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-black rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">SQ</span>
-                </div>
-                Square Configuration
-              </CardTitle>
-              <CardDescription>Configure your Square account credentials. The Access Token must be set as the <code className="bg-muted px-1 rounded text-xs">SQUARE_ACCESS_TOKEN</code> secret in environment settings.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Square Configuration</CardTitle><CardDescription>Configure your Square account credentials. The Access Token must be set as the <code className="bg-muted px-1 rounded text-xs">SQUARE_ACCESS_TOKEN</code> secret in environment settings.</CardDescription></CardHeader>
             <CardContent className="space-y-6">
               {/* Location ID — show auto-detected locations first */}
               <div className="space-y-3">
@@ -695,7 +712,42 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
+              {/* Pricing Settings */}
+              <div className="space-y-4 pt-6 border-t">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Tag className="w-4 h-4" />Plan Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { key: "square_plan_event_owner_pro", label: "Event Owner Pro Plan ID" },
+                    { key: "square_plan_vendor_pro", label: "Vendor Pro Plan ID" },
+                    { key: "square_plan_general_pro", label: "General Pro Plan ID" },
+                  ].map(item => (
+                    <div key={item.key} className="space-y-2">
+                      <label className="text-sm font-medium">{item.label}</label>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="plan_..."
+                          value={settingInputs[item.key] || (settings || []).find((s: any) => s.key === item.key)?.value || ""}
+                          onChange={e => setSettingInputs(p => ({ ...p, [item.key]: e.target.value }))}
+                          className="rounded-xl font-mono text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={savingSetting}
+                          onClick={() => upsertSetting({ key: item.key, value: settingInputs[item.key] || "" })}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <PromoCodesTab />
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200 mt-6">
                 <p className="font-semibold mb-1">✓ Square API Connected</p>
                 <p className="text-xs text-blue-700 dark:text-blue-300">Your production Square Access Token is working. Select a location above to enable payment links, or create one at <a href="https://squareup.com/dashboard/locations" target="_blank" className="underline font-medium" rel="noopener noreferrer">squareup.com/dashboard/locations</a>.</p>
                 <p className="text-xs mt-2 text-blue-600 dark:text-blue-400">Webhook URL: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">/api/square/webhook</code></p>
@@ -796,8 +848,9 @@ export default function AdminPage() {
                 <SelectTrigger className="rounded-xl" data-testid="select-sub-tier"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="event_owner_pro">Event Owner Pro ($9.95/mo)</SelectItem>
-                  <SelectItem value="vendor_pro">Vendor Pro ($4.95/mo)</SelectItem>
+                  <SelectItem value="event_owner_pro">Event Owner Pro ($19.95/mo)</SelectItem>
+                  <SelectItem value="vendor_pro">Vendor Pro ($9.95/mo)</SelectItem>
+                  <SelectItem value="general_pro">General Pro ($4.95/mo)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

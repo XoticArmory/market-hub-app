@@ -80,6 +80,23 @@ const TIERS = [
     features: VENDOR_PRO_FEATURES,
     includedFeatures: [],
   },
+  {
+    id: "general_pro",
+    label: "General Pro",
+    price: "$4.95",
+    period: "/month",
+    icon: Crown,
+    color: "from-purple-500 to-pink-500",
+    badge: null,
+    features: [
+      "General Pro badge on your profile",
+      "Priority visibility in community chat",
+      "Support the Artisan Collective platform",
+      "Early access to new features",
+      "Community perks and recognition",
+    ],
+    includedFeatures: [],
+  },
 ];
 
 export default function UpgradePage() {

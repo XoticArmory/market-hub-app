@@ -14,6 +14,7 @@ export const userProfiles = pgTable("user_profiles", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   subscriptionStatus: text("subscription_status").default("inactive"),
+  websiteUrl: text("website_url"),
   isAdmin: boolean("is_admin").default(false),
   onboardingComplete: boolean("onboarding_complete").default(false),
   termsAcceptedAt: timestamp("terms_accepted_at"),

@@ -26,7 +26,7 @@ export function AppSidebar() {
   const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
   const unreadCount = unreadData?.count || 0;
 
-  const addEventUrl = isEventOwnerPro ? "/events/new" : "/upgrade";
+  const addEventUrl = "/events/new";
 
   const navItems = [
     { title: "Market Events", url: "/", icon: CalendarDays },

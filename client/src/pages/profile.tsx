@@ -31,6 +31,7 @@ const PROFILE_TYPES = [
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
+  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -448,7 +449,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    const validTabs = ["profile", "events", "notifications", "analytics", "map"];
+    const validTabs = ["profile", "events", "notifications", "analytics", "map", "billing", "vendor-analytics"];
     if (tab && validTabs.includes(tab)) setActiveTab(tab);
   }, [location]);
 
@@ -456,9 +457,10 @@ export default function ProfilePage() {
   const userId = user?.id;
   const isAdmin = profile?.isAdmin === true;
 
+  const isGeneralPro = isAdmin || (profile?.subscriptionTier === "general_pro" && profile?.subscriptionStatus === "active");
   const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
   const isVendorPro = isAdmin || (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active");
-  const hasActivePro = isAdmin || (profile?.subscriptionStatus === "active" && profile?.subscriptionTier !== "free");
+  const hasActivePro = isAdmin || (profile?.subscriptionStatus === "active" && (profile?.subscriptionTier !== "free" && profile?.subscriptionTier !== null));
 
   const { data: analytics } = useOwnerAnalytics(isEventOwnerPro ? userId : undefined);
 
@@ -467,6 +469,7 @@ export default function ProfilePage() {
     areaCode: profile?.areaCode || "",
     bio: profile?.bio || "",
     businessName: profile?.businessName || "",
+    websiteUrl: profile?.websiteUrl || "",
   });
   const [notifForm, setNotifForm] = useState({ title: "", message: "", targetAudience: "vendor_pro" });
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
@@ -477,6 +480,7 @@ export default function ProfilePage() {
       areaCode: profile.areaCode || "",
       bio: profile.bio || "",
       businessName: profile.businessName || "",
+      websiteUrl: profile.websiteUrl || "",
     });
   }
 
@@ -531,35 +535,30 @@ export default function ProfilePage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap gap-1">
-          <TabsTrigger value="profile" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">My Profile</TabsTrigger>
-          <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Events</TabsTrigger>
-          <TabsTrigger value="notifications" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm relative" data-testid="tab-notifications">
-            Notifications
-            {unreadCount > 0 && (
-              <span className="ml-1.5 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{unreadCount}</span>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="profile" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Profile</TabsTrigger>
+          <TabsTrigger value="billing" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Billing</TabsTrigger>
           {isEventOwnerPro && (
-            <TabsTrigger value="analytics" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-analytics">
-              <BarChart3 className="w-4 h-4 mr-1.5" />Event Analytics
-            </TabsTrigger>
+            <>
+              <TabsTrigger value="notifications" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm relative" data-testid="tab-notifications">
+                Notifications
+                {unreadCount > 0 && (
+                  <span className="ml-1.5 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{unreadCount}</span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-analytics">
+                <BarChart3 className="w-4 h-4 mr-1.5" />Analytics
+              </TabsTrigger>
+              <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Events</TabsTrigger>
+              <TabsTrigger value="map" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-map">
+                <Map className="w-4 h-4 mr-1.5" />Map
+              </TabsTrigger>
+            </>
           )}
           {isVendorPro && (
             <TabsTrigger value="vendor-analytics" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-vendor-analytics">
-              <TrendingUp className="w-4 h-4 mr-1.5" />Vendor Analytics
+              <TrendingUp className="w-4 h-4 mr-1.5" />Analytics
             </TabsTrigger>
           )}
-          {isEventOwnerPro && (
-            <TabsTrigger value="push" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-push">
-              <Bell className="w-4 h-4 mr-1.5" />Push Notify
-            </TabsTrigger>
-          )}
-          {isEventOwnerPro && (
-            <TabsTrigger value="map" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-map">
-              <Map className="w-4 h-4 mr-1.5" />Event Map
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="billing" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Billing</TabsTrigger>
         </TabsList>
 
         {/* PROFILE */}
@@ -599,6 +598,24 @@ export default function ProfilePage() {
                 <label className="text-sm font-semibold mb-2 block">Bio</label>
                 <Textarea data-testid="input-bio" placeholder="Tell the community about yourself..." value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} className="rounded-xl resize-none" rows={3} />
               </div>
+              {(isEventOwnerPro || isVendorPro) && (
+                <div>
+                  <label className="text-sm font-semibold mb-2 block flex items-center gap-2">
+                    Website URL <span className="text-xs font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full">Pro Feature</span>
+                  </label>
+                  <Input
+                    data-testid="input-website-url"
+                    placeholder="https://yourwebsite.com"
+                    value={form.websiteUrl}
+                    onChange={e => setForm(f => ({ ...f, websiteUrl: e.target.value }))}
+                    className="rounded-xl"
+                    type="url"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {isEventOwnerPro ? "Shown on your event cards so attendees can visit your site." : "Shown on your vendor cards at events."}
+                  </p>
+                </div>
+              )}
               <Button onClick={() => upsertProfile(form)} disabled={isSaving} className="rounded-xl" data-testid="button-save-profile">
                 {isSaving ? "Saving..." : "Save Profile"}
               </Button>
@@ -606,59 +623,128 @@ export default function ProfilePage() {
           </Card>
         </TabsContent>
 
-        {/* EVENTS */}
-        <TabsContent value="events" className="mt-0 space-y-6">
-          {myEvents.length > 0 && (
-            <div>
-              <h3 className="text-xl font-display font-bold mb-4">My Posted Markets</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* EVENTS (Only for Event Owner Pro) */}
+        {isEventOwnerPro && (
+          <TabsContent value="events" className="mt-0 space-y-6">
+            {myEvents.length > 0 && (
+              <div className="space-y-6">
+                <h3 className="text-xl font-display font-bold mb-4">My Events</h3>
                 {myEvents.map(event => (
-                  <Link href={`/events/${event.id}`} key={event.id}>
-                    <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                      <CardContent className="p-5">
-                        <h4 className="font-bold text-foreground">{event.title}</h4>
-                        <p className="text-sm text-muted-foreground mt-1">{event.location}</p>
-                        <div className="flex flex-wrap gap-3 mt-3 text-sm">
-                          <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-primary" />{event.attendingCount || 0} attending</span>
-                          <span className="flex items-center gap-1"><Package className="w-3.5 h-3.5 text-primary" />{event.vendorSpacesUsed || 0}/{event.vendorSpaces || 0} vendor spaces</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  <Card key={event.id}>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle>{event.title}</CardTitle>
+                        <CardDescription>{event.location} · {format(new Date(event.date), 'MMM d, yyyy')}</CardDescription>
+                      </div>
+                      <Link href={`/events/${event.id}`}>
+                        <Button size="sm" variant="outline" className="rounded-xl">View Details</Button>
+                      </Link>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-wrap gap-3 text-sm mb-4">
+                        <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-primary" />{event.attendingCount || 0} attending</span>
+                        <span className="flex items-center gap-1"><Package className="w-3.5 h-3.5 text-primary" />{event.vendorSpacesUsed || 0}/{event.vendorSpaces || 0} vendor spaces</span>
+                      </div>
+                      <div className="border-t pt-4">
+                        <h5 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                          <Map className="w-4 h-4 text-primary" />Quick Map Edit
+                        </h5>
+                        <EventMapEditor eventId={event.id} />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
-            </div>
-          )}
-          {attendingEvents.length > 0 && (
-            <div>
-              <h3 className="text-xl font-display font-bold mb-4">Events I'm Attending</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {attendingEvents.map(event => (
-                  <Link href={`/events/${event.id}`} key={event.id}>
-                    <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                      <CardContent className="p-5">
-                        <h4 className="font-bold text-foreground">{event.title}</h4>
-                        <p className="text-sm text-muted-foreground">{format(new Date(event.date), 'MMM d, yyyy')} · {event.location}</p>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
+            )}
+            {myEvents.length === 0 && (
+              <div className="text-center py-16 bg-card rounded-2xl border border-dashed border-border">
+                <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <p className="text-muted-foreground">No events yet. Start by adding your first market!</p>
+                <Button asChild className="mt-4 rounded-xl" variant="outline">
+                  <Link href="/add-event">Create Event</Link>
+                </Button>
               </div>
-            </div>
-          )}
-          {myEvents.length === 0 && attendingEvents.length === 0 && (
-            <div className="text-center py-16 bg-card rounded-2xl border border-dashed border-border">
-              <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <p className="text-muted-foreground">No events yet. Browse markets and mark your attendance!</p>
-            </div>
-          )}
-        </TabsContent>
+            )}
+          </TabsContent>
+        )}
 
-        {/* NOTIFICATIONS */}
-        <TabsContent value="notifications" className="mt-0">
+        {/* NOTIFICATIONS (Event Owner Pro sees Admin tools + Personal alerts, Others just alerts) */}
+        <TabsContent value="notifications" className="mt-0 space-y-6">
+          {isEventOwnerPro && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Send className="w-5 h-5 text-primary" />Broadcast Notification</CardTitle>
+                <CardDescription>Send an in-app push notification to users in your area.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Target Audience</label>
+                  <select
+                    className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
+                    value={notifForm.targetAudience}
+                    onChange={e => setNotifForm(f => ({ ...f, targetAudience: e.target.value }))}
+                    data-testid="select-target-audience"
+                  >
+                    <option value="vendor_pro">Vendor Pro accounts</option>
+                    <option value="event_owner_pro">Event Owner Pro accounts</option>
+                    <option value="general">General (free) accounts</option>
+                    <option value="all">All accounts</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Notification Title</label>
+                  <Input
+                    data-testid="input-notif-title"
+                    placeholder="e.g. New Market Open — Spring Edition!"
+                    value={notifForm.title}
+                    onChange={e => setNotifForm(f => ({ ...f, title: e.target.value }))}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Message</label>
+                  <Textarea
+                    data-testid="input-notif-message"
+                    placeholder="Write your message..."
+                    value={notifForm.message}
+                    onChange={e => setNotifForm(f => ({ ...f, message: e.target.value }))}
+                    className="rounded-xl resize-none"
+                    rows={4}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Link to Event (Optional)</label>
+                  <select
+                    className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
+                    value={selectedEventId || ""}
+                    onChange={e => setSelectedEventId(e.target.value ? Number(e.target.value) : null)}
+                    data-testid="select-event"
+                  >
+                    <option value="">No event link</option>
+                    {myEvents.map(e => (
+                      <option key={e.id} value={e.id}>{e.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  className="rounded-xl w-full bg-gradient-to-r from-primary to-amber-500"
+                  disabled={!notifForm.title || !notifForm.message || isSendingNotif}
+                  onClick={() => {
+                    sendNotification({ title: notifForm.title, message: notifForm.message, eventId: selectedEventId || undefined, targetAudience: notifForm.targetAudience });
+                    setNotifForm({ title: "", message: "", targetAudience: "vendor_pro" });
+                    setSelectedEventId(null);
+                  }}
+                  data-testid="button-send-notification"
+                >
+                  {isSendingNotif ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Send className="w-4 h-4 mr-2" />Send Notification</>}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle>Notifications</CardTitle><CardDescription>In-app alerts from event owners and the platform.</CardDescription></div>
+              <div><CardTitle>My Alerts</CardTitle><CardDescription>In-app alerts from event owners and the platform.</CardDescription></div>
               {unreadCount > 0 && (
                 <Button size="sm" variant="outline" className="rounded-xl" onClick={() => markAllRead()}>Mark all read</Button>
               )}
@@ -755,82 +841,6 @@ export default function ProfilePage() {
           </TabsContent>
         )}
 
-        {/* PUSH NOTIFICATIONS (Event Owner Pro only) */}
-        {isEventOwnerPro && (
-          <TabsContent value="push" className="mt-0">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5 text-primary" />Send Push Notification</CardTitle>
-                <CardDescription>Send an in-app push notification to users in your area. Recipients must share your area code or have attended your events.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">Target Audience</label>
-                  <select
-                    className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
-                    value={notifForm.targetAudience}
-                    onChange={e => setNotifForm(f => ({ ...f, targetAudience: e.target.value }))}
-                    data-testid="select-target-audience"
-                  >
-                    <option value="vendor_pro">Vendor Pro accounts</option>
-                    <option value="event_owner_pro">Event Owner Pro accounts</option>
-                    <option value="general">General (free) accounts</option>
-                    <option value="all">All accounts</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">Notification Title</label>
-                  <Input
-                    data-testid="input-notif-title"
-                    placeholder="e.g. New Market Open — Spring Edition!"
-                    value={notifForm.title}
-                    onChange={e => setNotifForm(f => ({ ...f, title: e.target.value }))}
-                    className="rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">Message</label>
-                  <Textarea
-                    data-testid="input-notif-message"
-                    placeholder="Write your message..."
-                    value={notifForm.message}
-                    onChange={e => setNotifForm(f => ({ ...f, message: e.target.value }))}
-                    className="rounded-xl resize-none"
-                    rows={4}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">Link to Event (Optional)</label>
-                  <select
-                    className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
-                    value={selectedEventId || ""}
-                    onChange={e => setSelectedEventId(e.target.value ? Number(e.target.value) : null)}
-                    data-testid="select-event"
-                  >
-                    <option value="">No event link</option>
-                    {myEvents.map(e => (
-                      <option key={e.id} value={e.id}>{e.title}</option>
-                    ))}
-                  </select>
-                </div>
-                <Button
-                  className="rounded-xl w-full bg-gradient-to-r from-primary to-amber-500"
-                  disabled={!notifForm.title || !notifForm.message || isSendingNotif}
-                  onClick={() => {
-                    sendNotification({ title: notifForm.title, message: notifForm.message, eventId: selectedEventId || undefined, targetAudience: notifForm.targetAudience });
-                    setNotifForm({ title: "", message: "", targetAudience: "vendor_pro" });
-                    setSelectedEventId(null);
-                  }}
-                  data-testid="button-send-notification"
-                >
-                  {isSendingNotif ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Send className="w-4 h-4 mr-2" />Send Notification</>}
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">Recipients must be in your area code or have attended one of your events.</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-
         {/* EVENT MAP (Event Owner Pro only) */}
         {isEventOwnerPro && (
           <TabsContent value="map" className="mt-0">
@@ -855,7 +865,9 @@ export default function ProfilePage() {
                   </select>
                 </div>
                 {selectedEventId && (
-                  <EventMapEditor eventId={selectedEventId} readOnly={false} />
+                  <div className="pt-4 border-t">
+                    <EventMapEditor eventId={selectedEventId} readOnly={false} />
+                  </div>
                 )}
                 {!selectedEventId && (
                   <div className="text-center py-12 bg-muted/30 rounded-2xl border border-dashed">

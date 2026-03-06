@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link } from "wouter";
-import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash } from "lucide-react";
+import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +10,11 @@ import { useQueries } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  return url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
+}
 
 export default function Home() {
   const [areaInput, setAreaInput] = useState("");
@@ -120,61 +125,85 @@ export default function Home() {
                 const uniqueVendors = Array.from(new Set(eventPosts.map((p: any) => p.vendorId)));
                 return (
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.4 }} key={event.id}>
-                    <Link href={`/events/${event.id}`} className="group block h-full bg-card rounded-2xl overflow-hidden border border-border/50 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
-                      <div className="h-48 bg-muted relative overflow-hidden">
-                        <img src={`https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        {event.canceledAt ? (
-                          <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
-                            CANCELED
-                          </div>
-                        ) : (
-                          <div className="absolute top-4 right-4 bg-background/90 backdrop-blur text-foreground px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center">
-                            <span className="text-primary">{format(new Date(event.date), 'MMM')}</span>
-                            <span className="text-xl leading-none">{format(new Date(event.date), 'dd')}</span>
-                          </div>
-                        )}
-                        {event.areaCode && (
-                          <div className="absolute top-4 left-4 bg-background/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-semibold text-foreground flex items-center gap-1">
-                            <Hash className="w-3 h-3" />{event.areaCode}
-                          </div>
-                        )}
-                        {uniqueVendors.length > 0 && (
-                          <div className="absolute bottom-4 left-4 flex -space-x-2">
-                            {eventPosts.slice(0, 3).map((post: any) => (
-                              <Avatar key={post.id} className="w-8 h-8 border-2 border-background ring-2 ring-primary/20">
-                                <AvatarImage src={post.vendorAvatar || ""} />
-                                <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{post.vendorName?.charAt(0) || "V"}</AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {uniqueVendors.length > 3 && <div className="w-8 h-8 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-bold text-muted-foreground">+{uniqueVendors.length - 3}</div>}
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-6 flex-1 flex flex-col">
-                        <h3 className="text-xl font-display font-bold text-foreground mb-2 group-hover:text-primary transition-colors">{event.title}</h3>
-                        <div className="space-y-2 mb-4 flex-1">
-                          <div className="flex items-start gap-2 text-muted-foreground text-sm">
-                            <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-primary/70" /><span className="line-clamp-2">{event.location}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                            <Users className="w-4 h-4 shrink-0 text-primary/70" />
-                            <span>{event.attendingCount || 0} attending · {event.interestedCount || 0} interested</span>
-                          </div>
-                          {(event.vendorSpaces || 0) > 0 && (
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                              <Package className="w-4 h-4 shrink-0 text-primary/70" />
-                              <span>{(event.vendorSpaces || 0) - (event.vendorSpacesUsed || 0)} vendor spaces remaining</span>
+                    <div className="group h-full bg-card rounded-2xl overflow-hidden border border-border/50 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
+                      {/* Image — clickable link to event */}
+                      <Link href={`/events/${event.id}`} className="block shrink-0">
+                        <div className="h-48 bg-muted relative overflow-hidden">
+                          <img src={`https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          {event.canceledAt ? (
+                            <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
+                              CANCELED
+                            </div>
+                          ) : (
+                            <div className="absolute top-4 right-4 bg-background/90 backdrop-blur text-foreground px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center">
+                              <span className="text-primary">{format(new Date(event.date), 'MMM')}</span>
+                              <span className="text-xl leading-none">{format(new Date(event.date), 'dd')}</span>
+                            </div>
+                          )}
+                          {event.areaCode && (
+                            <div className="absolute top-4 left-4 bg-background/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-semibold text-foreground flex items-center gap-1">
+                              <Hash className="w-3 h-3" />{event.areaCode}
+                            </div>
+                          )}
+                          {uniqueVendors.length > 0 && (
+                            <div className="absolute bottom-4 left-4 flex -space-x-2">
+                              {eventPosts.slice(0, 3).map((post: any) => (
+                                <Avatar key={post.id} className="w-8 h-8 border-2 border-background ring-2 ring-primary/20">
+                                  <AvatarImage src={post.vendorAvatar || ""} />
+                                  <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{post.vendorName?.charAt(0) || "V"}</AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {uniqueVendors.length > 3 && <div className="w-8 h-8 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-bold text-muted-foreground">+{uniqueVendors.length - 3}</div>}
                             </div>
                           )}
                         </div>
-                        <div className="pt-4 border-t border-border/50 flex items-center justify-between mt-auto">
-                          <span className="text-sm font-medium text-muted-foreground">{eventPosts.length} items listed</span>
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                            <ArrowRight className="w-4 h-4" />
-                          </div>
+                      </Link>
+                      {/* Content */}
+                      <div className="p-6 flex-1 flex flex-col">
+                        {/* Title row with optional website link */}
+                        <div className="flex items-start gap-2 mb-2">
+                          <Link href={`/events/${event.id}`} className="flex-1 min-w-0">
+                            <h3 className="text-xl font-display font-bold text-foreground group-hover:text-primary transition-colors">{event.title}</h3>
+                          </Link>
+                          {(event as any).creatorWebsiteUrl && (
+                            <a
+                              href={normalizeUrl((event as any).creatorWebsiteUrl)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="Visit organizer's website"
+                              data-testid={`link-event-website-${event.id}`}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                         </div>
+                        {/* Details & footer — link to event */}
+                        <Link href={`/events/${event.id}`} className="flex-1 flex flex-col">
+                          <div className="space-y-2 mb-4 flex-1">
+                            <div className="flex items-start gap-2 text-muted-foreground text-sm">
+                              <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-primary/70" /><span className="line-clamp-2">{event.location}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                              <Users className="w-4 h-4 shrink-0 text-primary/70" />
+                              <span>{event.attendingCount || 0} attending · {event.interestedCount || 0} interested</span>
+                            </div>
+                            {(event.vendorSpaces || 0) > 0 && (
+                              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                                <Package className="w-4 h-4 shrink-0 text-primary/70" />
+                                <span>{(event.vendorSpaces || 0) - (event.vendorSpacesUsed || 0)} vendor spaces remaining</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="pt-4 border-t border-border/50 flex items-center justify-between mt-auto">
+                            <span className="text-sm font-medium text-muted-foreground">{eventPosts.length} items listed</span>
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                              <ArrowRight className="w-4 h-4" />
+                            </div>
+                          </div>
+                        </Link>
                       </div>
-                    </Link>
+                    </div>
                   </motion.div>
                 );
               })}
