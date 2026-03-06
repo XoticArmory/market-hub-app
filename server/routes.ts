@@ -58,6 +58,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // ---- FEEDBACK ROUTE ----
+  app.post('/api/feedback', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { subject, message } = req.body;
+    if (!subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ message: "Subject and message are required." });
+    }
+    const senderInfo = await enrichUser(userId);
+    const allProfiles = await storage.getAllUserProfiles();
+    const adminProfiles = allProfiles.filter(p => p.isAdmin === true);
+    await Promise.all(adminProfiles.map(p =>
+      storage.createNotification({
+        userId: p.userId,
+        fromUserId: userId,
+        type: 'feedback',
+        title: `💡 Suggestion: ${subject.trim()}`,
+        message: `From ${senderInfo.name || senderInfo.email || 'a user'}: ${message.trim()}`,
+      })
+    ));
+    res.json({ success: true });
+  });
+
   // ---- PROFILE ROUTES ----
   app.get(api.profile.get.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
