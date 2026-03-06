@@ -22,6 +22,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EventMapEditor } from "@/components/EventMapEditor";
 
+function normalizeUrl(url: string) {
+  if (!url) return url;
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 const postSchema = z.object({
   itemsDescription: z.string().min(5, "Please tell us a bit more about what you're bringing."),
   imageUrl: z.string().url("Please enter a valid image URL").optional().or(z.literal("")),
@@ -225,6 +230,18 @@ export default function EventDetail() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="w-4 h-4" />
                 <span>By <strong className="text-foreground">{event.creatorName}</strong></span>
+                {(event as any).creatorWebsiteUrl && (
+                  <a
+                    href={normalizeUrl((event as any).creatorWebsiteUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 rounded-lg hover:text-primary hover:bg-primary/10 transition-colors"
+                    title="Visit organizer's website"
+                    data-testid="link-creator-website-detail"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
                 {event.isFeatured && <Badge className="text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300"><Star className="w-3 h-3 mr-1" />Featured</Badge>}
               </div>
             )}
@@ -518,7 +535,21 @@ export default function EventDetail() {
                         <AvatarFallback className="bg-secondary text-secondary-foreground"><User className="w-5 h-5" /></AvatarFallback>
                       </Avatar>
                       <div>
-                        <h4 className="font-semibold text-foreground text-lg pr-20">{post.vendorName || "Anonymous Vendor"}</h4>
+                        <div className="flex items-center gap-2 pr-20">
+                          <h4 className="font-semibold text-foreground text-lg">{post.vendorName || "Anonymous Vendor"}</h4>
+                          {(post as any).vendorWebsiteUrl && (
+                            <a
+                              href={normalizeUrl((post as any).vendorWebsiteUrl)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
+                              title="Visit vendor's website"
+                              data-testid={`link-vendor-website-${post.id}`}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">{format(new Date(post.createdAt!), 'MMM d, h:mm a')}</p>
                       </div>
                     </div>

@@ -137,7 +137,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         userStatus = await storage.getUserStatusForEvent(e.id, req.user.claims?.sub);
       }
       const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-      const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
+      const isCreatorProOrAdmin = isFeatured || creatorProfile?.isAdmin === true;
+      const creatorWebsiteUrl = isCreatorProOrAdmin ? (creatorProfile?.websiteUrl || null) : null;
       return { ...e, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
     }));
     // Sort: featured (pro) events in the area at top, then by date
@@ -170,7 +171,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }));
     const registrations = await storage.getVendorRegistrations(eventId);
     const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-    const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
+    const isCreatorProOrAdmin = isFeatured || creatorProfile?.isAdmin === true;
+    const creatorWebsiteUrl = isCreatorProOrAdmin ? (creatorProfile?.websiteUrl || null) : null;
     res.json({ ...event, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
   });
 
