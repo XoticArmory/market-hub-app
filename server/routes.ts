@@ -277,7 +277,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ---- VENDOR POSTS ----
-  app.get(api.vendorPosts.listByEvent.path, async (req, res) => {
+  app.get(api.vendorPosts.listByEvent.path, async (req: any, res) => {
     const eventId = Number(req.params.eventId);
     const posts = await storage.getVendorPosts(eventId);
     const enriched = await Promise.all(posts.map(async (p) => {
@@ -285,7 +285,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const vendorProfile = await storage.getUserProfile(p.vendorId);
       const isVendorProAccount = vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active';
       const vendorWebsiteUrl = (isVendorProAccount || vendorProfile?.isAdmin) ? (vendorProfile?.websiteUrl || null) : null;
-      return { ...p, vendorName: u.name, vendorAvatar: u.avatar, vendorWebsiteUrl };
+      const catalogAssignments = (isVendorProAccount || vendorProfile?.isAdmin)
+        ? await storage.getCatalogAssignmentsForEvent(eventId, p.vendorId)
+        : [];
+      return { ...p, vendorName: u.name, vendorAvatar: u.avatar, vendorWebsiteUrl, catalogAssignments };
     }));
     res.json(enriched);
   });
@@ -572,6 +575,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     await storage.deleteVendorInventoryItem(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // ---- VENDOR CATALOG ----
+  app.get('/api/vendor/catalog', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const items = await storage.getVendorCatalog(userId);
+    res.json(items);
+  });
+
+  app.post('/api/vendor/catalog', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const { itemName, quantity, priceCents, imageUrl } = req.body;
+    if (!itemName) return res.status(400).json({ message: "itemName required" });
+    const item = await storage.createVendorCatalogItem(userId, {
+      itemName,
+      quantity: Number(quantity) || 0,
+      priceCents: Number(priceCents) || 0,
+      imageUrl: imageUrl || null,
+    });
+    res.json(item);
+  });
+
+  app.patch('/api/vendor/catalog/:id', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const id = Number(req.params.id);
+    const { itemName, quantity, priceCents, imageUrl } = req.body;
+    const item = await storage.updateVendorCatalogItem(id, { itemName, quantity: Number(quantity), priceCents: Number(priceCents), imageUrl: imageUrl || null });
+    res.json(item);
+  });
+
+  app.delete('/api/vendor/catalog/:id', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    await storage.deleteVendorCatalogItem(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  app.post('/api/vendor/catalog/:id/assign', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const catalogItemId = Number(req.params.id);
+    const { eventId, quantityAssigned } = req.body;
+    if (!eventId || quantityAssigned === undefined) return res.status(400).json({ message: "eventId and quantityAssigned required" });
+    const assignment = await storage.assignCatalogItemToEvent(catalogItemId, Number(eventId), userId, Number(quantityAssigned));
+    res.json(assignment);
+  });
+
+  app.delete('/api/vendor/catalog/:id/assign/:eventId', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    await storage.removeCatalogItemFromEvent(Number(req.params.id), Number(req.params.eventId));
     res.json({ ok: true });
   });
 

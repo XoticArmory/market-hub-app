@@ -576,6 +576,32 @@ export default function EventDetail() {
 
                     <div className="bg-muted/50 p-4 rounded-xl text-foreground text-sm leading-relaxed">{post.itemsDescription}</div>
 
+                    {/* Catalog-assigned items */}
+                    {(post as any).catalogAssignments?.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Products Available</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {(post as any).catalogAssignments.map((a: any) => (
+                            <div key={a.id} className="flex items-center gap-3 p-3 bg-background border border-border/40 rounded-xl" data-testid={`catalog-assignment-${a.id}`}>
+                              {a.item?.imageUrl ? (
+                                <img src={a.item.imageUrl} alt={a.item.itemName} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                  <Package className="w-4 h-4 text-muted-foreground" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{a.item?.itemName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  ${(a.item?.priceCents / 100).toFixed(2)} · Qty: {a.quantityAssigned}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Photo management for own post */}
                     {isMyPost && (
                       <div className="mt-4 flex items-center gap-2">

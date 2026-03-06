@@ -3,12 +3,14 @@ import { eq, desc, and, inArray, sql, gte, or, isNull, lt } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
+  vendorCatalog, vendorCatalogAssignments,
   promoCodes, promoCodeUses,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
   type Notification, type EventMap, type VendorRegistration,
   type VendorInventoryItem, type InsertVendorInventory,
+  type VendorCatalogItem, type InsertVendorCatalog, type VendorCatalogAssignment,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -93,6 +95,15 @@ export interface IStorage {
   updateVendorInventoryItem(id: number, data: Partial<InsertVendorInventory>): Promise<VendorInventoryItem>;
   deleteVendorInventoryItem(id: number): Promise<void>;
   getVendorAnalytics(vendorId: string): Promise<any>;
+
+  // Vendor Catalog
+  getVendorCatalog(vendorId: string): Promise<(VendorCatalogItem & { assignments: VendorCatalogAssignment[] })[]>;
+  createVendorCatalogItem(vendorId: string, data: InsertVendorCatalog): Promise<VendorCatalogItem>;
+  updateVendorCatalogItem(id: number, data: Partial<InsertVendorCatalog>): Promise<VendorCatalogItem>;
+  deleteVendorCatalogItem(id: number): Promise<void>;
+  assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number): Promise<VendorCatalogAssignment>;
+  removeCatalogItemFromEvent(catalogItemId: number, eventId: number): Promise<void>;
+  getCatalogAssignmentsForEvent(eventId: number, vendorId: string): Promise<(VendorCatalogAssignment & { item: VendorCatalogItem })[]>;
 
   // Promo Codes
   getAllPromoCodes(): Promise<any[]>;
@@ -570,6 +581,70 @@ export class DatabaseStorage implements IStorage {
       inventoryByEvent,
       itemSummary,
     };
+  }
+
+  // ---- Vendor Catalog ----
+  async getVendorCatalog(vendorId: string): Promise<(VendorCatalogItem & { assignments: VendorCatalogAssignment[] })[]> {
+    const items = await db.select().from(vendorCatalog)
+      .where(eq(vendorCatalog.vendorId, vendorId))
+      .orderBy(desc(vendorCatalog.createdAt));
+    const assignments = await db.select().from(vendorCatalogAssignments)
+      .where(eq(vendorCatalogAssignments.vendorId, vendorId));
+    return items.map(item => ({
+      ...item,
+      assignments: assignments.filter(a => a.catalogItemId === item.id),
+    }));
+  }
+
+  async createVendorCatalogItem(vendorId: string, data: InsertVendorCatalog): Promise<VendorCatalogItem> {
+    const [item] = await db.insert(vendorCatalog).values({ vendorId, ...data }).returning();
+    return item;
+  }
+
+  async updateVendorCatalogItem(id: number, data: Partial<InsertVendorCatalog>): Promise<VendorCatalogItem> {
+    const [item] = await db.update(vendorCatalog)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorCatalog.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteVendorCatalogItem(id: number): Promise<void> {
+    await db.delete(vendorCatalogAssignments).where(eq(vendorCatalogAssignments.catalogItemId, id));
+    await db.delete(vendorCatalog).where(eq(vendorCatalog.id, id));
+  }
+
+  async assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number): Promise<VendorCatalogAssignment> {
+    const existing = await db.select().from(vendorCatalogAssignments)
+      .where(and(eq(vendorCatalogAssignments.catalogItemId, catalogItemId), eq(vendorCatalogAssignments.eventId, eventId)));
+    if (existing.length > 0) {
+      const [updated] = await db.update(vendorCatalogAssignments)
+        .set({ quantityAssigned })
+        .where(and(eq(vendorCatalogAssignments.catalogItemId, catalogItemId), eq(vendorCatalogAssignments.eventId, eventId)))
+        .returning();
+      return updated;
+    }
+    const [assignment] = await db.insert(vendorCatalogAssignments)
+      .values({ catalogItemId, eventId, vendorId, quantityAssigned })
+      .returning();
+    return assignment;
+  }
+
+  async removeCatalogItemFromEvent(catalogItemId: number, eventId: number): Promise<void> {
+    await db.delete(vendorCatalogAssignments)
+      .where(and(eq(vendorCatalogAssignments.catalogItemId, catalogItemId), eq(vendorCatalogAssignments.eventId, eventId)));
+  }
+
+  async getCatalogAssignmentsForEvent(eventId: number, vendorId: string): Promise<(VendorCatalogAssignment & { item: VendorCatalogItem })[]> {
+    const assignments = await db.select().from(vendorCatalogAssignments)
+      .where(and(eq(vendorCatalogAssignments.eventId, eventId), eq(vendorCatalogAssignments.vendorId, vendorId)));
+    if (assignments.length === 0) return [];
+    const itemIds = assignments.map(a => a.catalogItemId);
+    const items = await db.select().from(vendorCatalog).where(inArray(vendorCatalog.id, itemIds));
+    return assignments.map(a => ({
+      ...a,
+      item: items.find(i => i.id === a.catalogItemId)!,
+    }));
   }
 
   // ---- Promo Codes ----

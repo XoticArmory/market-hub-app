@@ -44,10 +44,21 @@ function tierToProfileType(tier?: string | null, status?: string | null): string
 
 function VendorAnalyticsTab({ userId }: { userId: string }) {
   const { toast } = useToast();
+
+  // Inventory tracker state
   const [selectedEventId, setSelectedEventId] = useState<number | "">("");
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [itemForm, setItemForm] = useState({ itemName: "", quantityBrought: "", quantitySold: "", priceCents: "" });
+
+  // Catalog state
+  const [showCatalogDialog, setShowCatalogDialog] = useState(false);
+  const [editingCatalog, setEditingCatalog] = useState<any>(null);
+  const [catalogForm, setCatalogForm] = useState({ itemName: "", quantity: "", priceCents: "", imageUrl: "" });
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [assigningItem, setAssigningItem] = useState<any>(null);
+  const [assignEventId, setAssignEventId] = useState<string>("");
+  const [assignQty, setAssignQty] = useState<string>("");
 
   const { data: analytics, isLoading } = useQuery<any>({
     queryKey: ["/api/vendor/analytics"],
@@ -62,6 +73,15 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
     },
   });
 
+  const { data: catalogItems = [], isLoading: isLoadingCatalog } = useQuery<any[]>({
+    queryKey: ["/api/vendor/catalog"],
+  });
+
+  const { data: allEvents = [] } = useQuery<any[]>({
+    queryKey: ["/api/events"],
+  });
+
+  // Inventory mutations
   const createItem = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/vendor/inventory", data),
     onSuccess: () => {
@@ -92,6 +112,99 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
       toast({ title: "Item removed." });
     },
   });
+
+  // Catalog mutations
+  const createCatalogItem = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/vendor/catalog", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      setShowCatalogDialog(false);
+      setCatalogForm({ itemName: "", quantity: "", priceCents: "", imageUrl: "" });
+      toast({ title: "Item added to catalog!" });
+    },
+  });
+
+  const updateCatalogItem = useMutation({
+    mutationFn: ({ id, ...data }: any) => apiRequest("PATCH", `/api/vendor/catalog/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      setShowCatalogDialog(false);
+      setEditingCatalog(null);
+      toast({ title: "Item updated!" });
+    },
+  });
+
+  const deleteCatalogItem = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/vendor/catalog/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      toast({ title: "Item removed from catalog." });
+    },
+  });
+
+  const assignToEvent = useMutation({
+    mutationFn: ({ id, eventId, quantityAssigned }: any) =>
+      apiRequest("POST", `/api/vendor/catalog/${id}/assign`, { eventId, quantityAssigned }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      setShowAssignDialog(false);
+      setAssignEventId("");
+      setAssignQty("");
+      toast({ title: "Item assigned to event!" });
+    },
+  });
+
+  const removeAssignment = useMutation({
+    mutationFn: ({ catalogItemId, eventId }: any) =>
+      apiRequest("DELETE", `/api/vendor/catalog/${catalogItemId}/assign/${eventId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      toast({ title: "Assignment removed." });
+    },
+  });
+
+  const openAddCatalog = () => {
+    setEditingCatalog(null);
+    setCatalogForm({ itemName: "", quantity: "", priceCents: "", imageUrl: "" });
+    setShowCatalogDialog(true);
+  };
+
+  const openEditCatalog = (item: any) => {
+    setEditingCatalog(item);
+    setCatalogForm({
+      itemName: item.itemName,
+      quantity: String(item.quantity),
+      priceCents: String(item.priceCents / 100),
+      imageUrl: item.imageUrl || "",
+    });
+    setShowCatalogDialog(true);
+  };
+
+  const handleSaveCatalog = () => {
+    const payload = {
+      itemName: catalogForm.itemName,
+      quantity: Number(catalogForm.quantity) || 0,
+      priceCents: Math.round(parseFloat(catalogForm.priceCents || "0") * 100),
+      imageUrl: catalogForm.imageUrl || null,
+    };
+    if (editingCatalog) {
+      updateCatalogItem.mutate({ id: editingCatalog.id, ...payload });
+    } else {
+      createCatalogItem.mutate(payload);
+    }
+  };
+
+  const openAssign = (item: any) => {
+    setAssigningItem(item);
+    setAssignEventId("");
+    setAssignQty(String(item.quantity));
+    setShowAssignDialog(true);
+  };
+
+  const handleAssign = () => {
+    if (!assignEventId || !assignQty) return;
+    assignToEvent.mutate({ id: assigningItem.id, eventId: Number(assignEventId), quantityAssigned: Number(assignQty) });
+  };
 
   const openAdd = () => {
     setEditingItem(null);
@@ -136,6 +249,8 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
   const totalRevenueCents = Object.values(itemSummary).reduce((sum: number, v: any) => sum + (v.totalRevenueCents || 0), 0);
   const totalSold = Object.values(itemSummary).reduce((sum: number, v: any) => sum + (v.totalSold || 0), 0);
 
+  const activeEvents = (allEvents as any[]).filter((e: any) => !e.canceledAt);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -154,6 +269,71 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
           </div>
         ))}
       </div>
+
+      {/* My Items Catalog */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2"><Tag className="w-5 h-5 text-primary" />My Items</CardTitle>
+            <CardDescription>Log your products here, then assign them to events so they appear on your vendor card.</CardDescription>
+          </div>
+          <Button size="sm" className="rounded-xl" onClick={openAddCatalog} data-testid="button-add-catalog-item">
+            <Plus className="w-4 h-4 mr-1" />Add Item
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoadingCatalog ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          ) : (catalogItems as any[]).length === 0 ? (
+            <div className="text-center py-10 bg-muted/30 rounded-2xl border border-dashed">
+              <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm text-muted-foreground">No items yet. Add items to your catalog to assign them to events.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(catalogItems as any[]).map((item: any) => (
+                <div key={item.id} className="flex items-center gap-4 p-4 bg-muted/30 rounded-2xl border border-border/40" data-testid={`catalog-item-${item.id}`}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.itemName} className="w-14 h-14 rounded-xl object-cover shrink-0 border border-border/30" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center shrink-0 border border-border/30">
+                      <Package className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground truncate">{item.itemName}</p>
+                    <p className="text-sm text-muted-foreground">Qty: {item.quantity} · ${(item.priceCents / 100).toFixed(2)} each</p>
+                    {item.assignments?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.assignments.map((a: any) => {
+                          const ev = activeEvents.find((e: any) => e.id === a.eventId);
+                          return ev ? (
+                            <Badge key={a.id} variant="secondary" className="text-xs gap-1">
+                              {ev.title} ({a.quantityAssigned})
+                              <button
+                                onClick={() => removeAssignment.mutate({ catalogItemId: item.id, eventId: a.eventId })}
+                                className="ml-1 hover:text-destructive transition-colors"
+                                data-testid={`button-remove-assignment-${item.id}-${a.eventId}`}
+                              >×</button>
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="outline" className="rounded-xl h-8 px-3 text-xs" onClick={() => openAssign(item)} data-testid={`button-assign-${item.id}`}>
+                      Assign to Event
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEditCatalog(item)} data-testid={`button-edit-catalog-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => deleteCatalogItem.mutate(item.id)} data-testid={`button-delete-catalog-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {attendedEvents.length > 0 && (
         <Card>
@@ -276,6 +456,83 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
         </CardContent>
       </Card>
 
+      {/* Add/Edit Catalog Item Dialog */}
+      <Dialog open={showCatalogDialog} onOpenChange={setShowCatalogDialog}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>{editingCatalog ? "Edit Item" : "Add Item to Catalog"}</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Item Name</label>
+              <Input data-testid="input-catalog-name" placeholder="e.g. Hand-poured candles" value={catalogForm.itemName} onChange={e => setCatalogForm(f => ({ ...f, itemName: e.target.value }))} className="rounded-xl" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-semibold mb-2 block">Quantity</label>
+                <Input data-testid="input-catalog-qty" type="number" min="0" placeholder="0" value={catalogForm.quantity} onChange={e => setCatalogForm(f => ({ ...f, quantity: e.target.value }))} className="rounded-xl" />
+              </div>
+              <div>
+                <label className="text-sm font-semibold mb-2 block">Price ($)</label>
+                <Input data-testid="input-catalog-price" type="number" min="0" step="0.01" placeholder="0.00" value={catalogForm.priceCents} onChange={e => setCatalogForm(f => ({ ...f, priceCents: e.target.value }))} className="rounded-xl" />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Photo URL (optional)</label>
+              <Input data-testid="input-catalog-image" placeholder="https://..." value={catalogForm.imageUrl} onChange={e => setCatalogForm(f => ({ ...f, imageUrl: e.target.value }))} className="rounded-xl" />
+              {catalogForm.imageUrl && (
+                <img src={catalogForm.imageUrl} alt="preview" className="mt-2 w-20 h-20 object-cover rounded-xl border border-border/30" onError={e => (e.currentTarget.style.display = "none")} />
+              )}
+            </div>
+            <Button className="w-full rounded-xl" disabled={!catalogForm.itemName || createCatalogItem.isPending || updateCatalogItem.isPending} onClick={handleSaveCatalog} data-testid="button-save-catalog">
+              {(createCatalogItem.isPending || updateCatalogItem.isPending) ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : editingCatalog ? "Update Item" : "Add to Catalog"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign to Event Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>Assign to Event</DialogTitle></DialogHeader>
+          {assigningItem && (
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
+                {assigningItem.imageUrl ? (
+                  <img src={assigningItem.imageUrl} alt={assigningItem.itemName} className="w-10 h-10 rounded-lg object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center"><Package className="w-4 h-4 text-muted-foreground" /></div>
+                )}
+                <div>
+                  <p className="font-semibold text-sm">{assigningItem.itemName}</p>
+                  <p className="text-xs text-muted-foreground">${(assigningItem.priceCents / 100).toFixed(2)} · {assigningItem.quantity} in stock</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-semibold mb-2 block">Select Event</label>
+                <select
+                  className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
+                  value={assignEventId}
+                  onChange={e => setAssignEventId(e.target.value)}
+                  data-testid="select-assign-event"
+                >
+                  <option value="">Choose an event...</option>
+                  {activeEvents.map((ev: any) => (
+                    <option key={ev.id} value={ev.id}>{ev.title} — {format(new Date(ev.date), "MMM d, yyyy")}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-semibold mb-2 block">Quantity to Assign</label>
+                <Input data-testid="input-assign-qty" type="number" min="1" max={assigningItem.quantity} placeholder="0" value={assignQty} onChange={e => setAssignQty(e.target.value)} className="rounded-xl" />
+              </div>
+              <Button className="w-full rounded-xl" disabled={!assignEventId || !assignQty || assignToEvent.isPending} onClick={handleAssign} data-testid="button-confirm-assign">
+                {assignToEvent.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Assigning...</> : "Assign to Event"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add/Edit Inventory Item Dialog */}
       <Dialog open={showItemDialog} onOpenChange={setShowItemDialog}>
         <DialogContent className="rounded-2xl">
           <DialogHeader><DialogTitle>{editingItem ? "Edit Item" : "Add Inventory Item"}</DialogTitle></DialogHeader>
