@@ -19,7 +19,6 @@ import { format } from "date-fns";
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
-  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -174,7 +173,6 @@ function PromoCodesTab() {
                       <SelectItem value="all">All tiers</SelectItem>
                       <SelectItem value="event_owner_pro">Event Owner Pro only</SelectItem>
                       <SelectItem value="vendor_pro">Vendor Pro only</SelectItem>
-                      <SelectItem value="general_pro">General Pro only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -719,7 +717,6 @@ export default function AdminPage() {
                   {[
                     { key: "square_plan_event_owner_pro", label: "Event Owner Pro Plan ID" },
                     { key: "square_plan_vendor_pro", label: "Vendor Pro Plan ID" },
-                    { key: "square_plan_general_pro", label: "General Pro Plan ID" },
                   ].map(item => (
                     <div key={item.key} className="space-y-2">
                       <label className="text-sm font-medium">{item.label}</label>
@@ -850,7 +847,6 @@ export default function AdminPage() {
                   <SelectItem value="free">Free</SelectItem>
                   <SelectItem value="event_owner_pro">Event Owner Pro ($19.95/mo)</SelectItem>
                   <SelectItem value="vendor_pro">Vendor Pro ($9.95/mo)</SelectItem>
-                  <SelectItem value="general_pro">General Pro ($4.95/mo)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

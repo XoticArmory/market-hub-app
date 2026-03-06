@@ -31,7 +31,6 @@ const PROFILE_TYPES = [
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "Event Owner Pro",
   vendor_pro: "Vendor Pro",
-  general_pro: "General Pro",
   free: "Free",
 };
 
@@ -457,7 +456,6 @@ export default function ProfilePage() {
   const userId = user?.id;
   const isAdmin = profile?.isAdmin === true;
 
-  const isGeneralPro = isAdmin || (profile?.subscriptionTier === "general_pro" && profile?.subscriptionStatus === "active");
   const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
   const isVendorPro = isAdmin || (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active");
   const hasActivePro = isAdmin || (profile?.subscriptionStatus === "active" && (profile?.subscriptionTier !== "free" && profile?.subscriptionTier !== null));

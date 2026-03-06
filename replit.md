@@ -6,13 +6,13 @@ Artisan Collective is a comprehensive multi-tier subscription marketplace for lo
 
 Key features:
 - Browse and create artisan market events (all authenticated users, no fee required)
-- 3 Pro subscription tiers: Event Owner Pro ($19.95/mo), Vendor Pro ($9.95/mo), General Pro ($4.95/mo)
+- 2 Pro subscription tiers: Event Owner Pro ($19.95/mo), Vendor Pro ($9.95/mo)
 - Event Owner Pro: push notifications to local Vendor Pros, event analytics, interactive map builder, boosted listings
 - Vendor Pro: 0% platform fee on space registrations, notification receipt, full Vendor Analytics dashboard
 - Vendor Analytics (Vendor Pro + Admin): events attended, profile view count, per-event inventory tracking (items brought/sold/price), sales summary, revenue calculation
 - Profile view tracking: automatically logged when authenticated users view another user's profile
 - Vendor inventory management: add/edit/delete items per event with quantities and prices
-- Admin all-access: admin users get all Pro tier features enabled (event owner + vendor + general pro), with all fees waived on vendor space registrations
+- Admin all-access: admin users get all Pro tier features enabled (event owner + vendor), with all fees waived on vendor space registrations
 - Vendor space registration with Square payment (0.5% platform fee for non-Vendor Pro/non-Admin accounts)
 - Vendor space cancel/unregister with confirmation dialog; vendor post delete ("Unregister") with confirmation dialog
 - Multi-photo support on vendor posts: up to 3 photos for free accounts, 10 for Vendor Pro (URL-based, PATCH /api/events/:eventId/posts/:postId/images)
@@ -92,7 +92,7 @@ New users are redirected to `/setup` if their profile has `onboardingComplete: f
 
 - **Provider:** Replit Auth (OIDC)
 - **Admin access:** `user_profiles.isAdmin` boolean; claimed via `/api/admin/claim` using `ADMIN_EMAILS` env var
-- **Subscription tiers:** `free`, `event_owner_pro`, `vendor_pro`, `general_pro` stored in `user_profiles.subscriptionTier`
+- **Subscription tiers:** `free`, `event_owner_pro`, `vendor_pro` stored in `user_profiles.subscriptionTier`
 
 ### Subscription Tiers
 
@@ -100,14 +100,12 @@ New users are redirected to `/setup` if their profile has `onboardingComplete: f
 |------|-------|-------------|
 | `event_owner_pro` | $19.95/mo | Push notifications, featured listings, analytics, event maps |
 | `vendor_pro` | $9.95/mo | No platform fees, receive notifications |
-| `general_pro` | $4.95/mo | Badge, community perks |
 
 ### Stripe Integration
 
 - Tier price IDs stored in `admin_settings` table with keys:
   - `stripe_price_event_owner_pro`
   - `stripe_price_vendor_pro`
-  - `stripe_price_general_pro`
 - Checkout: POST `/api/stripe/upgrade` with `{ tier }` body
 - Terms accepted in DB before Stripe checkout redirect
 - Webhook updates `subscriptionTier` and `subscriptionStatus` from `checkout.session.completed`

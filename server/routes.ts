@@ -753,7 +753,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.square.subscriptionComplete.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { tier } = req.body;
-    if (!tier || !['event_owner_pro', 'vendor_pro', 'general_pro'].includes(tier)) {
+    if (!tier || !['event_owner_pro', 'vendor_pro'].includes(tier)) {
       return res.status(400).json({ message: "Invalid tier." });
     }
     await storage.upsertUserProfile(userId, {
@@ -880,7 +880,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
     const { userId, tier, status } = req.body;
     if (!userId || !tier) return res.status(400).json({ message: "userId and tier required." });
-    const validTier = ['event_owner_pro', 'vendor_pro', 'general_pro', 'free'].includes(tier) ? tier : 'free';
+    const validTier = ['event_owner_pro', 'vendor_pro', 'free'].includes(tier) ? tier : 'free';
     const validStatus = status === 'active' ? 'active' : 'inactive';
     await storage.upsertUserProfile(userId, {
       subscriptionTier: validTier as any,
