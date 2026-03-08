@@ -3,13 +3,14 @@ import { eq, desc, and, inArray, sql, gte, or, isNull, lt } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
-  vendorCatalog, vendorCatalogAssignments,
+  vendorCatalog, vendorCatalogAssignments, roadmapItems,
   promoCodes, promoCodeUses,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
   type Notification, type EventMap, type VendorRegistration,
   type VendorInventoryItem, type InsertVendorInventory,
+  type RoadmapItem, type InsertRoadmapItem,
   type VendorCatalogItem, type InsertVendorCatalog, type VendorCatalogAssignment,
 } from "@shared/schema";
 
@@ -104,6 +105,12 @@ export interface IStorage {
   assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number): Promise<VendorCatalogAssignment>;
   removeCatalogItemFromEvent(catalogItemId: number, eventId: number): Promise<void>;
   getCatalogAssignmentsForEvent(eventId: number, vendorId: string): Promise<(VendorCatalogAssignment & { item: VendorCatalogItem })[]>;
+
+  // Roadmap
+  getRoadmapItems(): Promise<RoadmapItem[]>;
+  createRoadmapItem(createdBy: string, data: InsertRoadmapItem): Promise<RoadmapItem>;
+  updateRoadmapItem(id: number, data: Partial<InsertRoadmapItem>): Promise<RoadmapItem>;
+  deleteRoadmapItem(id: number): Promise<void>;
 
   // Promo Codes
   getAllPromoCodes(): Promise<any[]>;
@@ -645,6 +652,25 @@ export class DatabaseStorage implements IStorage {
       ...a,
       item: items.find(i => i.id === a.catalogItemId)!,
     }));
+  }
+
+  // ---- Roadmap ----
+  async getRoadmapItems(): Promise<RoadmapItem[]> {
+    return await db.select().from(roadmapItems).orderBy(roadmapItems.createdAt);
+  }
+
+  async createRoadmapItem(createdBy: string, data: InsertRoadmapItem): Promise<RoadmapItem> {
+    const [item] = await db.insert(roadmapItems).values({ createdBy, ...data }).returning();
+    return item;
+  }
+
+  async updateRoadmapItem(id: number, data: Partial<InsertRoadmapItem>): Promise<RoadmapItem> {
+    const [item] = await db.update(roadmapItems).set({ ...data, updatedAt: new Date() }).where(eq(roadmapItems.id, id)).returning();
+    return item;
+  }
+
+  async deleteRoadmapItem(id: number): Promise<void> {
+    await db.delete(roadmapItems).where(eq(roadmapItems.id, id));
   }
 
   // ---- Promo Codes ----

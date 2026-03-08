@@ -578,6 +578,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ---- ROADMAP ----
+  app.get('/api/roadmap', async (req, res) => {
+    const items = await storage.getRoadmapItems();
+    res.json(items);
+  });
+
+  app.post('/api/roadmap', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { title, description, expectedDate, tiersAffected, status } = req.body;
+    if (!title || !description) return res.status(400).json({ message: "title and description required" });
+    const item = await storage.createRoadmapItem(req.user.claims.sub, {
+      title, description,
+      expectedDate: expectedDate || null,
+      tiersAffected: Array.isArray(tiersAffected) ? tiersAffected : [],
+      status: status || "planned",
+    });
+    res.json(item);
+  });
+
+  app.patch('/api/roadmap/:id', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { title, description, expectedDate, tiersAffected, status } = req.body;
+    const item = await storage.updateRoadmapItem(Number(req.params.id), {
+      title, description,
+      expectedDate: expectedDate || null,
+      tiersAffected: Array.isArray(tiersAffected) ? tiersAffected : [],
+      status,
+    });
+    res.json(item);
+  });
+
+  app.delete('/api/roadmap/:id', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteRoadmapItem(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
   // ---- VENDOR CATALOG ----
   app.get('/api/vendor/catalog', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

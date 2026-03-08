@@ -12,6 +12,7 @@ Key features:
 - Vendor Analytics (Vendor Pro + Admin): events attended, profile view count, per-event inventory tracking (items brought/sold/price), sales summary, revenue calculation
 - Profile view tracking: automatically logged when authenticated users view another user's profile
 - Vendor inventory management: add/edit/delete items per event with quantities and prices
+- Vendor Catalog: reusable catalog items (name, qty, price, image) that can be assigned to events; shown in "Products Available" section on vendor cards
 - Admin all-access: admin users get all Pro tier features enabled (event owner + vendor), with all fees waived on vendor space registrations
 - Vendor space registration with Square payment (0.5% platform fee for non-Vendor Pro/non-Admin accounts)
 - Vendor space cancel/unregister with confirmation dialog; vendor post delete ("Unregister") with confirmation dialog
@@ -19,6 +20,7 @@ Key features:
 - Vendor Pro badge (gradient blue-cyan Crown badge) shown on vendor post cards for Vendor Pro accounts
 - Interactive event map editor (grid-based vendor spot placement)
 - In-app push notifications (polling, not browser push API)
+- Product Roadmap: Rocket icon button in header; all authenticated users can view roadmap cards (title, description, expected date, tier tags, status); admin can create/edit/delete items
 - Admin panel with stats by area code, user management, revenue tracking, Square configuration
 - Account onboarding flow (/setup) for new users to select their role
 - Area-code-based filtering and community chat

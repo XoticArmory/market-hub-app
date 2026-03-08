@@ -138,6 +138,18 @@ export const vendorInventory = pgTable("vendor_inventory", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const roadmapItems = pgTable("roadmap_items", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  expectedDate: text("expected_date"),
+  tiersAffected: text("tiers_affected").array().default([]),
+  status: text("status").notNull().default("planned"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const vendorCatalog = pgTable("vendor_catalog", {
   id: serial("id").primaryKey(),
   vendorId: varchar("vendor_id").notNull().references(() => users.id),
@@ -190,6 +202,7 @@ export const insertMessageSchema = createInsertSchema(messages).omit({ id: true,
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertVendorRegistrationSchema = createInsertSchema(vendorRegistrations).omit({ id: true, createdAt: true });
 export const insertVendorInventorySchema = createInsertSchema(vendorInventory).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
+export const insertRoadmapItemSchema = createInsertSchema(roadmapItems).omit({ id: true, createdBy: true, createdAt: true, updatedAt: true });
 export const insertVendorCatalogSchema = createInsertSchema(vendorCatalog).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
 export const insertVendorCatalogAssignmentSchema = createInsertSchema(vendorCatalogAssignments).omit({ id: true, vendorId: true, createdAt: true });
 export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({ id: true, createdBy: true, usesCount: true, createdAt: true });
@@ -224,6 +237,8 @@ export type TermsAcceptance = typeof termsAcceptances.$inferSelect;
 export type ProfileView = typeof profileViews.$inferSelect;
 export type VendorInventoryItem = typeof vendorInventory.$inferSelect;
 export type InsertVendorInventory = z.infer<typeof insertVendorInventorySchema>;
+export type RoadmapItem = typeof roadmapItems.$inferSelect;
+export type InsertRoadmapItem = z.infer<typeof insertRoadmapItemSchema>;
 export type VendorCatalogItem = typeof vendorCatalog.$inferSelect;
 export type InsertVendorCatalog = z.infer<typeof insertVendorCatalogSchema>;
 export type VendorCatalogAssignment = typeof vendorCatalogAssignments.$inferSelect;
