@@ -872,6 +872,74 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // New: create a real recurring Square subscription (card on file + Subscriptions API)
+  app.post('/api/square/subscribe', isAuthenticated, async (req: any, res) => {
+    const square = getSquare();
+    if (!square) return res.status(503).json({ message: "Square not configured." });
+    const { tier, sourceId, promoCode } = req.body;
+    if (!sourceId) return res.status(400).json({ message: "Card token is required." });
+    const tierInfo = PRO_TIERS[tier as keyof typeof PRO_TIERS];
+    if (!tierInfo) return res.status(400).json({ message: "Invalid tier." });
+    const planVariationId = await storage.getAdminSetting(`square_plan_${tier}`);
+    if (!planVariationId) return res.status(503).json({ message: `Subscription plan not configured for ${tierInfo.label}. Contact the admin.` });
+    const locationId = await getSquareLocationId();
+    if (!locationId) return res.status(503).json({ message: "Square Location ID not configured." });
+    const userId = req.user.claims.sub;
+    const user = await authStorage.getUser(userId);
+    const profile = await storage.getUserProfile(userId);
+    let redeemedPromo: any = null;
+    if (promoCode) {
+      const validation = await storage.validatePromoCode(promoCode, tier);
+      if (!validation.valid) return res.status(400).json({ message: validation.error });
+      redeemedPromo = validation.promoCode;
+    }
+    try {
+      let customerId = profile?.stripeCustomerId;
+      if (!customerId) {
+        const customerRes = await (square as any).customers.create({
+          idempotencyKey: `cust-${userId}-${Date.now()}`,
+          givenName: user?.firstName || 'VendorLoop',
+          familyName: user?.lastName || 'User',
+          emailAddress: user?.email || undefined,
+          referenceId: userId,
+        });
+        customerId = customerRes.customer?.id;
+        if (!customerId) return res.status(500).json({ message: "Failed to create Square customer." });
+        await storage.upsertUserProfile(userId, { stripeCustomerId: customerId });
+      }
+      const cardRes = await (square as any).cards.create({
+        idempotencyKey: `card-${userId}-${Date.now()}`,
+        sourceId,
+        card: { customerId },
+      });
+      const cardId = cardRes.card?.id;
+      if (!cardId) return res.status(500).json({ message: "Failed to save payment method." });
+      const subRes = await (square as any).subscriptions.create({
+        idempotencyKey: `sub-${userId}-${tier}-${Date.now()}`,
+        locationId,
+        planVariationId,
+        customerId,
+        cardId,
+        startDate: new Date().toISOString().split('T')[0],
+      });
+      const subscription = subRes.subscription;
+      if (!subscription) return res.status(500).json({ message: "Failed to create subscription." });
+      await storage.upsertUserProfile(userId, {
+        subscriptionTier: tier as any,
+        subscriptionStatus: 'active',
+        stripeSubscriptionId: subscription.id,
+        profileType: tierToProfileType(tier) as any,
+      });
+      await storage.acceptTerms(userId, tier);
+      if (redeemedPromo) await storage.redeemPromoCode(promoCode, userId, tier);
+      res.json({ success: true, subscriptionId: subscription.id });
+    } catch (e: any) {
+      console.error('Square subscribe error:', e);
+      const msg = e?.errors?.[0]?.detail || e.message || "Subscription error.";
+      return res.status(500).json({ message: msg });
+    }
+  });
+
   app.post(api.square.subscriptionComplete.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { tier } = req.body;
@@ -1024,6 +1092,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
+  });
+
+  // List Square subscription plans from Catalog (for admin settings UI)
+  app.get('/api/admin/square/subscription-plans', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const square = getSquare();
+    if (!square) return res.status(503).json({ message: "Square not configured." });
+    try {
+      const response = await (square as any).catalog.list({ types: ['SUBSCRIPTION_PLAN'] });
+      const objects = (response as any).objects || [];
+      res.json(squareJson(objects));
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Public Square config for Web Payments SDK initialization
+  app.get('/api/square/config', async (req: any, res) => {
+    const appId = await storage.getAdminSetting('square_application_id');
+    const locationId = await getSquareLocationId();
+    const environment = process.env.SQUARE_ENVIRONMENT || 'production';
+    res.json({ appId: appId || null, locationId: locationId || null, environment });
   });
 
   // ---- Promo Codes ----

@@ -73,6 +73,19 @@ function useSquarePayments() {
   });
 }
 
+function useSquareSubscriptionPlans(enabled: boolean) {
+  return useQuery<any[]>({
+    queryKey: ["/api/admin/square/subscription-plans"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/square/subscription-plans", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled,
+    retry: false,
+  });
+}
+
 function useSquareLocations() {
   return useQuery<any[]>({
     queryKey: ["/api/admin/square/locations"],
@@ -246,6 +259,8 @@ export default function AdminPage() {
   const { data: registrations, isLoading: loadingRegs } = useAdminRegistrations();
   const { data: squarePayments, isLoading: loadingSquare, refetch: refetchPayments } = useSquarePayments();
   const { data: squareLocations, isLoading: loadingLocations } = useSquareLocations();
+  const [showPlansBrowser, setShowPlansBrowser] = useState(false);
+  const { data: squarePlans, isLoading: loadingPlans } = useSquareSubscriptionPlans(showPlansBrowser);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -710,34 +725,94 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Pricing Settings */}
+              {/* Plan Settings */}
               <div className="space-y-4 pt-6 border-t">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Tag className="w-4 h-4" />Plan Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[
-                    { key: "square_plan_event_owner_pro", label: "Event Owner Pro Plan ID" },
-                    { key: "square_plan_vendor_pro", label: "Vendor Pro Plan ID" },
-                  ].map(item => (
-                    <div key={item.key} className="space-y-2">
-                      <label className="text-sm font-medium">{item.label}</label>
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="plan_..."
-                          value={settingInputs[item.key] || (settings || []).find((s: any) => s.key === item.key)?.value || ""}
-                          onChange={e => setSettingInputs(p => ({ ...p, [item.key]: e.target.value }))}
-                          className="rounded-xl font-mono text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          disabled={savingSetting}
-                          onClick={() => upsertSetting({ key: item.key, value: settingInputs[item.key] || "" })}
-                        >
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Tag className="w-4 h-4" />Subscription Plan IDs</h3>
+                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg gap-1" onClick={() => setShowPlansBrowser(v => !v)}>
+                    {showPlansBrowser ? "Hide" : "Browse Plans from Square"}
+                  </Button>
                 </div>
+
+                {/* Current saved plan IDs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { key: "square_plan_event_owner_pro", label: "Event Owner Pro Plan Variation ID" },
+                    { key: "square_plan_vendor_pro", label: "Vendor Pro Plan Variation ID" },
+                  ].map(item => {
+                    const saved = (settings || []).find((s: any) => s.key === item.key)?.value;
+                    return (
+                      <div key={item.key} className="space-y-2">
+                        <label className="text-sm font-medium">{item.label}</label>
+                        {saved && !settingInputs[item.key] ? (
+                          <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                            <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                            <p className="text-xs font-mono text-green-700 dark:text-green-300 truncate flex-1">{saved}</p>
+                            <Button size="sm" variant="outline" className="h-6 text-xs rounded-lg shrink-0" onClick={() => setSettingInputs(p => ({ ...p, [item.key]: saved }))}>Change</Button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Enter plan variation ID..."
+                              value={settingInputs[item.key] || ""}
+                              onChange={e => setSettingInputs(p => ({ ...p, [item.key]: e.target.value }))}
+                              className="rounded-xl font-mono text-xs"
+                              data-testid={`input-${item.key}`}
+                            />
+                            <Button size="sm" disabled={savingSetting || !settingInputs[item.key]} onClick={() => { upsertSetting({ key: item.key, value: settingInputs[item.key] || "" }); setSettingInputs(p => ({ ...p, [item.key]: "" })); }} className="rounded-xl shrink-0">Save</Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Browse plans from Square */}
+                {showPlansBrowser && (
+                  <div className="space-y-3 pt-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Square Subscription Plans — click Assign to set</p>
+                    {loadingPlans ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading plans from Square...</div>
+                    ) : (squarePlans || []).length === 0 ? (
+                      <div className="p-3 bg-muted/40 rounded-xl text-sm text-muted-foreground">No subscription plans found. <a href="https://squareup.com/dashboard/subscriptions/plans" target="_blank" rel="noopener noreferrer" className="text-primary underline">Create plans in Square Dashboard →</a></div>
+                    ) : (
+                      (squarePlans || []).map((plan: any) => {
+                        const planName = plan.subscriptionPlanData?.name || plan.itemData?.name || 'Unnamed Plan';
+                        const variations = plan.subscriptionPlanData?.subscriptionPlanVariations || [];
+                        return (
+                          <div key={plan.id} className="p-3 bg-muted/30 rounded-xl border border-border/30 space-y-2">
+                            <p className="font-medium text-sm">{planName}</p>
+                            {variations.length > 0 ? variations.map((v: any) => {
+                              const varName = v.subscriptionPlanVariationData?.name || 'Default';
+                              const priceMoney = v.subscriptionPlanVariationData?.phases?.[0]?.recurringPriceMoney;
+                              const price = priceMoney ? `$${(Number(priceMoney.amount) / 100).toFixed(2)}/${v.subscriptionPlanVariationData?.phases?.[0]?.cadence?.toLowerCase() || 'mo'}` : '';
+                              return (
+                                <div key={v.id} className="flex items-center justify-between gap-3 pl-2">
+                                  <div>
+                                    <p className="text-sm font-medium">{varName} {price && <span className="text-muted-foreground font-normal">— {price}</span>}</p>
+                                    <p className="text-xs font-mono text-muted-foreground">{v.id}</p>
+                                  </div>
+                                  <div className="flex gap-2 shrink-0">
+                                    <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_event_owner_pro', value: v.id }); toast({ title: `Assigned to Event Owner Pro` }); }} data-testid={`button-assign-owner-${v.id}`}>Event Owner Pro</Button>
+                                    <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_vendor_pro', value: v.id }); toast({ title: `Assigned to Vendor Pro` }); }} data-testid={`button-assign-vendor-${v.id}`}>Vendor Pro</Button>
+                                  </div>
+                                </div>
+                              );
+                            }) : (
+                              <div className="flex items-center justify-between gap-3 pl-2">
+                                <p className="text-xs font-mono text-muted-foreground">{plan.id}</p>
+                                <div className="flex gap-2 shrink-0">
+                                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_event_owner_pro', value: plan.id }); toast({ title: `Assigned to Event Owner Pro` }); }}>Event Owner Pro</Button>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_vendor_pro', value: plan.id }); toast({ title: `Assigned to Vendor Pro` }); }}>Vendor Pro</Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-6">
