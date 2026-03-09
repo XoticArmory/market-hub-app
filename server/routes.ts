@@ -115,6 +115,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.patch('/api/profile/notification-areas', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isAdmin = profile?.isAdmin === true;
+    const isVendorPro = profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active';
+    if (!isAdmin && !isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
+    const { notificationAreaCodes } = req.body;
+    if (!Array.isArray(notificationAreaCodes)) return res.status(400).json({ message: "notificationAreaCodes must be an array" });
+    const cleaned = notificationAreaCodes.map((c: string) => String(c).trim()).filter(Boolean).slice(0, 10);
+    const updated = await storage.upsertUserProfile(userId, { notificationAreaCodes: cleaned });
+    res.json(updated);
+  });
+
   app.post(api.profile.completeOnboarding.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     await storage.completeOnboarding(userId);

@@ -244,13 +244,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendorProUsersInAreaOrHistory(areaCode: string, ownerEventIds: number[]): Promise<string[]> {
-    // Get Vendor Pro users in the same area code
+    // Get Vendor Pro users whose primary or additional area codes include the target
     const proUsersInArea = await db.select({ userId: userProfiles.userId })
       .from(userProfiles)
       .where(and(
         eq(userProfiles.subscriptionTier, 'vendor_pro'),
         eq(userProfiles.subscriptionStatus, 'active'),
-        eq(userProfiles.areaCode, areaCode)
+        or(
+          eq(userProfiles.areaCode, areaCode),
+          sql`${areaCode} = ANY(${userProfiles.notificationAreaCodes})`
+        )
       ));
 
     // Get Vendor Pro users who attended any of the owner's events in last 3 years
@@ -278,9 +281,16 @@ export class DatabaseStorage implements IStorage {
     let profiles: { userId: string }[] = [];
 
     if (targetAudience === 'vendor_pro') {
-      // Vendor Pro in area + historic attendees
+      // Vendor Pro in area (primary or additional notification area codes) + historic attendees
       const inArea = await db.select({ userId: userProfiles.userId }).from(userProfiles)
-        .where(and(eq(userProfiles.subscriptionTier, 'vendor_pro'), eq(userProfiles.subscriptionStatus, 'active'), eq(userProfiles.areaCode, areaCode)));
+        .where(and(
+          eq(userProfiles.subscriptionTier, 'vendor_pro'),
+          eq(userProfiles.subscriptionStatus, 'active'),
+          or(
+            eq(userProfiles.areaCode, areaCode),
+            sql`${areaCode} = ANY(${userProfiles.notificationAreaCodes})`
+          )
+        ));
       profiles = [...inArea];
       if (ownerEventIds.length > 0) {
         const historic = await db.select({ userId: eventAttendance.userId }).from(eventAttendance)

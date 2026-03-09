@@ -728,6 +728,32 @@ export default function ProfilePage() {
   });
   const [notifForm, setNotifForm] = useState({ title: "", message: "", targetAudience: "vendor_pro" });
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [notifAreaCodes, setNotifAreaCodes] = useState<string[]>(() => profile?.notificationAreaCodes ?? []);
+  const [notifAreaInput, setNotifAreaInput] = useState("");
+
+  useEffect(() => {
+    if (profile?.notificationAreaCodes) setNotifAreaCodes(profile.notificationAreaCodes);
+  }, [profile?.notificationAreaCodes?.join(",")]);
+
+  const { mutate: saveNotifAreas, isPending: isSavingAreas } = useMutation({
+    mutationFn: (codes: string[]) => apiRequest("PATCH", "/api/profile/notification-areas", { notificationAreaCodes: codes }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/profile"] }),
+  });
+
+  const addNotifArea = () => {
+    const code = notifAreaInput.trim();
+    if (!code || notifAreaCodes.includes(code) || notifAreaCodes.length >= 10) return;
+    const next = [...notifAreaCodes, code];
+    setNotifAreaCodes(next);
+    setNotifAreaInput("");
+    saveNotifAreas(next);
+  };
+
+  const removeNotifArea = (code: string) => {
+    const next = notifAreaCodes.filter(c => c !== code);
+    setNotifAreaCodes(next);
+    saveNotifAreas(next);
+  };
 
   if (profile && form.profileType === "general" && !form.areaCode && !form.bio) {
     setForm({
@@ -849,6 +875,49 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
+              {isVendorPro && (
+                <div>
+                  <label className="text-sm font-semibold mb-1 block flex items-center gap-2">
+                    Notification Area Codes
+                    <span className="text-xs font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full">Vendor Pro</span>
+                  </label>
+                  <p className="text-xs text-muted-foreground mb-3">Add extra ZIP / area codes to receive push notifications from events in those areas too. Up to 10 total.</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {notifAreaCodes.map(code => (
+                      <span key={code} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-medium text-primary" data-testid={`badge-notif-area-${code}`}>
+                        <MapPin className="w-3 h-3" />
+                        {code}
+                        <button onClick={() => removeNotifArea(code)} className="ml-0.5 hover:text-destructive transition-colors" data-testid={`button-remove-notif-area-${code}`} aria-label={`Remove ${code}`}>
+                          <XCircle className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                    {notifAreaCodes.length === 0 && <p className="text-sm text-muted-foreground italic">No extra areas added yet.</p>}
+                  </div>
+                  {notifAreaCodes.length < 10 && (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g. 90210"
+                        value={notifAreaInput}
+                        onChange={e => setNotifAreaInput(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && addNotifArea()}
+                        className="rounded-xl max-w-[160px]"
+                        data-testid="input-notif-area-code"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addNotifArea}
+                        disabled={!notifAreaInput.trim() || isSavingAreas}
+                        className="rounded-xl"
+                        data-testid="button-add-notif-area"
+                      >
+                        {isSavingAreas ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Plus className="w-3.5 h-3.5 mr-1" />Add</>}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="text-sm font-semibold mb-2 block">Bio</label>
                 <Textarea data-testid="input-bio" placeholder="Tell the community about yourself..." value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} className="rounded-xl resize-none" rows={3} />
