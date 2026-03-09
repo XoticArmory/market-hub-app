@@ -42,11 +42,14 @@ These terms are governed by the laws of the jurisdiction in which the platform i
 By clicking "Accept & Subscribe", you confirm you have read, understood, and agree to these terms.`;
 
 const VENDOR_PRO_FEATURES = [
-  "Zero platform fees on event space registrations",
-  "Receive push notifications from Event Owner Pros",
-  "Vendor Pro badge on your profile",
-  "Priority listing in vendor search",
-  "Book event spaces at no added cost",
+  "Find events in your area",
+  "Register with events to show your attendance",
+  "Post up to 10 product photos per event",
+  "Communicate directly with event owners",
+  "Receive notifications of events in your area",
+  "Register for notifications in multiple areas",
+  "View analytics such as inventory trackers and events you're attending",
+  "Link your personal or business website to drive traffic",
 ];
 
 const TIERS = [
