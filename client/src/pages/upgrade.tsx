@@ -67,7 +67,6 @@ const TIERS = [
       "Link your personal or company website to drive traffic",
       "Plus much more!",
     ],
-    includedFeatures: VENDOR_PRO_FEATURES,
   },
   {
     id: "vendor_pro",
@@ -78,7 +77,6 @@ const TIERS = [
     color: "from-blue-500 to-cyan-500",
     badge: null,
     features: VENDOR_PRO_FEATURES,
-    includedFeatures: [],
   },
 ];
 
@@ -164,7 +162,7 @@ export default function UpgradePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-        {TIERS.map(({ id, label, price, period, icon: Icon, color, badge, features, includedFeatures }) => {
+        {TIERS.map(({ id, label, price, period, icon: Icon, color, badge, features }) => {
           const isCurrentPlan = currentTier === id && hasActivePro;
           return (
             <div key={id} className={`relative bg-card rounded-3xl border-2 shadow-lg flex flex-col ${isCurrentPlan ? 'border-primary' : 'border-border/50'} overflow-hidden`} data-testid={`tier-${id}`}>
@@ -188,21 +186,6 @@ export default function UpgradePage() {
                     <span className="text-foreground">{f}</span>
                   </div>
                 ))}
-                {includedFeatures.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-2 pt-2 pb-1">
-                      <div className="flex-1 h-px bg-border" />
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">+ All Vendor Pro perks</span>
-                      <div className="flex-1 h-px bg-border" />
-                    </div>
-                    {includedFeatures.map((f, i) => (
-                      <div key={`inc-${i}`} className="flex items-start gap-3 text-sm">
-                        <CheckCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                        <span className="text-muted-foreground">{f}</span>
-                      </div>
-                    ))}
-                  </>
-                )}
               </div>
               <div className="px-8 pb-8">
                 {isCurrentPlan ? (
