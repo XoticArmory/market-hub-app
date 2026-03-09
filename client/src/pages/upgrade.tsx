@@ -68,6 +68,7 @@ const TIERS = [
       "Track how many spaces are filled with customizable event mapping",
       "View event analytics such as repeat vendors and all vendors across your posted events",
       "Link your personal or company website to drive traffic",
+      "Send notifications to vendors in your event's area",
       "Plus much more!",
     ],
   },
