@@ -84,7 +84,7 @@ export default function SetupPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6 border border-primary/20">
-            <Store className="w-4 h-4" /> Welcome to Artisan Collective
+            <Store className="w-4 h-4" /> Welcome to VendorLoop
           </div>
           <h1 className="text-4xl font-display font-bold text-foreground mb-3">Set Up Your Account</h1>
           <p className="text-muted-foreground text-lg">Tell us how you'll be using the platform so we can personalize your experience.</p>

@@ -42,8 +42,8 @@ export function AppSidebar() {
             <Store className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="font-display font-bold text-lg leading-tight text-foreground">Artisan</h2>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Collective</p>
+            <h2 className="font-display font-bold text-lg leading-tight text-foreground">Vendor</h2>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Loop</p>
           </div>
         </div>
 

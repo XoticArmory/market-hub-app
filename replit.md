@@ -1,8 +1,8 @@
-# Artisan Collective — replit.md
+# VendorLoop — replit.md
 
 ## Overview
 
-Artisan Collective is a comprehensive multi-tier subscription marketplace for local artisan markets and vendors. It allows event owners to create and manage market events with interactive vendor maps, vendors to register for event spaces and post what they're bringing, and community members to browse events, track attendance, and chat. The platform features three Pro subscription tiers and a full super-admin control panel.
+VendorLoop is a comprehensive multi-tier subscription marketplace for local artisan markets and vendors. It allows event owners to create and manage market events with interactive vendor maps, vendors to register for event spaces and post what they're bringing, and community members to browse events, track attendance, and chat. The platform features three Pro subscription tiers and a full super-admin control panel.
 
 Key features:
 - Browse and create artisan market events (all authenticated users, no fee required)

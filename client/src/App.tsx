@@ -110,7 +110,7 @@ function FeedbackButton() {
             </div>
           ) : (
             <div className="space-y-4 pt-2">
-              <p className="text-sm text-muted-foreground">Have an idea to make Artisan Collective better? We'd love to hear it.</p>
+              <p className="text-sm text-muted-foreground">Have an idea to make VendorLoop better? We'd love to hear it.</p>
               <div>
                 <label className="text-sm font-semibold mb-1.5 block">Subject</label>
                 <Input
@@ -426,7 +426,7 @@ function App() {
               <header className="flex h-14 items-center px-4 border-b border-border/50 bg-background/80 backdrop-blur sticky top-0 z-20 justify-between">
                 <div className="flex items-center gap-3">
                   <SidebarTrigger className="text-foreground" />
-                  <h1 className="md:hidden font-display font-semibold text-lg">Artisan Collective</h1>
+                  <h1 className="md:hidden font-display font-semibold text-lg">VendorLoop</h1>
                 </div>
                 <div className="flex items-center gap-1">
                   <RoadmapButton />

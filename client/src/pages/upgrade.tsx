@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CheckCircle, Store, Package, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X } from "lucide-react";
 
-const TERMS = `ARTISAN COLLECTIVE PRO — SUBSCRIPTION TERMS OF SERVICE
+const TERMS = `VENDORLOOP PRO — SUBSCRIPTION TERMS OF SERVICE
 
 Last updated: February 2026
 
-By subscribing to an Artisan Collective Pro plan, you agree to the following terms:
+By subscribing to a VendorLoop Pro plan, you agree to the following terms:
 
 1. SUBSCRIPTION & BILLING
 Your Pro subscription is billed monthly on a recurring basis. You authorize us to charge your payment method each billing period. Prices are as displayed at the time of purchase.
@@ -323,7 +323,7 @@ export default function UpgradePage() {
               className="w-4 h-4 mt-0.5 rounded accent-primary"
             />
             <label htmlFor="terms-accept" className={`text-sm ${!termsScrolled ? 'text-muted-foreground' : 'text-foreground'}`}>
-              I have read and agree to the Artisan Collective Pro Terms of Service.
+              I have read and agree to the VendorLoop Pro Terms of Service.
             </label>
           </div>
           <div className="flex gap-3 mt-2">
