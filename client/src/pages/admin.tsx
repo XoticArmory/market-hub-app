@@ -644,101 +644,115 @@ export default function AdminPage() {
         {/* SETTINGS */}
         <TabsContent value="settings" className="mt-0 space-y-6">
           <Card>
-            <CardHeader><CardTitle>Square Configuration</CardTitle><CardDescription>Configure your Square account credentials. The Access Token must be set as the <code className="bg-muted px-1 rounded text-xs">SQUARE_ACCESS_TOKEN</code> secret in environment settings.</CardDescription></CardHeader>
-            <CardContent className="space-y-6">
-              {/* Location ID — show auto-detected locations first */}
+            <CardHeader>
+              <CardTitle>Square Setup</CardTitle>
+              <CardDescription>Three things are required for subscriptions to work: your Application ID, a Location, and your subscription plan IDs.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+
+              {/* 1 — Application ID */}
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-semibold block">Square Location ID</label>
-                  <p className="text-xs text-muted-foreground mt-0.5">Required for creating payment links. Select from your Square account below or enter manually.</p>
+                  <label className="text-sm font-semibold block">1. Square Application ID</label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Found in <a href="https://developer.squareup.com/apps" target="_blank" rel="noopener noreferrer" className="text-primary underline">Square Developer Console</a> → your app → Application ID (starts with <code className="bg-muted px-1 rounded">sq0idp-</code>). Required for the card payment form.</p>
+                </div>
+                {(() => {
+                  const saved = (settings || []).find((s: any) => s.key === 'square_application_id')?.value;
+                  return saved && !settingInputs['square_application_id'] ? (
+                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                      <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                      <p className="text-xs font-mono text-green-700 dark:text-green-300 truncate flex-1">{saved}</p>
+                      <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg shrink-0" onClick={() => setSettingInputs(p => ({ ...p, square_application_id: saved }))}>Change</Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-3">
+                      <Input
+                        placeholder="sq0idp-..."
+                        value={settingInputs['square_application_id'] || ""}
+                        onChange={e => setSettingInputs(p => ({ ...p, square_application_id: e.target.value }))}
+                        className="rounded-xl font-mono text-sm"
+                        data-testid="input-square_application_id"
+                      />
+                      <Button
+                        disabled={savingSetting || !settingInputs['square_application_id']}
+                        onClick={() => { upsertSetting({ key: 'square_application_id', value: settingInputs['square_application_id'] }); setSettingInputs(p => ({ ...p, square_application_id: "" })); }}
+                        className="rounded-xl shrink-0"
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* 2 — Location ID */}
+              <div className="space-y-3 pt-2 border-t">
+                <div>
+                  <label className="text-sm font-semibold block">2. Square Location ID</label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Required to process payments. Your locations are auto-detected below — click Select to save one.</p>
                 </div>
                 {(() => {
                   const currentLocationId = (settings || []).find((s: any) => s.key === 'square_location_id')?.value;
                   return currentLocationId ? (
                     <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
                       <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-green-700 dark:text-green-300">Location configured</p>
-                        <p className="text-xs font-mono text-green-600 dark:text-green-400 truncate">{currentLocationId}</p>
-                      </div>
+                      <p className="text-xs font-mono text-green-700 dark:text-green-300 truncate flex-1">{currentLocationId}</p>
                       <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg shrink-0" onClick={() => setSettingInputs(p => ({ ...p, square_location_id: currentLocationId }))}>Change</Button>
                     </div>
                   ) : (
                     <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
-                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">No location configured — payment links won't work until this is set.</p>
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">No location set — subscriptions won't work until this is configured.</p>
                     </div>
                   );
                 })()}
 
-                {/* Auto-detected locations from Square API */}
                 {loadingLocations ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading your Square locations...</div>
                 ) : (squareLocations || []).length > 0 ? (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Square Locations — click to select</p>
                     {(squareLocations || []).map((loc: any) => (
                       <div key={loc.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border/30">
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm truncate">{loc.name || 'Unnamed Location'}</p>
                           <p className="text-xs font-mono text-muted-foreground">{loc.id}</p>
-                          {loc.address?.addressLine1 && <p className="text-xs text-muted-foreground">{loc.address.addressLine1}, {loc.address.locality}</p>}
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-3">
                           <Badge variant={loc.status === 'ACTIVE' ? 'default' : 'outline'} className={loc.status === 'ACTIVE' ? 'bg-green-500 text-xs' : 'text-xs'}>{loc.status}</Badge>
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs rounded-lg"
-                            onClick={() => { upsertSetting({ key: 'square_location_id', value: loc.id }); toast({ title: `Location "${loc.name}" saved.` }); }}
-                            data-testid={`button-select-location-${loc.id}`}
-                          >
-                            Select
-                          </Button>
+                          <Button size="sm" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_location_id', value: loc.id }); toast({ title: `Location "${loc.name}" saved.` }); }} data-testid={`button-select-location-${loc.id}`}>Select</Button>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="p-3 bg-muted/40 rounded-xl text-sm text-muted-foreground">
-                    No locations found in your Square account. <a href="https://squareup.com/dashboard/locations" target="_blank" rel="noopener noreferrer" className="text-primary underline">Create one in Square Dashboard →</a>
-                  </div>
-                )}
+                ) : null}
 
-                {/* Manual input fallback */}
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Or enter manually:</p>
-                  <div className="flex gap-3">
-                    <Input
-                      placeholder="LXX..."
-                      value={settingInputs['square_location_id'] || ""}
-                      onChange={e => setSettingInputs(p => ({ ...p, square_location_id: e.target.value }))}
-                      className="rounded-xl font-mono text-sm"
-                      data-testid="input-square_location_id"
-                    />
-                    <Button
-                      disabled={savingSetting || !settingInputs['square_location_id']}
-                      onClick={() => { upsertSetting({ key: 'square_location_id', value: settingInputs['square_location_id'] }); setSettingInputs(p => ({ ...p, square_location_id: "" })); }}
-                      className="rounded-xl shrink-0"
-                    >
-                      Save
-                    </Button>
-                  </div>
+                <div className="flex gap-3">
+                  <Input
+                    placeholder="Enter Location ID manually..."
+                    value={settingInputs['square_location_id'] || ""}
+                    onChange={e => setSettingInputs(p => ({ ...p, square_location_id: e.target.value }))}
+                    className="rounded-xl font-mono text-sm"
+                    data-testid="input-square_location_id"
+                  />
+                  <Button disabled={savingSetting || !settingInputs['square_location_id']} onClick={() => { upsertSetting({ key: 'square_location_id', value: settingInputs['square_location_id'] }); setSettingInputs(p => ({ ...p, square_location_id: "" })); }} className="rounded-xl shrink-0">Save</Button>
                 </div>
               </div>
 
-              {/* Plan Settings */}
-              <div className="space-y-4 pt-6 border-t">
+              {/* 3 — Subscription Plan IDs */}
+              <div className="space-y-4 pt-2 border-t">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Tag className="w-4 h-4" />Subscription Plan IDs</h3>
-                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg gap-1" onClick={() => setShowPlansBrowser(v => !v)}>
-                    {showPlansBrowser ? "Hide" : "Browse Plans from Square"}
+                  <div>
+                    <label className="text-sm font-semibold block">3. Subscription Plan IDs</label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Link each VendorLoop tier to a Square subscription plan. Click "Browse" to pick from your existing plans.</p>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg shrink-0 ml-4" onClick={() => setShowPlansBrowser(v => !v)}>
+                    {showPlansBrowser ? "Hide" : "Browse Plans"}
                   </Button>
                 </div>
 
-                {/* Current saved plan IDs */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { key: "square_plan_event_owner_pro", label: "Event Owner Pro Plan Variation ID" },
-                    { key: "square_plan_vendor_pro", label: "Vendor Pro Plan Variation ID" },
+                    { key: "square_plan_event_owner_pro", label: "Event Owner Pro" },
+                    { key: "square_plan_vendor_pro", label: "Vendor Pro" },
                   ].map(item => {
                     const saved = (settings || []).find((s: any) => s.key === item.key)?.value;
                     return (
@@ -753,7 +767,7 @@ export default function AdminPage() {
                         ) : (
                           <div className="flex gap-2">
                             <Input
-                              placeholder="Enter plan variation ID..."
+                              placeholder="Plan variation ID..."
                               value={settingInputs[item.key] || ""}
                               onChange={e => setSettingInputs(p => ({ ...p, [item.key]: e.target.value }))}
                               className="rounded-xl font-mono text-xs"
@@ -767,12 +781,11 @@ export default function AdminPage() {
                   })}
                 </div>
 
-                {/* Browse plans from Square */}
                 {showPlansBrowser && (
                   <div className="space-y-3 pt-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Square Subscription Plans — click Assign to set</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Square Plans — click to assign</p>
                     {loadingPlans ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading plans from Square...</div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading plans...</div>
                     ) : (squarePlans || []).length === 0 ? (
                       <div className="p-3 bg-muted/40 rounded-xl text-sm text-muted-foreground">No subscription plans found. <a href="https://squareup.com/dashboard/subscriptions/plans" target="_blank" rel="noopener noreferrer" className="text-primary underline">Create plans in Square Dashboard →</a></div>
                     ) : (
@@ -815,50 +828,11 @@ export default function AdminPage() {
                 )}
               </div>
 
-              <div className="border-t pt-6">
-                <PromoCodesTab />
+              {/* Webhook reminder */}
+              <div className="pt-2 border-t text-xs text-muted-foreground">
+                <span className="font-semibold">Square Webhook URL:</span> <code className="bg-muted px-1 rounded">/api/square/webhook</code> — set this in your Square Developer Console to keep subscription statuses in sync.
               </div>
 
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200 mt-6">
-                <p className="font-semibold mb-1">✓ Square API Connected</p>
-                <p className="text-xs text-blue-700 dark:text-blue-300">Your production Square Access Token is working. Select a location above to enable payment links, or create one at <a href="https://squareup.com/dashboard/locations" target="_blank" className="underline font-medium" rel="noopener noreferrer">squareup.com/dashboard/locations</a>.</p>
-                <p className="text-xs mt-2 text-blue-600 dark:text-blue-400">Webhook URL: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">/api/square/webhook</code></p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Pricing</CardTitle><CardDescription>Current subscription prices. These are fixed and applied when generating Square payment links.</CardDescription></CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {[
-                  { tier: "Event Owner Pro", price: "$9.95/mo", key: "event_owner_pro" },
-                  { tier: "Vendor Pro", price: "$4.95/mo", key: "vendor_pro" },
-                ].map(item => (
-                  <div key={item.key} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
-                    <span className="font-medium text-sm">{item.tier}</span>
-                    <Badge variant="secondary" className="font-mono">{item.price}</Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Required Environment Secrets</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {[
-                  { key: "SQUARE_ACCESS_TOKEN", desc: "Your Square production access token (required for payments)" },
-                  { key: "ADMIN_EMAILS", desc: "Comma-separated admin emails (e.g. you@email.com)" },
-                  { key: "SESSION_SECRET", desc: "Random session signing secret" },
-                ].map(item => (
-                  <div key={item.key} className="p-3 bg-muted/50 rounded-xl">
-                    <p className="font-mono text-sm font-semibold">{item.key}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
