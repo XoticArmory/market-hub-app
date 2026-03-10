@@ -1,15 +1,14 @@
-import { useState, useEffect, useRef } from "react";
-import { useValidatePromo, useRedeemAdminCode } from "@/hooks/use-upgrade";
+import { useState } from "react";
+import { useUpgradeCheckout, useValidatePromo, useRedeemAdminCode } from "@/hooks/use-upgrade";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 import { usePortalSession } from "@/hooks/use-stripe";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CheckCircle, Store, Package, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X, CreditCard } from "lucide-react";
+import { CheckCircle, Store, Package, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X } from "lucide-react";
 
 const TERMS = `VENDORLOOP PRO — SUBSCRIPTION TERMS OF SERVICE
 
@@ -86,175 +85,10 @@ const TIERS = [
   },
 ];
 
-function SquareCardDialog({
-  open,
-  onOpenChange,
-  tier,
-  promoCode,
-  promoDiscount,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  tier: string | null;
-  promoCode?: string;
-  promoDiscount?: number;
-}) {
-  const [sdkLoading, setSdkLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const cardRef = useRef<any>(null);
-  const { toast } = useToast();
-  const qc = useQueryClient();
-
-  const { data: squareConfig } = useQuery({
-    queryKey: ['/api/square/config'],
-    queryFn: async () => {
-      const res = await fetch('/api/square/config');
-      if (!res.ok) return null;
-      return res.json() as Promise<{ appId: string | null; locationId: string | null; environment: string }>;
-    },
-    enabled: open,
-  });
-
-  const tierInfo = tier ? TIERS.find(t => t.id === tier) : null;
-  const basePrice = parseFloat((tierInfo?.price || '$0').replace('$', ''));
-  const finalPrice = promoDiscount ? (basePrice * (1 - promoDiscount / 100)).toFixed(2) : basePrice.toFixed(2);
-
-  useEffect(() => {
-    if (!open || !squareConfig?.appId || !squareConfig?.locationId) return;
-
-    setSdkLoading(true);
-    setError(null);
-    if (cardRef.current) {
-      try { cardRef.current.destroy(); } catch (_) {}
-      cardRef.current = null;
-    }
-
-    const scriptUrl = squareConfig.environment === 'sandbox'
-      ? 'https://sandbox.web.squarecdn.com/v1/square.js'
-      : 'https://web.squarecdn.com/v1/square.js';
-
-    const initCard = async () => {
-      try {
-        const payments = await (window as any).Square.payments(squareConfig.appId, squareConfig.locationId);
-        const card = await payments.card();
-        await card.attach('#square-card-container');
-        cardRef.current = card;
-        setSdkLoading(false);
-      } catch (e: any) {
-        setError(e.message || 'Failed to initialize payment form.');
-        setSdkLoading(false);
-      }
-    };
-
-    const existing = document.getElementById('square-web-sdk');
-    if (existing && (window as any).Square) {
-      initCard();
-    } else {
-      const script = document.createElement('script');
-      script.id = 'square-web-sdk';
-      script.src = scriptUrl;
-      script.onload = initCard;
-      script.onerror = () => { setError('Failed to load Square payment SDK.'); setSdkLoading(false); };
-      document.head.appendChild(script);
-    }
-
-    return () => {
-      if (cardRef.current) {
-        try { cardRef.current.destroy(); } catch (_) {}
-        cardRef.current = null;
-      }
-    };
-  }, [open, squareConfig?.appId, squareConfig?.locationId]);
-
-  const handleSubmit = async () => {
-    if (!cardRef.current || !tier) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const result = await cardRef.current.tokenize();
-      if (result.status !== 'OK') {
-        setError(result.errors?.[0]?.message || 'Card verification failed.');
-        setSubmitting(false);
-        return;
-      }
-      const res = await fetch('/api/square/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ tier, sourceId: result.token, promoCode: promoCode || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.message || 'Subscription failed.');
-        setSubmitting(false);
-        return;
-      }
-      qc.invalidateQueries({ queryKey: ['/api/profile'] });
-      qc.invalidateQueries({ queryKey: ['/api/square/subscription'] });
-      onOpenChange(false);
-      toast({ title: "Subscribed!", description: `You are now on ${tierInfo?.label}. Welcome!` });
-      window.location.href = `/profile?subscribed=${tier}`;
-    } catch (e: any) {
-      setError(e.message || 'An error occurred.');
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!submitting) onOpenChange(v); }}>
-      <DialogContent className="max-w-md rounded-3xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-display flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-primary" /> Payment Details
-          </DialogTitle>
-          <DialogDescription>
-            {tierInfo?.label} — <span className="font-semibold">${finalPrice}/month</span> recurring
-            {promoDiscount ? <span className="text-green-600 ml-1">({promoDiscount}% promo applied)</span> : null}
-          </DialogDescription>
-        </DialogHeader>
-
-        {!squareConfig?.appId ? (
-          <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-800 dark:text-amber-200">
-            Payment is not yet configured. Please contact the admin to set up the Square Application ID.
-          </div>
-        ) : (
-          <>
-            {sdkLoading && (
-              <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading secure payment form...
-              </div>
-            )}
-            <div id="square-card-container" className={sdkLoading ? 'hidden' : 'min-h-[90px] py-1'} />
-            {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-3 mt-2">
-              <Button variant="outline" className="rounded-xl flex-1" onClick={() => onOpenChange(false)} disabled={submitting}>Back</Button>
-              <Button
-                className="flex-1 rounded-xl bg-gradient-to-r from-primary to-amber-500"
-                onClick={handleSubmit}
-                disabled={sdkLoading || submitting}
-                data-testid="button-subscribe-now"
-              >
-                {submitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</> : `Subscribe — $${finalPrice}/mo`}
-              </Button>
-            </div>
-            <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
-              <ShieldCheck className="w-3 h-3" /> Secured by Square · Cancel anytime from your profile
-            </p>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function UpgradePage() {
   const { isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
+  const { mutate: checkout, isPending: isCheckingOut } = useUpgradeCheckout();
   const { mutate: validatePromo, isPending: isValidating } = useValidatePromo();
   const { mutate: redeemAdmin, isPending: isRedeemingAdmin } = useRedeemAdminCode();
   const { mutate: portal } = usePortalSession();
@@ -263,13 +97,10 @@ export default function UpgradePage() {
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsScrolled, setTermsScrolled] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [cardOpen, setCardOpen] = useState(false);
 
-  // Promo code state per tier dialog
   const [promoInput, setPromoInput] = useState("");
   const [promoResult, setPromoResult] = useState<{ valid?: boolean; discount?: number; error?: string } | null>(null);
 
-  // Admin code dialog
   const [adminCodeOpen, setAdminCodeOpen] = useState(false);
   const [adminCode, setAdminCode] = useState("");
 
@@ -306,7 +137,10 @@ export default function UpgradePage() {
   const handleAcceptAndSubscribe = () => {
     if (!selectedTier || !termsAccepted) return;
     setTermsOpen(false);
-    setCardOpen(true);
+    checkout({
+      tier: selectedTier,
+      promoCode: promoResult?.valid ? promoInput.trim() : undefined,
+    });
   };
 
   const discountedPrice = (basePrice: string) => {
@@ -484,23 +318,18 @@ export default function UpgradePage() {
             <Button variant="outline" className="rounded-xl flex-1" onClick={() => setTermsOpen(false)}>Cancel</Button>
             <Button
               className="flex-1 rounded-xl bg-gradient-to-r from-primary to-amber-500"
-              disabled={!termsAccepted}
+              disabled={!termsAccepted || isCheckingOut}
               onClick={handleAcceptAndSubscribe}
               data-testid="button-accept-subscribe"
             >
-              Accept & Continue to Payment
+              {isCheckingOut ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Redirecting...</> : "Accept & Continue to Payment"}
             </Button>
           </div>
+          <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
+            <ShieldCheck className="w-3 h-3" /> Secured by Stripe · Cancel anytime from your profile
+          </p>
         </DialogContent>
       </Dialog>
-
-      <SquareCardDialog
-        open={cardOpen}
-        onOpenChange={setCardOpen}
-        tier={selectedTier}
-        promoCode={promoResult?.valid ? promoInput.trim() : undefined}
-        promoDiscount={promoResult?.valid ? promoResult.discount : undefined}
-      />
     </div>
   );
 }

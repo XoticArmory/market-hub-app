@@ -63,12 +63,11 @@ export const api = {
     getRegistrations: { method: 'GET' as const, path: '/api/admin/registrations' as const, responses: { 200: z.array(z.any()) } },
     getAnalytics: { method: 'GET' as const, path: '/api/admin/analytics/:userId' as const, responses: { 200: z.any() } },
   },
-  square: {
-    upgradeCheckout: { method: 'POST' as const, path: '/api/square/upgrade' as const, responses: { 200: z.object({ url: z.string() }) } },
-    manageSubscription: { method: 'POST' as const, path: '/api/square/manage' as const, responses: { 200: z.object({ url: z.string() }) } },
-    subscriptionStatus: { method: 'GET' as const, path: '/api/square/subscription' as const, responses: { 200: z.any() } },
-    acceptTerms: { method: 'POST' as const, path: '/api/square/terms-accept' as const, responses: { 200: z.any() } },
-    subscriptionComplete: { method: 'POST' as const, path: '/api/square/subscription-complete' as const, responses: { 200: z.any() } },
+  stripe: {
+    subscriptionStatus: { method: 'GET' as const, path: '/api/stripe/subscription' as const, responses: { 200: z.any() } },
+    checkout: { method: 'POST' as const, path: '/api/stripe/checkout' as const, responses: { 200: z.object({ url: z.string() }) } },
+    manageSubscription: { method: 'POST' as const, path: '/api/stripe/portal' as const, responses: { 200: z.object({ url: z.string() }) } },
+    acceptTerms: { method: 'POST' as const, path: '/api/stripe/terms-accept' as const, responses: { 200: z.any() } },
   },
 };
 

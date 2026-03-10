@@ -5,7 +5,7 @@ export function useUpgradeCheckout() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async ({ tier, promoCode }: { tier: string; promoCode?: string }) => {
-      const res = await fetch("/api/square/upgrade", {
+      const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier, promoCode: promoCode || undefined }),
@@ -58,7 +58,7 @@ export function useAcceptTerms() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (tier: string) => {
-      const res = await fetch("/api/square/terms-accept", {
+      const res = await fetch("/api/stripe/terms-accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier }),

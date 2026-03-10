@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck, Settings, Users, DollarSign, Loader2, User, BarChart3, CalendarDays, Package, Trash2, TrendingUp, RefreshCw, CreditCard, CheckCircle, XCircle, RotateCcw, Tag } from "lucide-react";
+import { ShieldCheck, Settings, Users, Loader2, User, BarChart3, CalendarDays, Package, Trash2, CreditCard, CheckCircle, XCircle, Tag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -61,43 +61,6 @@ function useAdminRegistrations() {
   });
 }
 
-function useSquarePayments() {
-  return useQuery<any[]>({
-    queryKey: ["/api/admin/square/payments"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/square/payments", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    retry: false,
-  });
-}
-
-function useSquareSubscriptionPlans(enabled: boolean) {
-  return useQuery<any[]>({
-    queryKey: ["/api/admin/square/subscription-plans"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/square/subscription-plans", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled,
-    retry: false,
-  });
-}
-
-function useSquareLocations() {
-  return useQuery<any[]>({
-    queryKey: ["/api/admin/square/locations"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/square/locations", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    retry: false,
-    staleTime: 60000,
-  });
-}
 
 function StatCard({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
   return (
@@ -257,16 +220,10 @@ export default function AdminPage() {
   const { data: stats, isLoading: loadingStats } = useAdminStats();
   const { data: allEvents, isLoading: loadingEvents } = useAdminAllEvents();
   const { data: registrations, isLoading: loadingRegs } = useAdminRegistrations();
-  const { data: squarePayments, isLoading: loadingSquare, refetch: refetchPayments } = useSquarePayments();
-  const { data: squareLocations, isLoading: loadingLocations } = useSquareLocations();
-  const [showPlansBrowser, setShowPlansBrowser] = useState(false);
-  const { data: squarePlans, isLoading: loadingPlans } = useSquareSubscriptionPlans(showPlansBrowser);
   const { toast } = useToast();
   const qc = useQueryClient();
 
   const [settingInputs, setSettingInputs] = useState<Record<string, string>>({});
-  const [refundDialog, setRefundDialog] = useState<{ paymentId: string; amount: number } | null>(null);
-  const [refundAmount, setRefundAmount] = useState("");
   const [subDialog, setSubDialog] = useState<any>(null);
   const [subTier, setSubTier] = useState("free");
   const [subStatus, setSubStatus] = useState("active");
@@ -282,20 +239,9 @@ export default function AdminPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/events"] }); toast({ title: "Event deleted." }); },
   });
 
-  const issueRefund = useMutation({
-    mutationFn: ({ paymentId, amountCents, reason }: any) =>
-      apiRequest("POST", "/api/admin/square/refund", { paymentId, amountCents, reason }),
-    onSuccess: () => {
-      toast({ title: "Refund issued successfully." });
-      setRefundDialog(null);
-      qc.invalidateQueries({ queryKey: ["/api/admin/square/payments"] });
-    },
-    onError: (e: any) => toast({ title: "Refund failed", description: e.message, variant: "destructive" }),
-  });
-
   const updateSubscription = useMutation({
     mutationFn: ({ userId, tier, status }: any) =>
-      apiRequest("POST", "/api/admin/square/activate-subscription", { userId, tier, status }),
+      apiRequest("POST", "/api/admin/stripe/activate-subscription", { userId, tier, status }),
     onSuccess: () => {
       toast({ title: "Subscription updated." });
       setSubDialog(null);
@@ -308,19 +254,6 @@ export default function AdminPage() {
     window.location.href = "/";
     return null;
   }
-
-  const squareKeys = [
-    { key: "square_location_id", label: "Square Location ID", placeholder: "LXX...", hint: "Found in Square Dashboard → Account & Settings → Locations" },
-    { key: "square_application_id", label: "Square Application ID (optional)", placeholder: "sq0idp-...", hint: "Found in Square Developer Console → Applications" },
-  ];
-
-  const squareTotalRevenue = (squarePayments || [])
-    .filter((p: any) => p.status === 'COMPLETED')
-    .reduce((sum: number, p: any) => sum + (p.amountMoney?.amount || 0), 0);
-
-  const squareTodayRevenue = (squarePayments || [])
-    .filter((p: any) => p.status === 'COMPLETED' && new Date(p.createdAt).toDateString() === new Date().toDateString())
-    .reduce((sum: number, p: any) => sum + (p.amountMoney?.amount || 0), 0);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
@@ -440,89 +373,13 @@ export default function AdminPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Square Payments</h2>
-              <p className="text-sm text-muted-foreground">Live transaction data from your Square account.</p>
-            </div>
-            <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={() => refetchPayments()} data-testid="button-refresh-payments">
-              <RefreshCw className="w-4 h-4" />Refresh
-            </Button>
-          </div>
-
-          {loadingSquare ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
-          ) : (squarePayments || []).length === 0 ? (
-            <Card>
-              <CardContent className="py-16 text-center">
-                <CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-40" />
-                <p className="font-semibold text-muted-foreground mb-2">No Square transactions found</p>
-                <p className="text-sm text-muted-foreground">Configure your Square Access Token and Location ID in Settings, then payments will appear here.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="Square Revenue" value={`$${(squareTotalRevenue / 100).toFixed(2)}`} />
-                <StatCard label="Today's Square" value={`$${(squareTodayRevenue / 100).toFixed(2)}`} />
-                <StatCard label="Square Txns" value={(squarePayments || []).filter((p: any) => p.status === 'COMPLETED').length} />
-                <StatCard label="Pending" value={(squarePayments || []).filter((p: any) => p.status !== 'COMPLETED').length} />
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-primary" />Transaction History</CardTitle>
-                  <CardDescription>Recent Square payments. Click Refund to issue a refund for any completed payment.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-3 px-3 font-semibold text-muted-foreground">Date</th>
-                          <th className="text-left py-3 px-3 font-semibold text-muted-foreground">ID</th>
-                          <th className="text-right py-3 px-3 font-semibold text-muted-foreground">Amount</th>
-                          <th className="text-center py-3 px-3 font-semibold text-muted-foreground">Status</th>
-                          <th className="py-3 px-3"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(squarePayments || []).map((payment: any) => (
-                          <tr key={payment.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors" data-testid={`payment-row-${payment.id}`}>
-                            <td className="py-3 px-3 text-muted-foreground text-xs">{payment.createdAt ? format(new Date(payment.createdAt), "MMM d, yyyy h:mm a") : "—"}</td>
-                            <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{payment.id?.slice(0, 12)}...</td>
-                            <td className="py-3 px-3 text-right font-semibold">${((payment.amountMoney?.amount || 0) / 100).toFixed(2)}</td>
-                            <td className="py-3 px-3 text-center">
-                              {payment.status === 'COMPLETED' ? (
-                                <Badge className="bg-green-500 text-white gap-1"><CheckCircle className="w-3 h-3" />Completed</Badge>
-                              ) : payment.status === 'CANCELED' ? (
-                                <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" />Canceled</Badge>
-                              ) : (
-                                <Badge variant="outline">{payment.status}</Badge>
-                              )}
-                            </td>
-                            <td className="py-3 px-3 text-right">
-                              {payment.status === 'COMPLETED' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs rounded-lg gap-1"
-                                  onClick={() => { setRefundDialog({ paymentId: payment.id, amount: payment.amountMoney?.amount || 0 }); setRefundAmount(""); }}
-                                  data-testid={`button-refund-${payment.id}`}
-                                >
-                                  <RotateCcw className="w-3 h-3" />Refund
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
+          <Card>
+            <CardContent className="py-8 text-center">
+              <CreditCard className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-40" />
+              <p className="font-semibold text-muted-foreground mb-1">Subscription payments processed by Stripe</p>
+              <p className="text-sm text-muted-foreground">View your subscription revenue and customer billing history in the <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Stripe Dashboard →</a></p>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* USERS */}
@@ -645,192 +502,30 @@ export default function AdminPage() {
         <TabsContent value="settings" className="mt-0 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Square Setup</CardTitle>
-              <CardDescription>Three things are required for subscriptions to work: your Application ID, a Location, and your subscription plan IDs.</CardDescription>
+              <CardTitle>Stripe Setup</CardTitle>
+              <CardDescription>Two environment secrets are required, then you're ready to accept subscriptions.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
 
-              {/* 1 — Application ID */}
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-semibold block">1. Square Application ID</label>
-                  <p className="text-xs text-muted-foreground mt-0.5">Found in <a href="https://developer.squareup.com/apps" target="_blank" rel="noopener noreferrer" className="text-primary underline">Square Developer Console</a> → your app → Application ID (starts with <code className="bg-muted px-1 rounded">sq0idp-</code>). Required for the card payment form.</p>
-                </div>
-                {(() => {
-                  const saved = (settings || []).find((s: any) => s.key === 'square_application_id')?.value;
-                  return saved && !settingInputs['square_application_id'] ? (
-                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
-                      <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-                      <p className="text-xs font-mono text-green-700 dark:text-green-300 truncate flex-1">{saved}</p>
-                      <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg shrink-0" onClick={() => setSettingInputs(p => ({ ...p, square_application_id: saved }))}>Change</Button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-3">
-                      <Input
-                        placeholder="sq0idp-..."
-                        value={settingInputs['square_application_id'] || ""}
-                        onChange={e => setSettingInputs(p => ({ ...p, square_application_id: e.target.value }))}
-                        className="rounded-xl font-mono text-sm"
-                        data-testid="input-square_application_id"
-                      />
-                      <Button
-                        disabled={savingSetting || !settingInputs['square_application_id']}
-                        onClick={() => { upsertSetting({ key: 'square_application_id', value: settingInputs['square_application_id'] }); setSettingInputs(p => ({ ...p, square_application_id: "" })); }}
-                        className="rounded-xl shrink-0"
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* 2 — Location ID */}
-              <div className="space-y-3 pt-2 border-t">
-                <div>
-                  <label className="text-sm font-semibold block">2. Square Location ID</label>
-                  <p className="text-xs text-muted-foreground mt-0.5">Required to process payments. Your locations are auto-detected below — click Select to save one.</p>
-                </div>
-                {(() => {
-                  const currentLocationId = (settings || []).find((s: any) => s.key === 'square_location_id')?.value;
-                  return currentLocationId ? (
-                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
-                      <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-                      <p className="text-xs font-mono text-green-700 dark:text-green-300 truncate flex-1">{currentLocationId}</p>
-                      <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg shrink-0" onClick={() => setSettingInputs(p => ({ ...p, square_location_id: currentLocationId }))}>Change</Button>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
-                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">No location set — subscriptions won't work until this is configured.</p>
-                    </div>
-                  );
-                })()}
-
-                {loadingLocations ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading your Square locations...</div>
-                ) : (squareLocations || []).length > 0 ? (
-                  <div className="space-y-2">
-                    {(squareLocations || []).map((loc: any) => (
-                      <div key={loc.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border/30">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{loc.name || 'Unnamed Location'}</p>
-                          <p className="text-xs font-mono text-muted-foreground">{loc.id}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-3">
-                          <Badge variant={loc.status === 'ACTIVE' ? 'default' : 'outline'} className={loc.status === 'ACTIVE' ? 'bg-green-500 text-xs' : 'text-xs'}>{loc.status}</Badge>
-                          <Button size="sm" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_location_id', value: loc.id }); toast({ title: `Location "${loc.name}" saved.` }); }} data-testid={`button-select-location-${loc.id}`}>Select</Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="flex gap-3">
-                  <Input
-                    placeholder="Enter Location ID manually..."
-                    value={settingInputs['square_location_id'] || ""}
-                    onChange={e => setSettingInputs(p => ({ ...p, square_location_id: e.target.value }))}
-                    className="rounded-xl font-mono text-sm"
-                    data-testid="input-square_location_id"
-                  />
-                  <Button disabled={savingSetting || !settingInputs['square_location_id']} onClick={() => { upsertSetting({ key: 'square_location_id', value: settingInputs['square_location_id'] }); setSettingInputs(p => ({ ...p, square_location_id: "" })); }} className="rounded-xl shrink-0">Save</Button>
+              {/* 1 — Secret Key */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold block">1. Stripe Secret Key</label>
+                <p className="text-xs text-muted-foreground">Found in your <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer" className="text-primary underline">Stripe Dashboard → API keys</a>. Starts with <code className="bg-muted px-1 rounded">sk_live_</code> (production) or <code className="bg-muted px-1 rounded">sk_test_</code> (test mode).</p>
+                <div className="flex items-center gap-2 p-3 bg-muted/40 rounded-xl border border-border/30">
+                  <CheckCircle className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <p className="text-xs text-muted-foreground">Add <code className="bg-muted px-1 rounded font-mono">STRIPE_SECRET_KEY</code> as an environment secret in the Replit Secrets panel. Never paste it here.</p>
                 </div>
               </div>
 
-              {/* 3 — Subscription Plan IDs */}
-              <div className="space-y-4 pt-2 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-sm font-semibold block">3. Subscription Plan IDs</label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Link each VendorLoop tier to a Square subscription plan. Click "Browse" to pick from your existing plans.</p>
-                  </div>
-                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg shrink-0 ml-4" onClick={() => setShowPlansBrowser(v => !v)}>
-                    {showPlansBrowser ? "Hide" : "Browse Plans"}
-                  </Button>
+              {/* 2 — Webhook Secret */}
+              <div className="space-y-2 pt-2 border-t">
+                <label className="text-sm font-semibold block">2. Stripe Webhook Secret</label>
+                <p className="text-xs text-muted-foreground">Set <code className="bg-muted px-1 rounded">STRIPE_WEBHOOK_SECRET</code> as an environment secret. After adding your webhook endpoint in Stripe, copy the signing secret it provides.</p>
+                <div className="p-3 bg-muted/40 rounded-xl border border-border/30 text-xs">
+                  <p className="font-semibold mb-1">Webhook endpoint to add in Stripe Dashboard:</p>
+                  <code className="font-mono text-primary">POST /api/stripe/webhook</code>
+                  <p className="text-muted-foreground mt-1">Events to subscribe: <span className="font-mono">checkout.session.completed, customer.subscription.updated, customer.subscription.deleted</span></p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { key: "square_plan_event_owner_pro", label: "Event Owner Pro" },
-                    { key: "square_plan_vendor_pro", label: "Vendor Pro" },
-                  ].map(item => {
-                    const saved = (settings || []).find((s: any) => s.key === item.key)?.value;
-                    return (
-                      <div key={item.key} className="space-y-2">
-                        <label className="text-sm font-medium">{item.label}</label>
-                        {saved && !settingInputs[item.key] ? (
-                          <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
-                            <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-                            <p className="text-xs font-mono text-green-700 dark:text-green-300 truncate flex-1">{saved}</p>
-                            <Button size="sm" variant="outline" className="h-6 text-xs rounded-lg shrink-0" onClick={() => setSettingInputs(p => ({ ...p, [item.key]: saved }))}>Change</Button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Input
-                              placeholder="Plan variation ID..."
-                              value={settingInputs[item.key] || ""}
-                              onChange={e => setSettingInputs(p => ({ ...p, [item.key]: e.target.value }))}
-                              className="rounded-xl font-mono text-xs"
-                              data-testid={`input-${item.key}`}
-                            />
-                            <Button size="sm" disabled={savingSetting || !settingInputs[item.key]} onClick={() => { upsertSetting({ key: item.key, value: settingInputs[item.key] || "" }); setSettingInputs(p => ({ ...p, [item.key]: "" })); }} className="rounded-xl shrink-0">Save</Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {showPlansBrowser && (
-                  <div className="space-y-3 pt-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Square Plans — click to assign</p>
-                    {loadingPlans ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading plans...</div>
-                    ) : (squarePlans || []).length === 0 ? (
-                      <div className="p-3 bg-muted/40 rounded-xl text-sm text-muted-foreground">No subscription plans found. <a href="https://squareup.com/dashboard/subscriptions/plans" target="_blank" rel="noopener noreferrer" className="text-primary underline">Create plans in Square Dashboard →</a></div>
-                    ) : (
-                      (squarePlans || []).map((plan: any) => {
-                        const planName = plan.subscriptionPlanData?.name || plan.itemData?.name || 'Unnamed Plan';
-                        const variations = plan.subscriptionPlanData?.subscriptionPlanVariations || [];
-                        return (
-                          <div key={plan.id} className="p-3 bg-muted/30 rounded-xl border border-border/30 space-y-2">
-                            <p className="font-medium text-sm">{planName}</p>
-                            {variations.length > 0 ? variations.map((v: any) => {
-                              const varName = v.subscriptionPlanVariationData?.name || 'Default';
-                              const priceMoney = v.subscriptionPlanVariationData?.phases?.[0]?.recurringPriceMoney;
-                              const price = priceMoney ? `$${(Number(priceMoney.amount) / 100).toFixed(2)}/${v.subscriptionPlanVariationData?.phases?.[0]?.cadence?.toLowerCase() || 'mo'}` : '';
-                              return (
-                                <div key={v.id} className="flex items-center justify-between gap-3 pl-2">
-                                  <div>
-                                    <p className="text-sm font-medium">{varName} {price && <span className="text-muted-foreground font-normal">— {price}</span>}</p>
-                                    <p className="text-xs font-mono text-muted-foreground">{v.id}</p>
-                                  </div>
-                                  <div className="flex gap-2 shrink-0">
-                                    <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_event_owner_pro', value: v.id }); toast({ title: `Assigned to Event Owner Pro` }); }} data-testid={`button-assign-owner-${v.id}`}>Event Owner Pro</Button>
-                                    <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_vendor_pro', value: v.id }); toast({ title: `Assigned to Vendor Pro` }); }} data-testid={`button-assign-vendor-${v.id}`}>Vendor Pro</Button>
-                                  </div>
-                                </div>
-                              );
-                            }) : (
-                              <div className="flex items-center justify-between gap-3 pl-2">
-                                <p className="text-xs font-mono text-muted-foreground">{plan.id}</p>
-                                <div className="flex gap-2 shrink-0">
-                                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_event_owner_pro', value: plan.id }); toast({ title: `Assigned to Event Owner Pro` }); }}>Event Owner Pro</Button>
-                                  <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={() => { upsertSetting({ key: 'square_plan_vendor_pro', value: plan.id }); toast({ title: `Assigned to Vendor Pro` }); }}>Vendor Pro</Button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Webhook reminder */}
-              <div className="pt-2 border-t text-xs text-muted-foreground">
-                <span className="font-semibold">Square Webhook URL:</span> <code className="bg-muted px-1 rounded">/api/square/webhook</code> — set this in your Square Developer Console to keep subscription statuses in sync.
               </div>
 
             </CardContent>
@@ -842,45 +537,6 @@ export default function AdminPage() {
           <PromoCodesTab />
         </TabsContent>
       </Tabs>
-
-      {/* REFUND DIALOG */}
-      <Dialog open={!!refundDialog} onOpenChange={() => setRefundDialog(null)}>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader><DialogTitle>Issue Refund</DialogTitle></DialogHeader>
-          <div className="space-y-4 pt-2">
-            <p className="text-sm text-muted-foreground">Payment ID: <code className="bg-muted px-1 rounded text-xs">{refundDialog?.paymentId}</code></p>
-            <div>
-              <label className="text-sm font-semibold mb-2 block">Refund Amount ($) — leave blank for full refund</label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder={`Max: $${((refundDialog?.amount || 0) / 100).toFixed(2)}`}
-                value={refundAmount}
-                onChange={e => setRefundAmount(e.target.value)}
-                className="rounded-xl"
-                data-testid="input-refund-amount"
-              />
-            </div>
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setRefundDialog(null)}>Cancel</Button>
-              <Button
-                variant="destructive"
-                className="flex-1 rounded-xl"
-                disabled={issueRefund.isPending}
-                onClick={() => issueRefund.mutate({
-                  paymentId: refundDialog!.paymentId,
-                  amountCents: refundAmount ? Math.round(parseFloat(refundAmount) * 100) : undefined,
-                  reason: "Admin-issued refund",
-                })}
-                data-testid="button-confirm-refund"
-              >
-                {issueRefund.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</> : "Confirm Refund"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* SUBSCRIPTION MANAGEMENT DIALOG */}
       <Dialog open={!!subDialog} onOpenChange={() => setSubDialog(null)}>
