@@ -1236,9 +1236,18 @@ export default function ProfilePage() {
                 )}
               </div>
               {hasActivePro && !isAdmin ? (
-                <Button variant="outline" onClick={() => portal()} disabled={isPortal} className="rounded-xl" data-testid="button-manage-billing">
-                  {isPortal ? "Opening..." : "Manage Billing"}
-                </Button>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="outline" onClick={() => portal()} disabled={isPortal} className="rounded-xl" data-testid="button-manage-billing">
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      {isPortal ? "Opening..." : "Manage Billing & Payment"}
+                    </Button>
+                    <Button variant="outline" onClick={() => portal()} disabled={isPortal} className="rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10" data-testid="button-cancel-subscription">
+                      {isPortal ? "Opening..." : "Cancel Subscription"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Canceling keeps your Pro access until the end of the current billing period. No partial refunds.</p>
+                </div>
               ) : !hasActivePro ? (
                 <Button onClick={() => setLocation("/upgrade")} className="rounded-xl bg-gradient-to-r from-primary to-amber-500 shadow-lg" data-testid="button-go-upgrade">
                   <Crown className="w-4 h-4 mr-2" />View Pro Plans
