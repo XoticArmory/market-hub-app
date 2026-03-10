@@ -498,8 +498,8 @@ export class DatabaseStorage implements IStorage {
 
     // Monthly revenue estimate from pro subscriptions
     const proRevenue =
-      tierCounts['event_owner_pro'] * 1995 +
-      tierCounts['vendor_pro'] * 995;
+      tierCounts['event_owner_pro'] * 2495 +
+      tierCounts['vendor_pro'] * 1495;
 
     return {
       totalEvents: allEvents.length,

@@ -57,7 +57,7 @@ const TIERS = [
   {
     id: "event_owner_pro",
     label: "Event Owner Pro",
-    price: "$19.95",
+    price: "$24.95",
     period: "/month",
     icon: Store,
     color: "from-primary to-amber-500",
@@ -76,7 +76,7 @@ const TIERS = [
   {
     id: "vendor_pro",
     label: "Vendor Pro",
-    price: "$9.95",
+    price: "$14.95",
     period: "/month",
     icon: Package,
     color: "from-blue-500 to-cyan-500",

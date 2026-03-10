@@ -8,8 +8,8 @@ export const errorSchemas = {
 };
 
 export const PRO_TIERS = {
-  event_owner_pro: { label: 'Event Owner Pro', price: 1995, displayPrice: '$19.95' },
-  vendor_pro: { label: 'Vendor Pro', price: 995, displayPrice: '$9.95' },
+  event_owner_pro: { label: 'Event Owner Pro', price: 2495, displayPrice: '$24.95' },
+  vendor_pro: { label: 'Vendor Pro', price: 1495, displayPrice: '$14.95' },
 } as const;
 
 export const api = {
