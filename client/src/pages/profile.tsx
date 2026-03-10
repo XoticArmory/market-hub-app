@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ImageUpload } from "@/components/image-upload";
 import { useProfile, useUpsertProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { usePortalSession } from "@/hooks/use-stripe";
@@ -476,11 +477,12 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
               </div>
             </div>
             <div>
-              <label className="text-sm font-semibold mb-2 block">Photo URL (optional)</label>
-              <Input data-testid="input-catalog-image" placeholder="https://..." value={catalogForm.imageUrl} onChange={e => setCatalogForm(f => ({ ...f, imageUrl: e.target.value }))} className="rounded-xl" />
-              {catalogForm.imageUrl && (
-                <img src={catalogForm.imageUrl} alt="preview" className="mt-2 w-20 h-20 object-cover rounded-xl border border-border/30" onError={e => (e.currentTarget.style.display = "none")} />
-              )}
+              <label className="text-sm font-semibold mb-2 block">Photo (optional)</label>
+              <ImageUpload
+                value={catalogForm.imageUrl}
+                onChange={url => setCatalogForm(f => ({ ...f, imageUrl: url }))}
+                data-testid="input-catalog-image"
+              />
             </div>
             <Button className="w-full rounded-xl" disabled={!catalogForm.itemName || createCatalogItem.isPending || updateCatalogItem.isPending} onClick={handleSaveCatalog} data-testid="button-save-catalog">
               {(createCatalogItem.isPending || updateCatalogItem.isPending) ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : editingCatalog ? "Update Item" : "Add to Catalog"}

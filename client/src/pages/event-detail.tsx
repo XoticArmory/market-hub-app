@@ -21,6 +21,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EventMapEditor } from "@/components/EventMapEditor";
+import { ImageUpload } from "@/components/image-upload";
 
 function normalizeUrl(url: string) {
   if (!url) return url;
@@ -695,16 +696,14 @@ export default function EventDetail() {
       </Tabs>
 
       {/* Add Photo Dialog */}
-      <Dialog open={addPhotoDialogOpen} onOpenChange={setAddPhotoDialogOpen}>
+      <Dialog open={addPhotoDialogOpen} onOpenChange={open => { setAddPhotoDialogOpen(open); if (!open) setAddPhotoUrl(""); }}>
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader><DialogTitle className="text-xl font-display">Add a Photo</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">{allImages_count()} of {maxPhotos} photos used{isVendorPro ? '' : ' — upgrade to Vendor Pro for up to 10'}.</p>
           <div className="space-y-3 mt-2">
-            <Input
-              placeholder="https://example.com/photo.jpg"
+            <ImageUpload
               value={addPhotoUrl}
-              onChange={e => setAddPhotoUrl(e.target.value)}
-              className="rounded-xl"
+              onChange={setAddPhotoUrl}
               data-testid="input-photo-url"
             />
             <div className="flex gap-3">

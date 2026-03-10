@@ -6,6 +6,27 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { authStorage } from "./replit_integrations/auth/storage";
 import Stripe from "stripe";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+const uploadsDir = path.resolve(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image files are allowed."));
+  },
+});
 
 function tierToProfileType(tier: string): string {
   if (tier === 'event_owner_pro') return 'event_owner';
@@ -40,6 +61,16 @@ async function enrichUser(userId: string) {
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  // ---- FILE UPLOAD ----
+  const express = await import("express");
+  app.use("/uploads", express.static(uploadsDir));
+
+  app.post("/api/upload", isAuthenticated, upload.single("file"), (req: any, res) => {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded." });
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url });
+  });
 
   // ---- FEEDBACK ROUTE ----
   app.post('/api/feedback', isAuthenticated, async (req: any, res) => {
