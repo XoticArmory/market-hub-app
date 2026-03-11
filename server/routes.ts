@@ -206,6 +206,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      const isAdmin = profile?.isAdmin === true;
+      const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
+      if (!isAdmin && !isEventOwnerPro) {
+        return res.status(403).json({ message: "Event Owner Pro subscription required to create events." });
+      }
       const input = api.events.create.input.parse(req.body);
       const { extraDates, ...eventData } = input;
       const created = await storage.createEvent({ ...eventData, date: new Date(eventData.date as any), createdBy: userId });

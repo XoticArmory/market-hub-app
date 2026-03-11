@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -80,6 +80,19 @@ export default function AddEvent() {
         <Store className="w-16 h-16 text-primary mx-auto mb-6" />
         <h2 className="text-3xl font-display font-bold mb-4">Login Required</h2>
         <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><a href="/api/login">Login to Continue</a></Button>
+      </div>
+    );
+  }
+
+  if (!isEventOwnerPro) {
+    return (
+      <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
+        <Crown className="w-16 h-16 text-amber-500 mx-auto mb-6" />
+        <h2 className="text-3xl font-display font-bold mb-3">Event Owner Pro Required</h2>
+        <p className="text-muted-foreground mb-8">Hosting market events is a feature of the Event Owner Pro plan. Upgrade to start listing your events on VendorGrid.</p>
+        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full bg-gradient-to-r from-amber-500 to-primary" data-testid="button-upgrade-to-host">
+          <a href="/upgrade">Upgrade to Event Owner Pro</a>
+        </Button>
       </div>
     );
   }
