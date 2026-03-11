@@ -43,7 +43,7 @@ export function AppSidebar() {
           </div>
           <div>
             <h2 className="font-display font-bold text-lg leading-tight text-foreground">Vendor</h2>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Loop</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Grid</p>
           </div>
         </div>
 
