@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -20,6 +20,12 @@ const formSchema = z.object({
   areaCode: z.string().optional(),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
   vendorSpaces: z.coerce.number().min(0).default(0),
+  vendorRegistrationType: z.enum(["vendorgrid", "external"]).optional(),
+  vendorRegistrationUrl: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.vendorRegistrationType === "external" && !data.vendorRegistrationUrl?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter your market website URL", path: ["vendorRegistrationUrl"] });
+  }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -33,6 +39,8 @@ export default function AddEvent() {
   const [extraDates, setExtraDates] = useState<string[]>([]);
   const [newDate, setNewDate] = useState("");
 
+  const isEventOwnerPro = profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active";
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -42,8 +50,12 @@ export default function AddEvent() {
       areaCode: profile?.areaCode || "",
       date: "",
       vendorSpaces: 0,
+      vendorRegistrationType: undefined,
+      vendorRegistrationUrl: "",
     },
   });
+
+  const registrationType = form.watch("vendorRegistrationType");
 
   const onSubmit = (data: FormValues) => {
     createEvent({
@@ -127,6 +139,68 @@ export default function AddEvent() {
                 </FormItem>
               )} />
             </div>
+
+            {/* Vendor Registration Method — Event Owner Pro only */}
+            {isEventOwnerPro && (
+              <FormField control={form.control} name="vendorRegistrationType" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2">
+                    <Users className="w-4 h-4 text-primary" />
+                    How should vendors register?
+                  </FormLabel>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                    <button
+                      type="button"
+                      data-testid="option-register-vendorgrid"
+                      onClick={() => { field.onChange("vendorgrid"); form.setValue("vendorRegistrationUrl", ""); }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "vendorgrid" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "vendorgrid" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <LayoutGrid className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Register through VendorGrid</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors sign up directly on this platform</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-register-external"
+                      onClick={() => field.onChange("external")}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "external" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "external" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <Globe className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Link to market website</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Send vendors to your own registration page</p>
+                      </div>
+                    </button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
+            {/* Registration URL — only if "external" chosen */}
+            {isEventOwnerPro && registrationType === "external" && (
+              <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2"><Globe className="w-4 h-4 text-primary" />Market Website / Registration URL</FormLabel>
+                  <FormControl>
+                    <Input
+                      data-testid="input-registration-url"
+                      placeholder="https://yourmarket.com/register"
+                      className="h-14 rounded-xl text-base"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
 
             {/* Extra Dates */}
             <div className="space-y-3">
