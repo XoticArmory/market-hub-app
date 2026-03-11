@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link } from "wouter";
-import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink } from "lucide-react";
+import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,10 +10,73 @@ import { useQueries } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { SiX, SiFacebook, SiWhatsapp } from "react-icons/si";
+import { useToast } from "@/hooks/use-toast";
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
   return url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
+}
+
+function ShareButton({ eventId, eventTitle }: { eventId: number; eventTitle: string }) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+  const eventUrl = `${window.location.origin}/events/${eventId}`;
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.clipboard.writeText(eventUrl).then(() => {
+      setCopied(true);
+      toast({ title: "Link copied!", description: "Event link copied to clipboard." });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleShare = (platform: "twitter" | "facebook" | "whatsapp") => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const text = encodeURIComponent(`Check out this market event: ${eventTitle}`);
+    const url = encodeURIComponent(eventUrl);
+    const urls = {
+      twitter: `https://twitter.com/intent/tweet?text=${text}&url=${url}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+      whatsapp: `https://wa.me/?text=${text}%20${url}`,
+    };
+    window.open(urls[platform], "_blank", "noopener,noreferrer,width=600,height=500");
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          title="Share event"
+          data-testid={`button-share-event-${eventId}`}
+        >
+          <Share2 className="w-3.5 h-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+        <DropdownMenuItem onClick={handleCopy} data-testid={`menu-share-copy-${eventId}`} className="gap-2">
+          {copied ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
+          {copied ? "Copied!" : "Copy Link"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleShare("twitter")} data-testid={`menu-share-twitter-${eventId}`} className="gap-2">
+          <SiX className="w-4 h-4" /> Share on X
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleShare("facebook")} data-testid={`menu-share-facebook-${eventId}`} className="gap-2">
+          <SiFacebook className="w-4 h-4" /> Share on Facebook
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleShare("whatsapp")} data-testid={`menu-share-whatsapp-${eventId}`} className="gap-2">
+          <SiWhatsapp className="w-4 h-4" /> Share on WhatsApp
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export default function Home() {
@@ -160,7 +223,7 @@ export default function Home() {
                       </Link>
                       {/* Content */}
                       <div className="p-6 flex-1 flex flex-col">
-                        {/* Title row with optional website link */}
+                        {/* Title row with share + optional website link */}
                         <div className="flex items-start gap-2 mb-2">
                           <Link href={`/events/${event.id}`} className="flex-1 min-w-0">
                             <h3 className="text-xl font-display font-bold text-foreground group-hover:text-primary transition-colors">{event.title}</h3>
@@ -177,6 +240,7 @@ export default function Home() {
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
                           )}
+                          <ShareButton eventId={event.id} eventTitle={event.title} />
                         </div>
                         {/* Details & footer — link to event */}
                         <Link href={`/events/${event.id}`} className="flex-1 flex flex-col">
