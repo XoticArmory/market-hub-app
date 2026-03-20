@@ -7,7 +7,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
-import { useProfile } from "@/hooks/use-profile";
+import { useProfile, useRealProfile } from "@/hooks/use-profile";
 import { useUnreadCount } from "@/hooks/use-notifications";
 
 const TIER_LABELS: Record<string, string> = {
@@ -19,9 +19,11 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
   const { data: profileData } = useProfile();
+  const { data: realProfileData } = useRealProfile();
   const { data: unreadData } = useUnreadCount();
   const profile = profileData?.profile;
-  const isAdmin = profile?.isAdmin === true;
+  const realProfile = realProfileData?.profile;
+  const isAdmin = realProfile?.isAdmin === true;
   const hasActivePro = profile?.subscriptionStatus === "active" && profile?.subscriptionTier && profile.subscriptionTier !== "free";
   const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
   const unreadCount = unreadData?.count || 0;

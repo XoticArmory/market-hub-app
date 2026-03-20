@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAdminSettings, useAdminUsers, useUpsertSetting, useClaimAdmin } from "@/hooks/use-admin";
-import { useProfile } from "@/hooks/use-profile";
+import { useRealProfile } from "@/hooks/use-profile";
+import { useAdminPreview } from "@/contexts/admin-preview";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -211,8 +212,9 @@ function PromoCodesTab() {
 
 export default function AdminPage() {
   const { user } = useAuth();
-  const { data: profileData } = useProfile();
+  const { data: profileData } = useRealProfile();
   const profile = profileData?.profile;
+  const { previewTier, setPreviewTier } = useAdminPreview();
   const { data: settings } = useAdminSettings();
   const { data: users, isLoading: loadingUsers } = useAdminUsers();
   const { mutate: upsertSetting, isPending: savingSetting } = useUpsertSetting();
@@ -257,13 +259,39 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center">
-          <ShieldCheck className="w-7 h-7 text-amber-500" />
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center">
+            <ShieldCheck className="w-7 h-7 text-amber-500" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-display font-bold">Admin Panel</h1>
+            <p className="text-muted-foreground">Full platform control and visibility.</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-display font-bold">Admin Panel</h1>
-          <p className="text-muted-foreground">Full platform control and visibility.</p>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground font-medium">Preview as:</span>
+            <Select value={previewTier ?? "none"} onValueChange={v => setPreviewTier(v === "none" ? null : v as any)}>
+              <SelectTrigger className="rounded-xl w-48 h-9 text-sm" data-testid="select-preview-tier">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— My real view —</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="event_owner_pro">Event Owner Pro</SelectItem>
+                <SelectItem value="vendor_pro">Vendor Pro</SelectItem>
+                <SelectItem value="free">Free user</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {previewTier && (
+            <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-400/30 text-amber-700 dark:text-amber-300 text-xs font-medium px-3 py-1.5 rounded-lg" data-testid="banner-preview-active">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Previewing as: <span className="font-semibold capitalize">{previewTier.replace(/_/g, " ")}</span>
+              <button className="ml-1 opacity-60 hover:opacity-100" onClick={() => setPreviewTier(null)}>✕</button>
+            </div>
+          )}
         </div>
       </div>
 

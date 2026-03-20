@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useProfile } from "@/hooks/use-profile";
+import { AdminPreviewProvider } from "@/contexts/admin-preview";
 
 import Home from "@/pages/home";
 import EventDetail from "@/pages/event-detail";
@@ -418,6 +419,7 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AdminPreviewProvider>
       <TooltipProvider>
         <SidebarProvider>
           <div className="flex min-h-screen w-full bg-background">
@@ -445,6 +447,7 @@ function App() {
         </SidebarProvider>
         <Toaster />
       </TooltipProvider>
+      </AdminPreviewProvider>
     </QueryClientProvider>
   );
 }

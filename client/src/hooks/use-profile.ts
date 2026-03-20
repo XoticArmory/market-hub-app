@@ -1,7 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useQueryErrorResetBoundary } from "@tanstack/react-query";
+import { useContext } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { AdminPreviewContext, PREVIEW_OVERRIDES } from "@/contexts/admin-preview";
 
-export function useProfile() {
+export function useRealProfile() {
   return useQuery({
     queryKey: ["/api/profile"],
     queryFn: async () => {
@@ -12,6 +14,23 @@ export function useProfile() {
     },
     retry: false,
   });
+}
+
+export function useProfile() {
+  const { previewTier } = useContext(AdminPreviewContext);
+  const query = useRealProfile();
+
+  if (previewTier && query.data?.profile?.isAdmin) {
+    const overrides = PREVIEW_OVERRIDES[previewTier] ?? {};
+    return {
+      ...query,
+      data: query.data
+        ? { ...query.data, profile: { ...query.data.profile, ...overrides } }
+        : null,
+    } as typeof query;
+  }
+
+  return query;
 }
 
 export function useProfileById(userId: string | undefined) {
