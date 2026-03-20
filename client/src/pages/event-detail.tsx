@@ -4,6 +4,7 @@ import { useVendorPosts, useCreateVendorPost, useDeleteVendorPost, useUpdateVend
 import { useSetAttendance, useRemoveAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
+import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
@@ -49,6 +50,7 @@ export default function EventDetail() {
   const { mutate: removeAttendance, isPending: isRemoving } = useRemoveAttendance(eventId);
   const { isAuthenticated, user } = useAuth();
   const { data: profileData } = useProfile();
+  const { previewTier } = useAdminPreview();
   const { data: registrations } = useEventRegistrations(eventId);
   const { data: mapData } = useEventMap(eventId);
   const { mutate: registerSpace, isPending: isRegistering } = useRegisterVendorSpace(eventId);
@@ -124,7 +126,9 @@ export default function EventDetail() {
   const userStatus = event?.userStatus;
   const isVendor = profile?.profileType === "vendor";
   const isEventOwner = profile?.profileType === "event_owner";
-  const isOwner = event?.createdBy === user?.id;
+  const realIsOwner = event?.createdBy === user?.id;
+  // When admin previews as vendor_pro, treat them as a non-owner so vendor flows are visible
+  const isOwner = previewTier === "vendor_pro" ? false : realIsOwner;
   const isVendorPro = (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active") || profile?.isAdmin === true;
   const isAdmin = profile?.isAdmin === true;
   const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
