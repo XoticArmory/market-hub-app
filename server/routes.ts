@@ -211,9 +211,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isCreatorProOrAdmin = isFeatured || creatorProfile?.isAdmin === true;
     const creatorWebsiteUrl = isCreatorProOrAdmin ? (creatorProfile?.websiteUrl || null) : null;
     const requesterId = req.user?.claims?.sub;
-    const isEventOwnerReq = requesterId === event.createdBy || (await storage.getUserProfile(requesterId || ''))?.isAdmin === true;
+    const requesterProfile = await storage.getUserProfile(requesterId || '');
+    const isRequesterAdmin = requesterProfile?.isAdmin === true;
+    const isRequesterEventOwnerPro = requesterProfile?.subscriptionTier === 'event_owner_pro' && requesterProfile?.subscriptionStatus === 'active';
+    // Only Event Owner Pro accounts (or admins) who own this event can see the registration code
+    const canSeeCode = isRequesterAdmin || (requesterId === event.createdBy && (isRequesterEventOwnerPro || isRequesterAdmin));
     const { registrationCode: rawCode, ...eventWithoutCode } = event;
-    const responseEvent = isEventOwnerReq ? { ...event } : { ...eventWithoutCode };
+    const responseEvent = canSeeCode ? { ...event } : { ...eventWithoutCode };
     res.json({ ...responseEvent, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
   });
 

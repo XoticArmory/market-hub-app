@@ -303,7 +303,7 @@ export default function EventDetail() {
           </div>
 
           {/* Owner-only: Registration Code display */}
-          {isOwner && (event as any).registrationCode && (
+          {canManageEvent && (event as any).registrationCode && (
             <div className="mt-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
               <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-2 flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5" />Offline Registration Code
