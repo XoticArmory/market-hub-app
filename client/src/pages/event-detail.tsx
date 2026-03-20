@@ -214,7 +214,7 @@ export default function EventDetail() {
 
       {/* Hero */}
       <div className="bg-card rounded-3xl overflow-hidden border border-border/50 shadow-lg mb-8">
-        <div className="h-48 md:h-64 bg-muted relative group/banner">
+        <div className="h-48 md:h-64 bg-muted relative">
           <img
             src={(event as any).bannerUrl || `https://images.unsplash.com/photo-1519999482648-25049ddd37b1?q=80&w=2000&auto=format&fit=crop&sig=${event.id}`}
             alt={event.title}
@@ -224,7 +224,7 @@ export default function EventDetail() {
             <button
               onClick={() => bannerInputRef.current?.click()}
               disabled={bannerUploading || updateBanner.isPending}
-              className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium px-3 py-1.5 rounded-lg opacity-0 group-hover/banner:opacity-100 transition-opacity backdrop-blur disabled:opacity-50"
+              className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-opacity backdrop-blur disabled:opacity-50"
               data-testid="button-change-banner"
             >
               {bannerUploading || updateBanner.isPending ? (
