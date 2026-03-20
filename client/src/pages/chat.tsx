@@ -1,23 +1,39 @@
 import { useState } from "react";
 import { useMessages, useCreateMessage } from "@/hooks/use-messages";
-import { useProfile } from "@/hooks/use-profile";
+import { useRealProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { Send, Store, User, Loader2, MapPin, Filter } from "lucide-react";
+import { Send, Store, User, Loader2, MapPin, Filter, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Chat() {
   const { user, isAuthenticated } = useAuth();
-  const { data: profileData } = useProfile();
+  const { data: profileData } = useRealProfile();
+  const isAdmin = profileData?.profile?.isAdmin === true;
   const [areaFilter, setAreaFilter] = useState<string>(() => profileData?.profile?.areaCode || "");
   const [areaInput, setAreaInput] = useState(profileData?.profile?.areaCode || "");
   const { data: messages, isLoading } = useMessages(areaFilter || undefined);
   const { mutate: sendMessage, isPending } = useCreateMessage();
   const [content, setContent] = useState("");
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const deleteMessage = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/messages/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/messages"] });
+      toast({ title: "Message deleted." });
+    },
+    onError: () => toast({ title: "Failed to delete message.", variant: "destructive" }),
+  });
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,8 +105,15 @@ export default function Chat() {
           messages?.map((msg: any, i: number) => {
             const isMe = msg.senderId === user?.id;
             const showAvatar = i === 0 || messages[i - 1].senderId !== msg.senderId;
+            const isHovered = hoveredId === msg.id;
             return (
-              <div key={msg.id} className={`flex gap-4 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div
+                key={msg.id}
+                className={`flex gap-4 ${isMe ? 'flex-row-reverse' : 'flex-row'} group relative`}
+                onMouseEnter={() => setHoveredId(msg.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                data-testid={`message-row-${msg.id}`}
+              >
                 <div className={`w-10 flex-shrink-0 ${!showAvatar && 'opacity-0'}`}>
                   <Avatar className="w-10 h-10 border border-primary/20 shadow-sm">
                     <AvatarImage src={msg.senderAvatar || ""} />
@@ -104,8 +127,36 @@ export default function Chat() {
                       {msg.areaCode && <Badge variant="outline" className="text-[9px] h-4 px-1">{msg.areaCode}</Badge>}
                     </div>
                   )}
-                  <div className={`px-5 py-3 rounded-2xl text-[15px] leading-relaxed shadow-sm ${isMe ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border border-border/50 text-foreground rounded-tl-sm'}`}>
-                    {msg.content}
+                  <div className="flex items-center gap-2">
+                    {isAdmin && isHovered && !isMe && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="w-7 h-7 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => deleteMessage.mutate(msg.id)}
+                        disabled={deleteMessage.isPending}
+                        data-testid={`button-delete-message-${msg.id}`}
+                        title="Delete message"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                    <div className={`px-5 py-3 rounded-2xl text-[15px] leading-relaxed shadow-sm ${isMe ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border border-border/50 text-foreground rounded-tl-sm'}`}>
+                      {msg.content}
+                    </div>
+                    {isAdmin && isHovered && isMe && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="w-7 h-7 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => deleteMessage.mutate(msg.id)}
+                        disabled={deleteMessage.isPending}
+                        data-testid={`button-delete-message-${msg.id}`}
+                        title="Delete message"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                   </div>
                   <span className="text-[10px] text-muted-foreground mt-1 px-1 opacity-70">{format(new Date(msg.createdAt!), 'h:mm a')}</span>
                 </div>

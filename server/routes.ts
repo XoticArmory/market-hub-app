@@ -402,6 +402,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.delete("/api/messages/:id", isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const isAdmin = await isAdminUser(userId);
+    if (!isAdmin) return res.status(403).json({ message: "Admin access required." });
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid message ID." });
+    await storage.deleteMessage(id);
+    res.json({ success: true });
+  });
+
   // ---- NOTIFICATIONS ----
   app.get(api.notifications.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;

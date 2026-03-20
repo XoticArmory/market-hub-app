@@ -54,6 +54,7 @@ export interface IStorage {
   // Messages
   getMessages(areaCode?: string): Promise<Message[]>;
   createMessage(message: InsertMessage & { senderId: string }): Promise<Message>;
+  deleteMessage(id: number): Promise<void>;
 
   // Notifications
   getNotifications(userId: string): Promise<Notification[]>;
@@ -352,6 +353,10 @@ export class DatabaseStorage implements IStorage {
   async createMessage(message: InsertMessage & { senderId: string }): Promise<Message> {
     const [m] = await db.insert(messages).values(message).returning();
     return m;
+  }
+
+  async deleteMessage(id: number): Promise<void> {
+    await db.delete(messages).where(eq(messages.id, id));
   }
 
   // ---- Notifications ----
