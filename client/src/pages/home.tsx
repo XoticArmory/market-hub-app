@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
-import { Link } from "wouter";
-import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SiX, SiFacebook, SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useProfile } from "@/hooks/use-profile";
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
@@ -83,6 +85,12 @@ export default function Home() {
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
   const { data: events, isLoading: isLoadingEvents } = useEvents(areaFilter);
+  const [, navigate] = useLocation();
+  const { user, isAuthenticated } = useAuth();
+  const { data: profileData } = useProfile();
+  const profile = profileData?.profile;
+  const isAdmin = profile?.isAdmin === true;
+  const isVendorPro = isAdmin || (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active");
 
   const postQueries = useQueries({
     queries: (events || []).map((event) => ({
@@ -242,7 +250,7 @@ export default function Home() {
                           )}
                           <ShareButton eventId={event.id} eventTitle={event.title} />
                         </div>
-                        {/* Details & footer — link to event */}
+                        {/* Details — link to event */}
                         <Link href={`/events/${event.id}`} className="flex-1 flex flex-col">
                           <div className="space-y-2 mb-4 flex-1">
                             <div className="flex items-start gap-2 text-muted-foreground text-sm">
@@ -259,13 +267,42 @@ export default function Home() {
                               </div>
                             )}
                           </div>
-                          <div className="pt-4 border-t border-border/50 flex items-center justify-between mt-auto">
-                            <span className="text-sm font-medium text-muted-foreground">{eventPosts.length} items listed</span>
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                              <ArrowRight className="w-4 h-4" />
-                            </div>
-                          </div>
                         </Link>
+
+                        {/* Card footer */}
+                        <div className="pt-4 border-t border-border/50 flex items-center justify-between mt-auto gap-2">
+                          <span className="text-sm font-medium text-muted-foreground shrink-0">{eventPosts.length} items listed</span>
+                          <div className="flex items-center gap-2">
+                            {/* Vendor Registration button — only for active, non-owned events */}
+                            {!event.canceledAt && event.createdBy !== user?.id && (
+                              isVendorPro ? (
+                                <Button
+                                  size="sm"
+                                  className="rounded-xl gap-1.5 h-8 text-xs"
+                                  onClick={(e) => { e.preventDefault(); navigate(`/events/${event.id}`); }}
+                                  data-testid={`button-vendor-registration-card-${event.id}`}
+                                >
+                                  <ShieldCheck className="w-3.5 h-3.5" />Vendor Registration
+                                </Button>
+                              ) : isAuthenticated ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-xl gap-1.5 h-8 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                  onClick={(e) => { e.preventDefault(); navigate("/upgrade"); }}
+                                  data-testid={`button-upgrade-card-${event.id}`}
+                                >
+                                  <Crown className="w-3.5 h-3.5" />Register
+                                </Button>
+                              ) : null
+                            )}
+                            <Link href={`/events/${event.id}`}>
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
+                                <ArrowRight className="w-4 h-4" />
+                              </div>
+                            </Link>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
