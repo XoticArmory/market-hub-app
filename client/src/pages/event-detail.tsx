@@ -392,6 +392,44 @@ export default function EventDetail() {
                 {userStatus === "interested" ? "Interested" : "Mark Interested"}
               </Button>
 
+              {/* Vendor Registration — Vendor Pro only, next to Mark Interested */}
+              {isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && (
+                isVendorGridReg ? (
+                  vendorSpacesLeft > 0 ? (
+                    <Button
+                      size="default"
+                      className="rounded-xl gap-2"
+                      onClick={() => setRegisterDialogOpen(true)}
+                      data-testid="button-vendor-registration"
+                    >
+                      <ShieldCheck className="w-4 h-4" />Vendor Registration
+                    </Button>
+                  ) : (
+                    <Button size="default" variant="outline" disabled className="rounded-xl gap-2 opacity-60" data-testid="button-no-spaces-left">
+                      <ShieldCheck className="w-4 h-4" />No Spaces Left
+                    </Button>
+                  )
+                ) : isExternalReg ? (
+                  <Button
+                    size="default"
+                    className="rounded-xl gap-2"
+                    onClick={() => window.open(regUrl!, '_blank')}
+                    data-testid="button-vendor-registration-external"
+                  >
+                    <ExternalLink className="w-4 h-4" />Vendor Registration
+                  </Button>
+                ) : (
+                  <Button
+                    size="default"
+                    className="rounded-xl gap-2"
+                    onClick={() => setIsDialogOpen(true)}
+                    data-testid="button-vendor-registration"
+                  >
+                    <Package className="w-4 h-4" />Vendor Registration
+                  </Button>
+                )
+              )}
+
               {/* Cancel Event — event owner pro only */}
               {canManageEvent && !event.canceledAt && (
                 <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
@@ -421,22 +459,7 @@ export default function EventDetail() {
                 </Dialog>
               )}
 
-              {/* ===== VENDOR REGISTRATION ===== */}
-
-              {/* Upsell for non-pro users */}
-              {!isVendorPro && !isAdmin && !isOwner && (
-                <Button
-                  size="default"
-                  variant="outline"
-                  className="rounded-xl gap-2 border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                  onClick={() => window.location.href = "/upgrade"}
-                  data-testid="button-upgrade-for-registration"
-                >
-                  <Crown className="w-4 h-4" />Upgrade to Register
-                </Button>
-              )}
-
-              {/* Pro vendor / admin flow */}
+              {/* ===== VENDOR MANAGEMENT (Pro vendors / admins) ===== */}
               {(isVendorPro || isAdmin) && !isOwner && (
                 <>
                   {/* Remove Listing — when vendor has a listing */}
@@ -505,44 +528,6 @@ export default function EventDetail() {
                         </DialogContent>
                       </Dialog>
                     </>
-                  )}
-
-                  {/* Vendor Registration — main CTA when not yet space-registered */}
-                  {!alreadyRegistered && (
-                    isVendorGridReg ? (
-                      vendorSpacesLeft > 0 ? (
-                        <Button
-                          size="default"
-                          className="rounded-xl gap-2"
-                          onClick={() => setRegisterDialogOpen(true)}
-                          data-testid="button-vendor-registration"
-                        >
-                          <ShieldCheck className="w-4 h-4" />Vendor Registration
-                        </Button>
-                      ) : (
-                        <Button size="default" variant="outline" disabled className="rounded-xl gap-2 opacity-60" data-testid="button-no-spaces-left">
-                          <ShieldCheck className="w-4 h-4" />No Spaces Left
-                        </Button>
-                      )
-                    ) : isExternalReg ? (
-                      <Button
-                        size="default"
-                        className="rounded-xl gap-2"
-                        onClick={() => window.open(regUrl!, '_blank')}
-                        data-testid="button-vendor-registration-external"
-                      >
-                        <ExternalLink className="w-4 h-4" />Vendor Registration
-                      </Button>
-                    ) : (
-                      <Button
-                        size="default"
-                        className="rounded-xl gap-2"
-                        onClick={() => setIsDialogOpen(true)}
-                        data-testid="button-vendor-registration"
-                      >
-                        <Package className="w-4 h-4" />Vendor Registration
-                      </Button>
-                    )
                   )}
 
                   {/* Set Up Your Listing — space registered but no listing yet */}
