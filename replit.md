@@ -14,7 +14,8 @@ Key features:
 - Vendor inventory management: add/edit/delete items per event with quantities and prices
 - Vendor Catalog: reusable catalog items (name, qty, price, image) that can be assigned to events; shown in "Products Available" section on vendor cards
 - Admin all-access: admin users get all Pro tier features enabled (event owner + vendor), with all fees waived on vendor space registrations
-- Vendor space registration with Square payment (0.5% platform fee for non-Vendor Pro/non-Admin accounts)
+- Payment Processor Connection (Event Owner Pro): market owners connect Stripe (via Stripe Connect Express) or Square (manual API credentials) on their Payments profile tab; vendor space registration payments route to the owner's connected account; Square takes priority over Stripe Connect when both are set; falls back to platform Stripe if neither configured
+- Vendor space registration with Stripe/Square payment (0.5% platform fee for non-Vendor Pro/non-Admin accounts)
 - Vendor space cancel/unregister with confirmation dialog; vendor post delete ("Unregister") with confirmation dialog
 - Multi-photo support on vendor posts: up to 3 photos for free accounts, 10 for Vendor Pro (URL-based, PATCH /api/events/:eventId/posts/:postId/images)
 - Vendor Pro badge (gradient blue-cyan Crown badge) shown on vendor post cards for Vendor Pro accounts

@@ -744,7 +744,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    const validTabs = ["profile", "events", "notifications", "analytics", "map", "billing", "vendor-analytics"];
+    const validTabs = ["profile", "events", "notifications", "analytics", "map", "billing", "vendor-analytics", "payments"];
     if (tab && validTabs.includes(tab)) setActiveTab(tab);
   }, [location]);
 
@@ -778,6 +778,48 @@ export default function ProfilePage() {
     mutationFn: (codes: string[]) => apiRequest("PATCH", "/api/profile/notification-areas", { notificationAreaCodes: codes }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/profile"] }),
   });
+
+  // Payment Connect state
+  const [squareForm, setSquareForm] = useState({ accessToken: "", locationId: "" });
+  const [squareFormVisible, setSquareFormVisible] = useState(false);
+  const { data: connectStatus, refetch: refetchConnect } = useQuery<any>({
+    queryKey: ["/api/connect/status"],
+    enabled: isEventOwnerPro,
+    retry: false,
+  });
+  const { mutate: startStripeConnect, isPending: isStartingStripe } = useMutation({
+    mutationFn: async () => { const r = await apiRequest("POST", "/api/connect/stripe/start"); return r.json(); },
+    onSuccess: (data: any) => { if (data?.url) window.location.href = data.url; },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const { mutate: verifyStripe, isPending: isVerifyingStripe } = useMutation({
+    mutationFn: async () => { const r = await apiRequest("POST", "/api/connect/stripe/verify"); return r.json(); },
+    onSuccess: () => { refetchConnect(); queryClient.invalidateQueries({ queryKey: ["/api/profile"] }); toast({ title: "Stripe account verified!" }); },
+    onError: (e: any) => toast({ title: "Verification pending", description: "Please complete Stripe onboarding first.", variant: "destructive" }),
+  });
+  const { mutate: disconnectStripe, isPending: isDisconnectingStripe } = useMutation({
+    mutationFn: async () => { const r = await apiRequest("DELETE", "/api/connect/stripe"); return r.json(); },
+    onSuccess: () => { refetchConnect(); toast({ title: "Stripe disconnected" }); },
+  });
+  const { mutate: saveSquare, isPending: isSavingSquare } = useMutation({
+    mutationFn: async (data: { accessToken: string; locationId: string }) => { const r = await apiRequest("POST", "/api/connect/square", data); return r.json(); },
+    onSuccess: () => { refetchConnect(); setSquareForm({ accessToken: "", locationId: "" }); setSquareFormVisible(false); toast({ title: "Square connected!" }); },
+    onError: (e: any) => toast({ title: "Square connection failed", description: e.message, variant: "destructive" }),
+  });
+  const { mutate: disconnectSquare, isPending: isDisconnectingSquare } = useMutation({
+    mutationFn: async () => { const r = await apiRequest("DELETE", "/api/connect/square"); return r.json(); },
+    onSuccess: () => { refetchConnect(); toast({ title: "Square disconnected" }); },
+  });
+
+  // Handle return from Stripe Connect onboarding
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("connect") === "stripe" && params.get("result") === "success") {
+      setActiveTab("payments");
+      verifyStripe();
+      window.history.replaceState({}, "", "/profile?tab=payments");
+    }
+  }, []);
 
   const addNotifArea = () => {
     const code = notifAreaInput.trim();
@@ -871,6 +913,9 @@ export default function ProfilePage() {
               <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Events</TabsTrigger>
               <TabsTrigger value="map" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-map">
                 <Map className="w-4 h-4 mr-1.5" />Map
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-payments">
+                <DollarSign className="w-4 h-4 mr-1.5" />Payments
               </TabsTrigger>
             </>
           )}
@@ -1298,6 +1343,143 @@ export default function ProfilePage() {
           {/* ADMIN: Promo Code Management */}
           {isAdmin && <AdminPromoSection userId={userId || ""} />}
         </TabsContent>
+
+        {/* PAYMENTS */}
+        {isEventOwnerPro && (
+          <TabsContent value="payments" className="mt-0 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-primary" />Payment Processing</CardTitle>
+                <CardDescription>Connect a payment processor so vendors can pay for spaces directly to you. You can connect Stripe, Square, or both — the first one configured will be used.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+
+                {/* Stripe Connect */}
+                <div className="rounded-2xl border p-5 space-y-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#635BFF]/10 flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 text-[#635BFF]" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">Stripe</p>
+                        <p className="text-xs text-muted-foreground">Payments go directly to your Stripe account</p>
+                      </div>
+                    </div>
+                    {connectStatus?.stripe?.onboarded ? (
+                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-300 dark:border-green-700 gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5" />Connected
+                      </Badge>
+                    ) : connectStatus?.stripe ? (
+                      <Badge variant="outline" className="text-amber-600 border-amber-400 gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5" />Onboarding incomplete
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground gap-1.5">Not connected</Badge>
+                    )}
+                  </div>
+
+                  {connectStatus?.stripe?.onboarded ? (
+                    <div className="flex gap-3 flex-wrap">
+                      <p className="text-sm text-muted-foreground flex-1">Account ID: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{connectStatus.stripe.accountId}</code></p>
+                      <Button size="sm" variant="outline" className="rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => disconnectStripe()} disabled={isDisconnectingStripe} data-testid="button-disconnect-stripe">
+                        {isDisconnectingStripe ? <Loader2 className="w-4 h-4 animate-spin" /> : "Disconnect"}
+                      </Button>
+                    </div>
+                  ) : connectStatus?.stripe && !connectStatus.stripe.onboarded ? (
+                    <div className="flex gap-3 flex-wrap items-center">
+                      <p className="text-sm text-muted-foreground flex-1">Your Stripe account needs to finish onboarding before it can accept payments.</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" className="rounded-xl" onClick={() => startStripeConnect()} disabled={isStartingStripe} data-testid="button-continue-stripe-onboarding">
+                          {isStartingStripe ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Redirecting...</> : "Continue Setup"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => verifyStripe()} disabled={isVerifyingStripe} data-testid="button-verify-stripe">
+                          {isVerifyingStripe ? <Loader2 className="w-4 h-4 animate-spin" /> : "Check Status"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => disconnectStripe()} disabled={isDisconnectingStripe}>
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button className="rounded-xl gap-2" onClick={() => startStripeConnect()} disabled={isStartingStripe} data-testid="button-connect-stripe">
+                      {isStartingStripe ? <><Loader2 className="w-4 h-4 animate-spin" />Redirecting to Stripe...</> : <><CreditCard className="w-4 h-4" />Connect Stripe Account</>}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Square */}
+                <div className="rounded-2xl border p-5 space-y-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-black/5 dark:bg-white/10 flex items-center justify-center">
+                        <span className="font-bold text-lg text-foreground">⬛</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">Square</p>
+                        <p className="text-xs text-muted-foreground">Accept payments through your Square account</p>
+                      </div>
+                    </div>
+                    {connectStatus?.square?.connected ? (
+                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-300 dark:border-green-700 gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5" />Connected
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground gap-1.5">Not connected</Badge>
+                    )}
+                  </div>
+
+                  {connectStatus?.square?.connected ? (
+                    <div className="flex gap-3 flex-wrap items-center">
+                      <p className="text-sm text-muted-foreground flex-1">Location ID: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{connectStatus.square.locationId}</code></p>
+                      <Button size="sm" variant="outline" className="rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => disconnectSquare()} disabled={isDisconnectingSquare} data-testid="button-disconnect-square">
+                        {isDisconnectingSquare ? <Loader2 className="w-4 h-4 animate-spin" /> : "Disconnect"}
+                      </Button>
+                    </div>
+                  ) : squareFormVisible ? (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Square Access Token</p>
+                        <Input
+                          type="password"
+                          placeholder="EAAAl..."
+                          value={squareForm.accessToken}
+                          onChange={e => setSquareForm(f => ({ ...f, accessToken: e.target.value }))}
+                          className="rounded-xl font-mono text-sm"
+                          data-testid="input-square-access-token"
+                        />
+                        <p className="text-xs text-muted-foreground">Found in your Square Developer Dashboard → Applications → Credentials</p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Location ID</p>
+                        <Input
+                          placeholder="LG4FSQW8ZK06V"
+                          value={squareForm.locationId}
+                          onChange={e => setSquareForm(f => ({ ...f, locationId: e.target.value }))}
+                          className="rounded-xl font-mono text-sm"
+                          data-testid="input-square-location-id"
+                        />
+                        <p className="text-xs text-muted-foreground">Found in Square Dashboard → Locations</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" className="rounded-xl" onClick={() => saveSquare(squareForm)} disabled={isSavingSquare || !squareForm.accessToken || !squareForm.locationId} data-testid="button-save-square">
+                          {isSavingSquare ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Verifying...</> : "Save & Connect"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => { setSquareFormVisible(false); setSquareForm({ accessToken: "", locationId: "" }); }}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button variant="outline" className="rounded-xl gap-2" onClick={() => setSquareFormVisible(true)} data-testid="button-connect-square">
+                      <DollarSign className="w-4 h-4" />Connect Square Account
+                    </Button>
+                  )}
+                </div>
+
+                <p className="text-xs text-muted-foreground">When a vendor pays for a space at your event, funds go directly to your connected payment account. VendorGrid does not collect a fee on Pro vendor registrations.</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

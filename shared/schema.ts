@@ -19,6 +19,10 @@ export const userProfiles = pgTable("user_profiles", {
   isAdmin: boolean("is_admin").default(false),
   onboardingComplete: boolean("onboarding_complete").default(false),
   termsAcceptedAt: timestamp("terms_accepted_at"),
+  stripeConnectAccountId: text("stripe_connect_account_id"),
+  stripeConnectOnboarded: boolean("stripe_connect_onboarded").default(false),
+  squareAccessToken: text("square_access_token_connect"),
+  squareLocationId: text("square_location_id_connect"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

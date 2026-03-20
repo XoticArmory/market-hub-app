@@ -568,11 +568,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     if (spotPriceCents > 0) {
+      // Check if event owner has Square configured
+      const ownerProfile = await storage.getUserProfile(event.createdBy);
+      if (ownerProfile?.squareAccessToken && ownerProfile?.squareLocationId) {
+        // Route through owner's Square account
+        try {
+          const totalCents = spotPriceCents + feeCents;
+          const idempotencyKey = `reg-${reg.id}-${Date.now()}`;
+          const sqBody = {
+            idempotency_key: idempotencyKey,
+            quick_pay: {
+              name: `Vendor Space${spotName ? `: ${spotName}` : ''} — ${event.title}`,
+              price_money: { amount: totalCents, currency: 'USD' },
+              location_id: ownerProfile.squareLocationId,
+            },
+            pre_populated_data: {},
+            checkout_options: {
+              redirect_url: `${getHost(req)}/events/${eventId}?setup_listing=1`,
+            },
+          };
+          const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ownerProfile.squareAccessToken}`,
+              'Square-Version': '2024-01-18',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sqBody),
+          });
+          if (sqResp.ok) {
+            const sqData = await sqResp.json() as any;
+            const checkoutUrl = sqData?.payment_link?.url;
+            if (checkoutUrl) {
+              await storage.updateRegistrationStatus(reg.id, 'pending', idempotencyKey);
+              return res.json({ ...reg, checkoutUrl, totalCents, feeCents, processor: 'square' });
+            }
+          }
+        } catch (_) { /* fall through to Stripe */ }
+      }
+
+      // Stripe payment — route to owner's connected account if available
       const stripe = getStripe();
       if (stripe) {
         try {
           const totalCents = spotPriceCents + feeCents;
-          const session = await stripe.checkout.sessions.create({
+          const sessionParams: any = {
             mode: 'payment',
             payment_method_types: ['card'],
             line_items: [{
@@ -593,7 +633,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             },
             success_url: `${getHost(req)}/events/${eventId}?setup_listing=1`,
             cancel_url: `${getHost(req)}/events/${eventId}`,
-          });
+          };
+          // Route to owner's Stripe Connect account if onboarded
+          if (ownerProfile?.stripeConnectAccountId && ownerProfile?.stripeConnectOnboarded) {
+            sessionParams.payment_intent_data = {
+              transfer_data: { destination: ownerProfile.stripeConnectAccountId },
+              ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
+            };
+          }
+          const session = await stripe.checkout.sessions.create(sessionParams);
           await storage.updateRegistrationStatus(reg.id, 'pending', session.id);
           return res.json({ ...reg, checkoutUrl: session.url, totalCents, feeCents });
         } catch (e: any) {
@@ -895,6 +943,140 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     await storage.setAdminFlag(userId, true);
     res.json({ success: true });
+  });
+
+  // ---- PAYMENT PROCESSOR CONNECTION (Stripe Connect / Square) ----
+
+  // Get current user's payment connection status
+  app.get('/api/connect/status', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+    const isEventOwnerPro = profile.isAdmin || (profile.subscriptionTier === 'event_owner_pro' && profile.subscriptionStatus === 'active');
+    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    res.json({
+      stripe: profile.stripeConnectAccountId ? {
+        accountId: profile.stripeConnectAccountId,
+        onboarded: profile.stripeConnectOnboarded || false,
+      } : null,
+      square: (profile.squareLocationId) ? {
+        locationId: profile.squareLocationId,
+        connected: true,
+      } : null,
+    });
+  });
+
+  // Start Stripe Connect Express onboarding
+  app.post('/api/connect/stripe/start', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
+    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    const stripe = getStripe();
+    if (!stripe) return res.status(503).json({ message: "Stripe not configured." });
+    try {
+      let accountId = profile?.stripeConnectAccountId;
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: 'express',
+          capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+        });
+        accountId = account.id;
+        await storage.upsertUserProfile(userId, { stripeConnectAccountId: accountId, stripeConnectOnboarded: false });
+      }
+      const host = getHost(req);
+      const link = await stripe.accountLinks.create({
+        account: accountId,
+        type: 'account_onboarding',
+        return_url: `${host}/profile?connect=stripe&result=success`,
+        refresh_url: `${host}/api/connect/stripe/refresh?userId=${userId}`,
+      });
+      res.json({ url: link.url });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Refresh expired Stripe Connect onboarding link
+  app.get('/api/connect/stripe/refresh', async (req: any, res) => {
+    const { userId } = req.query;
+    if (!userId) return res.redirect('/profile');
+    const profile = await storage.getUserProfile(userId as string);
+    const accountId = profile?.stripeConnectAccountId;
+    if (!accountId) return res.redirect('/profile');
+    const stripe = getStripe();
+    if (!stripe) return res.redirect('/profile');
+    try {
+      const host = `${req.protocol}://${req.hostname}`;
+      const link = await stripe.accountLinks.create({
+        account: accountId,
+        type: 'account_onboarding',
+        return_url: `${host}/profile?connect=stripe&result=success`,
+        refresh_url: `${host}/api/connect/stripe/refresh?userId=${userId}`,
+      });
+      res.redirect(link.url);
+    } catch {
+      res.redirect('/profile');
+    }
+  });
+
+  // Verify and mark Stripe Connect onboarding complete
+  app.post('/api/connect/stripe/verify', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const accountId = profile?.stripeConnectAccountId;
+    if (!accountId) return res.status(400).json({ message: "No Stripe Connect account found" });
+    const stripe = getStripe();
+    if (!stripe) return res.status(503).json({ message: "Stripe not configured" });
+    try {
+      const account = await stripe.accounts.retrieve(accountId);
+      const onboarded = account.details_submitted && !account.requirements?.currently_due?.length;
+      await storage.upsertUserProfile(userId, { stripeConnectOnboarded: onboarded || false });
+      res.json({ onboarded, accountId });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Disconnect Stripe Connect
+  app.delete('/api/connect/stripe', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
+    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    await storage.upsertUserProfile(userId, { stripeConnectAccountId: undefined as any, stripeConnectOnboarded: false });
+    res.json({ ok: true });
+  });
+
+  // Save Square credentials
+  app.post('/api/connect/square', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
+    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    const { accessToken, locationId } = req.body;
+    if (!accessToken || !locationId) return res.status(400).json({ message: "Access token and location ID are required" });
+    // Verify credentials by calling Square API
+    try {
+      const resp = await fetch(`https://connect.squareup.com/v2/locations/${locationId}`, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Square-Version': '2024-01-18' },
+      });
+      if (!resp.ok) return res.status(400).json({ message: "Invalid Square credentials. Please check your access token and location ID." });
+      await storage.upsertUserProfile(userId, { squareAccessToken: accessToken, squareLocationId: locationId });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Disconnect Square
+  app.delete('/api/connect/square', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
+    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    await storage.upsertUserProfile(userId, { squareAccessToken: undefined as any, squareLocationId: undefined as any });
+    res.json({ ok: true });
   });
 
   // ---- STRIPE ROUTES ----
