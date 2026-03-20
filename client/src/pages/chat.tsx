@@ -4,6 +4,7 @@ import { useRealProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { api } from "@shared/routes";
 import { format } from "date-fns";
 import { Send, Store, User, Loader2, MapPin, Filter, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,11 +29,24 @@ export default function Chat() {
 
   const deleteMessage = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/messages/${id}`),
+    onMutate: async (id: number) => {
+      await qc.cancelQueries({ queryKey: [api.messages.list.path] });
+      const snapshots = qc.getQueriesData<any[]>({ queryKey: [api.messages.list.path] });
+      qc.setQueriesData<any[]>({ queryKey: [api.messages.list.path] }, (old) =>
+        old ? old.filter((m: any) => m.id !== id) : old
+      );
+      return { snapshots };
+    },
+    onError: (_err, _id, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
+      toast({ title: "Failed to delete message.", variant: "destructive" });
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/messages"] });
       toast({ title: "Message deleted." });
     },
-    onError: () => toast({ title: "Failed to delete message.", variant: "destructive" }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: [api.messages.list.path] });
+    },
   });
 
   const handleSend = (e: React.FormEvent) => {

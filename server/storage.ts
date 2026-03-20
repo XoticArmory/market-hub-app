@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, desc, and, inArray, sql, gte, or, isNull, lt } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
@@ -356,7 +356,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteMessage(id: number): Promise<void> {
-    await db.delete(messages).where(eq(messages.id, id));
+    await pool.query("DELETE FROM messages WHERE id = $1", [id]);
   }
 
   // ---- Notifications ----
