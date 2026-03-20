@@ -564,9 +564,16 @@ export class DatabaseStorage implements IStorage {
     const attendance = await db.select().from(eventAttendance)
       .where(and(eq(eventAttendance.userId, vendorId), eq(eventAttendance.status, 'attending')));
 
-    const eventIds = attendance.map(a => a.eventId);
-    const attendedEvents = eventIds.length > 0
-      ? await db.select().from(events).where(inArray(events.id, eventIds))
+    const posts = await db.select({ eventId: vendorPosts.eventId })
+      .from(vendorPosts)
+      .where(eq(vendorPosts.vendorId, vendorId));
+
+    const attendanceEventIds = attendance.map(a => a.eventId);
+    const postEventIds = posts.map(p => p.eventId);
+    const allEventIds = Array.from(new Set([...attendanceEventIds, ...postEventIds]));
+
+    const attendedEvents = allEventIds.length > 0
+      ? await db.select().from(events).where(inArray(events.id, allEventIds))
       : [];
 
     const profileViewCount = await this.getProfileViewCount(vendorId);
