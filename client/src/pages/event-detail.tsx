@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,6 +54,7 @@ export default function EventDetail() {
   const { mutate: cancelEvent, isPending: isCanceling } = useCancelEvent(eventId);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [justRegistered, setJustRegistered] = useState(false);
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
   const [unregisterDialogOpen, setUnregisterDialogOpen] = useState(false);
   const [unregisterPostDialogOpen, setUnregisterPostDialogOpen] = useState(false);
@@ -61,6 +62,15 @@ export default function EventDetail() {
   const [addPhotoDialogOpen, setAddPhotoDialogOpen] = useState(false);
   const [addPhotoUrl, setAddPhotoUrl] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<any>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("setup_listing") === "1") {
+      setJustRegistered(true);
+      setIsDialogOpen(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const profile = profileData?.profile;
   const userStatus = event?.userStatus;
@@ -335,14 +345,20 @@ export default function EventDetail() {
                     </Dialog>
                   </>
                 ) : (
-                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setJustRegistered(false); }}>
                     <DialogTrigger asChild>
                       <Button size="default" className="rounded-xl gap-2" data-testid="button-im-vending">
                         <Package className="w-4 h-4" />I'm Vending Here
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md rounded-2xl">
-                      <DialogHeader><DialogTitle className="text-2xl font-display">What are you bringing?</DialogTitle></DialogHeader>
+                      <DialogHeader><DialogTitle className="text-2xl font-display">{justRegistered ? "You're registered!" : "What are you bringing?"}</DialogTitle></DialogHeader>
+                      {justRegistered && (
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-300">
+                          <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>Your spot is confirmed. Now set up your listing so attendees know what you're bringing!</span>
+                        </div>
+                      )}
                       <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-4">
                           <FormField control={form.control} name="itemsDescription" render={({ field }) => (
@@ -456,7 +472,16 @@ export default function EventDetail() {
                           disabled={isRegistering || (hasEventMap && availableSpots.length > 0 && !selectedSpot)}
                           onClick={() => {
                             registerSpace({ spotId: selectedSpot?.id, spotName: selectedSpot?.name }, {
-                              onSuccess: () => { setRegisterDialogOpen(false); setSelectedSpot(null); }
+                              onSuccess: (data: any) => {
+                                setRegisterDialogOpen(false);
+                                setSelectedSpot(null);
+                                if (data?.checkoutUrl) {
+                                  window.location.href = data.checkoutUrl;
+                                } else {
+                                  setJustRegistered(true);
+                                  setIsDialogOpen(true);
+                                }
+                              }
                             });
                           }}
                           data-testid="button-confirm-registration"

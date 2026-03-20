@@ -530,7 +530,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               eventId: String(eventId),
               vendorId: userId,
             },
-            success_url: `${getHost(req)}/events/${eventId}?registered=1`,
+            success_url: `${getHost(req)}/events/${eventId}?setup_listing=1`,
             cancel_url: `${getHost(req)}/events/${eventId}`,
           });
           await storage.updateRegistrationStatus(reg.id, 'pending', session.id);

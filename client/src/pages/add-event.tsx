@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -20,6 +20,7 @@ const formSchema = z.object({
   areaCode: z.string().optional(),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
   vendorSpaces: z.coerce.number().min(0).default(0),
+  spotPrice: z.coerce.number().min(0).default(0),
   vendorRegistrationType: z.enum(["vendorgrid", "external"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -50,6 +51,7 @@ export default function AddEvent() {
       areaCode: profile?.areaCode || "",
       date: "",
       vendorSpaces: 0,
+      spotPrice: 0,
       vendorRegistrationType: undefined,
       vendorRegistrationUrl: "",
     },
@@ -61,6 +63,7 @@ export default function AddEvent() {
     createEvent({
       ...data,
       date: new Date(data.date),
+      spotPrice: Math.round((data.spotPrice || 0) * 100),
       extraDates,
     }, {
       onSuccess: (event: any) => setLocation(`/events/${event.id}`)
@@ -192,6 +195,33 @@ export default function AddEvent() {
                       </div>
                     </button>
                   </div>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
+            {/* Spot Price — only if "vendorgrid" chosen */}
+            {isEventOwnerPro && registrationType === "vendorgrid" && (
+              <FormField control={form.control} name="spotPrice" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-primary" />Registration Fee per Space
+                  </FormLabel>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                    <FormControl>
+                      <Input
+                        data-testid="input-spot-price"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        className="h-14 rounded-xl text-base pl-8"
+                        {...field}
+                      />
+                    </FormControl>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Set to 0 for free registration. Vendors pay this when reserving their space.</p>
                   <FormMessage />
                 </FormItem>
               )} />
