@@ -359,6 +359,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = req.user.claims.sub;
       const profile = await storage.getUserProfile(userId);
       const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+      if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro subscription required to post a vendor listing." });
       const created = await storage.createVendorPost({ ...input, eventId, vendorId: userId, isVendorPro });
       const ev = await storage.getEvent(eventId);
       if (ev && (ev.vendorSpaces || 0) > 0) await storage.updateVendorSpacesUsed(eventId, 1);
@@ -386,8 +387,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { imageUrls } = req.body;
     if (!Array.isArray(imageUrls)) return res.status(400).json({ message: "imageUrls must be an array" });
     const profile = await storage.getUserProfile(userId);
-    const maxPhotos = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin ? 10 : 3;
-    const limited = (imageUrls as string[]).slice(0, maxPhotos);
+    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro subscription required to manage photos." });
+    const limited = (imageUrls as string[]).slice(0, 10);
     const updated = await storage.updateVendorPostImages(postId, userId, limited);
     res.json(updated);
   });
@@ -527,6 +529,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
 
+    const profile = await storage.getUserProfile(userId);
+    const isVendorProCheck = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    if (!isVendorProCheck) return res.status(403).json({ message: "Vendor Pro subscription required to register for vendor spaces." });
+
     const hasValidCode = !!(
       event.registrationCode &&
       registrationCode &&
@@ -536,8 +542,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (registrationCode && !hasValidCode) {
       return res.status(400).json({ message: "Invalid registration code. Please check with the event organizer." });
     }
-
-    const profile = await storage.getUserProfile(userId);
     const isPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     const spotPriceCents = hasValidCode ? 0 : (event.spotPrice || 0);
     const feeCents = (isPro || hasValidCode) ? 0 : Math.round(spotPriceCents * 0.005);
@@ -834,8 +838,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get(api.admin.getAnalytics.path, isAuthenticated, async (req: any, res) => {
-    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const requesterId = req.user.claims.sub;
     const { userId } = req.params;
+    const requesterProfile = await storage.getUserProfile(requesterId);
+    const isAdmin = requesterProfile?.isAdmin === true;
+    const isEventOwnerPro = requesterProfile?.subscriptionTier === 'event_owner_pro' && requesterProfile?.subscriptionStatus === 'active';
+    // Admins can view anyone's analytics; Event Owner Pro users can only view their own
+    if (!isAdmin && !(isEventOwnerPro && requesterId === userId)) {
+      return res.status(403).json({ message: "Event Owner Pro subscription required to view analytics." });
+    }
     const ownerEvents = await storage.getEventsByOwner(userId);
     if (ownerEvents.length === 0) return res.json({ vendors: [], repeatVendors: [], avgAttending: 0, avgInterested: 0 });
     const vendorCounts: Record<string, { count: number; name: string }> = {};
