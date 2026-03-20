@@ -130,6 +130,10 @@ export default function EventDetail() {
   const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
   const canManageEvent = isAdmin || (isOwner && isEventOwnerPro);
   const hasVendorSpaces = (event?.vendorSpaces || 0) > 0;
+  const regType = (event as any)?.vendorRegistrationType as string | null;
+  const regUrl = (event as any)?.vendorRegistrationUrl as string | null;
+  const isVendorGridReg = regType === 'vendorgrid';
+  const isExternalReg = regType === 'external' && !!regUrl;
   const spotPrice = event?.spotPrice || 0;
   const spotPriceDollars = (spotPrice / 100).toFixed(2);
   const platformFee = isVendorPro ? 0 : Math.round(spotPrice * 0.005);
@@ -417,66 +421,244 @@ export default function EventDetail() {
                 </Dialog>
               )}
 
-              {/* Vendor Pro upsell for free vendor accounts */}
-              {isVendor && !isVendorPro && !isAdmin && (
+              {/* ===== VENDOR REGISTRATION ===== */}
+
+              {/* Upsell for non-pro users */}
+              {!isVendorPro && !isAdmin && !isOwner && (
                 <Button
                   size="default"
                   variant="outline"
                   className="rounded-xl gap-2 border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                   onClick={() => window.location.href = "/upgrade"}
-                  data-testid="button-upgrade-to-vend"
+                  data-testid="button-upgrade-for-registration"
                 >
-                  <Crown className="w-4 h-4" />Upgrade to Vend Here
+                  <Crown className="w-4 h-4" />Upgrade to Register
                 </Button>
               )}
 
-              {/* I'm Vending Here / Unregister Post */}
-              {(isVendorPro || isAdmin) && (
-                myPost ? (
-                  <>
+              {/* Pro vendor / admin flow */}
+              {(isVendorPro || isAdmin) && !isOwner && (
+                <>
+                  {/* Remove Listing — when vendor has a listing */}
+                  {myPost && (
+                    <>
+                      <Button
+                        size="default"
+                        variant="outline"
+                        className="rounded-xl gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
+                        onClick={() => setUnregisterPostDialogOpen(true)}
+                        disabled={isDeleting}
+                        data-testid="button-unregister-post"
+                      >
+                        <X className="w-4 h-4" />Remove Listing
+                      </Button>
+                      <Dialog open={unregisterPostDialogOpen} onOpenChange={setUnregisterPostDialogOpen}>
+                        <DialogContent className="sm:max-w-md rounded-2xl">
+                          <DialogHeader><DialogTitle className="text-xl font-display flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" />Remove your vendor listing?</DialogTitle></DialogHeader>
+                          <p className="text-muted-foreground text-sm">This will remove your vendor listing from this event. You can re-register anytime.</p>
+                          <div className="flex gap-3 mt-2">
+                            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setUnregisterPostDialogOpen(false)}>Keep Listing</Button>
+                            <Button
+                              variant="destructive"
+                              className="flex-1 rounded-xl"
+                              disabled={isDeleting}
+                              onClick={() => deletePost(myPost.id, { onSuccess: () => setUnregisterPostDialogOpen(false) })}
+                              data-testid="button-confirm-unregister-post"
+                            >
+                              {isDeleting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Removing...</> : "Yes, Remove"}
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </>
+                  )}
+
+                  {/* Cancel Space — when vendor has a space registration */}
+                  {alreadyRegistered && (
+                    <>
+                      <Button
+                        size="default"
+                        variant="outline"
+                        className="rounded-xl gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
+                        onClick={() => setUnregisterDialogOpen(true)}
+                        disabled={isUnregistering}
+                        data-testid="button-unregister-space"
+                      >
+                        <X className="w-4 h-4" />Cancel Space
+                      </Button>
+                      <Dialog open={unregisterDialogOpen} onOpenChange={setUnregisterDialogOpen}>
+                        <DialogContent className="sm:max-w-md rounded-2xl">
+                          <DialogHeader><DialogTitle className="text-xl font-display flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" />Cancel space registration?</DialogTitle></DialogHeader>
+                          <p className="text-muted-foreground text-sm">This will cancel your vendor space registration. Refunds (if applicable) are handled by the event organizer.</p>
+                          <div className="flex gap-3 mt-2">
+                            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setUnregisterDialogOpen(false)}>Keep My Space</Button>
+                            <Button
+                              variant="destructive"
+                              className="flex-1 rounded-xl"
+                              disabled={isUnregistering}
+                              onClick={() => unregisterSpace(undefined, { onSuccess: () => setUnregisterDialogOpen(false) })}
+                              data-testid="button-confirm-unregister-space"
+                            >
+                              {isUnregistering ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Canceling...</> : "Yes, Cancel"}
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </>
+                  )}
+
+                  {/* Vendor Registration — main CTA when not yet space-registered */}
+                  {!alreadyRegistered && (
+                    isVendorGridReg ? (
+                      vendorSpacesLeft > 0 ? (
+                        <Button
+                          size="default"
+                          className="rounded-xl gap-2"
+                          onClick={() => setRegisterDialogOpen(true)}
+                          data-testid="button-vendor-registration"
+                        >
+                          <ShieldCheck className="w-4 h-4" />Vendor Registration
+                        </Button>
+                      ) : (
+                        <Button size="default" variant="outline" disabled className="rounded-xl gap-2 opacity-60" data-testid="button-no-spaces-left">
+                          <ShieldCheck className="w-4 h-4" />No Spaces Left
+                        </Button>
+                      )
+                    ) : isExternalReg ? (
+                      <Button
+                        size="default"
+                        className="rounded-xl gap-2"
+                        onClick={() => window.open(regUrl!, '_blank')}
+                        data-testid="button-vendor-registration-external"
+                      >
+                        <ExternalLink className="w-4 h-4" />Vendor Registration
+                      </Button>
+                    ) : (
+                      <Button
+                        size="default"
+                        className="rounded-xl gap-2"
+                        onClick={() => setIsDialogOpen(true)}
+                        data-testid="button-vendor-registration"
+                      >
+                        <Package className="w-4 h-4" />Vendor Registration
+                      </Button>
+                    )
+                  )}
+
+                  {/* Set Up Your Listing — space registered but no listing yet */}
+                  {alreadyRegistered && !myPost && (
                     <Button
                       size="default"
                       variant="outline"
-                      className="rounded-xl gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
-                      onClick={() => setUnregisterPostDialogOpen(true)}
-                      disabled={isDeleting}
-                      data-testid="button-unregister-post"
+                      className="rounded-xl gap-2"
+                      onClick={() => setIsDialogOpen(true)}
+                      data-testid="button-setup-listing"
                     >
-                      <X className="w-4 h-4" />Unregister
+                      <Package className="w-4 h-4" />Set Up Your Listing
                     </Button>
-                    {/* Unregister Post Confirmation */}
-                    <Dialog open={unregisterPostDialogOpen} onOpenChange={setUnregisterPostDialogOpen}>
-                      <DialogContent className="sm:max-w-md rounded-2xl">
-                        <DialogHeader><DialogTitle className="text-xl font-display flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" />Unregister from this event?</DialogTitle></DialogHeader>
-                        <p className="text-muted-foreground text-sm">This will remove your vendor listing from this event. You can re-register anytime.</p>
-                        <div className="flex gap-3 mt-2">
-                          <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setUnregisterPostDialogOpen(false)}>Cancel</Button>
-                          <Button
-                            variant="destructive"
-                            className="flex-1 rounded-xl"
-                            disabled={isDeleting}
-                            onClick={() => deletePost(myPost.id, { onSuccess: () => setUnregisterPostDialogOpen(false) })}
-                            data-testid="button-confirm-unregister-post"
-                          >
-                            {isDeleting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Removing...</> : "Yes, Unregister"}
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </>
-                ) : (
-                  <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setJustRegistered(false); }}>
-                    <DialogTrigger asChild>
-                      <Button size="default" className="rounded-xl gap-2" data-testid="button-im-vending">
-                        <Package className="w-4 h-4" />I'm Vending Here
-                      </Button>
-                    </DialogTrigger>
+                  )}
+
+                  {/* Space Registration Dialog (VendorGrid) */}
+                  <Dialog open={registerDialogOpen} onOpenChange={(open) => { setRegisterDialogOpen(open); if (!open) { setShowCodeInput(false); setRegistrationCodeInput(""); setSelectedSpot(null); } }}>
                     <DialogContent className="sm:max-w-md rounded-2xl">
-                      <DialogHeader><DialogTitle className="text-2xl font-display">{justRegistered ? "You're registered!" : "What are you bringing?"}</DialogTitle></DialogHeader>
+                      <DialogHeader>
+                        <DialogTitle className="text-2xl font-display">Vendor Registration</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 mt-2">
+                        {spotPrice > 0 ? (
+                          <div className="p-4 bg-muted/50 rounded-xl space-y-2 text-sm">
+                            <div className="flex justify-between"><span>Space fee:</span><strong>${spotPriceDollars}</strong></div>
+                            <div className="flex justify-between font-bold border-t border-border/50 pt-2"><span>Total due:</span><strong>${spotPriceDollars}</strong></div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-300">
+                            <CheckCircle className="w-4 h-4 shrink-0" />Free space registration
+                          </div>
+                        )}
+
+                        {hasEventMap && availableSpots.length > 0 && (
+                          <div>
+                            <label className="text-sm font-semibold mb-2 block">Choose a spot</label>
+                            <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                              {availableSpots.map((spot: any) => (
+                                <button
+                                  key={spot.id}
+                                  onClick={() => setSelectedSpot(spot)}
+                                  className={`p-2 text-xs rounded-xl border-2 transition-all ${selectedSpot?.id === spot.id ? 'border-primary bg-primary/10 font-bold' : 'border-border hover:border-primary/50'}`}
+                                  data-testid={`spot-${spot.id}`}
+                                >
+                                  {spot.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {!hasEventMap && (
+                          <p className="text-sm text-muted-foreground">You'll be assigned a space by the event organizer after registering.</p>
+                        )}
+
+                        {/* Code entry for vendors who paid the organizer directly */}
+                        {spotPrice > 0 && (
+                          <div>
+                            <button
+                              type="button"
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                              data-testid="button-toggle-code-input"
+                              onClick={() => { setShowCodeInput(v => !v); setRegistrationCodeInput(""); }}
+                            >
+                              <Key className="w-3 h-3" />
+                              {showCodeInput ? "Never mind, I'll pay online" : "I have a registration code"}
+                            </button>
+                            {showCodeInput && (
+                              <div className="mt-2">
+                                <Input
+                                  data-testid="input-vendor-registration-code"
+                                  placeholder="Enter code provided by organizer"
+                                  className="rounded-xl uppercase tracking-widest font-mono"
+                                  value={registrationCodeInput}
+                                  onChange={e => setRegistrationCodeInput(e.target.value.toUpperCase())}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <Button
+                          className="w-full h-12 rounded-xl"
+                          disabled={isRegistering || (hasEventMap && availableSpots.length > 0 && !selectedSpot)}
+                          onClick={() => {
+                            const code = showCodeInput && registrationCodeInput.trim() ? registrationCodeInput.trim() : undefined;
+                            registerSpace({ spotId: selectedSpot?.id, spotName: selectedSpot?.name, registrationCode: code }, {
+                              onSuccess: (data: any) => {
+                                setRegisterDialogOpen(false);
+                                setSelectedSpot(null);
+                                setShowCodeInput(false);
+                                setRegistrationCodeInput("");
+                                if (data?.checkoutUrl) {
+                                  window.location.href = data.checkoutUrl;
+                                } else {
+                                  setJustRegistered(true);
+                                  setIsDialogOpen(true);
+                                }
+                              }
+                            });
+                          }}
+                          data-testid="button-confirm-registration"
+                        >
+                          {isRegistering ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Registering...</> : (spotPrice > 0 && !(showCodeInput && registrationCodeInput.trim())) ? "Reserve & Pay" : "Register"}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Listing form dialog (controlled) */}
+                  <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setJustRegistered(false); }}>
+                    <DialogContent className="sm:max-w-md rounded-2xl">
+                      <DialogHeader><DialogTitle className="text-2xl font-display">{justRegistered ? "Space Reserved!" : "Set Up Your Vendor Listing"}</DialogTitle></DialogHeader>
                       {justRegistered && (
                         <div className="flex items-start gap-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-300">
                           <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                          <span>Your spot is confirmed. Now set up your listing so attendees know what you're bringing!</span>
+                          <span>Your space is confirmed! Now let the community know what you're bringing.</span>
                         </div>
                       )}
                       <Form {...form}>
@@ -502,155 +684,7 @@ export default function EventDetail() {
                       </Form>
                     </DialogContent>
                   </Dialog>
-                )
-              )}
-
-              {/* Vendor Space Registration / Unregister */}
-              {hasVendorSpaces && !isOwner && !isEventOwner && !isVendorPro && !isAdmin && (
-                <Button
-                  size="default"
-                  variant="outline"
-                  className="rounded-xl gap-2 border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                  onClick={() => window.location.href = "/upgrade"}
-                  data-testid="button-upgrade-for-space"
-                >
-                  <Crown className="w-4 h-4" />Upgrade to Register for a Space
-                </Button>
-              )}
-
-              {hasVendorSpaces && !isOwner && !isEventOwner && (isVendorPro || isAdmin) && (
-                alreadyRegistered ? (
-                  <>
-                    <Button
-                      size="default"
-                      variant="outline"
-                      className="rounded-xl gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
-                      onClick={() => setUnregisterDialogOpen(true)}
-                      disabled={isUnregistering}
-                      data-testid="button-unregister-space"
-                    >
-                      <X className="w-4 h-4" />Cancel Space
-                    </Button>
-                    <Dialog open={unregisterDialogOpen} onOpenChange={setUnregisterDialogOpen}>
-                      <DialogContent className="sm:max-w-md rounded-2xl">
-                        <DialogHeader><DialogTitle className="text-xl font-display flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" />Cancel space registration?</DialogTitle></DialogHeader>
-                        <p className="text-muted-foreground text-sm">This will cancel your vendor space registration for this event. Refunds (if applicable) are handled by the event organizer.</p>
-                        <div className="flex gap-3 mt-2">
-                          <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setUnregisterDialogOpen(false)}>Keep My Space</Button>
-                          <Button
-                            variant="destructive"
-                            className="flex-1 rounded-xl"
-                            disabled={isUnregistering}
-                            onClick={() => unregisterSpace(undefined, { onSuccess: () => setUnregisterDialogOpen(false) })}
-                            data-testid="button-confirm-unregister-space"
-                          >
-                            {isUnregistering ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Canceling...</> : "Yes, Cancel"}
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </>
-                ) : vendorSpacesLeft > 0 ? (
-                  <Dialog open={registerDialogOpen} onOpenChange={(open) => { setRegisterDialogOpen(open); if (!open) { setShowCodeInput(false); setRegistrationCodeInput(""); } }}>
-                    <DialogTrigger asChild>
-                      <Button
-                        size="default"
-                        className="rounded-xl gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 border-0 text-white"
-                        data-testid="button-register-space"
-                      >
-                        <ShieldCheck className="w-4 h-4" />Register for Space
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md rounded-2xl">
-                      <DialogHeader>
-                        <DialogTitle className="text-2xl font-display">Register for Vendor Space</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 mt-2">
-                        <div className="p-4 bg-muted/50 rounded-xl space-y-2 text-sm">
-                          <div className="flex justify-between"><span>Space price:</span><strong>${spotPriceDollars}</strong></div>
-                          <div className="flex justify-between font-bold border-t border-border/50 pt-2"><span>Total:</span><strong>${spotPriceDollars}</strong></div>
-                        </div>
-
-                        {hasEventMap && availableSpots.length > 0 && (
-                          <div>
-                            <label className="text-sm font-semibold mb-2 block">Select a spot</label>
-                            <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-                              {availableSpots.map((spot: any) => (
-                                <button
-                                  key={spot.id}
-                                  onClick={() => setSelectedSpot(spot)}
-                                  className={`p-2 text-xs rounded-xl border-2 transition-all ${selectedSpot?.id === spot.id ? 'border-primary bg-primary/10 font-bold' : 'border-border hover:border-primary/50'}`}
-                                  data-testid={`spot-${spot.id}`}
-                                >
-                                  {spot.name}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {!hasEventMap && (
-                          <p className="text-sm text-muted-foreground">You'll be assigned a space by the event organizer.</p>
-                        )}
-
-                        {/* Registration code input (for vendors who paid outside VendorGrid) */}
-                        {spotPrice > 0 && (
-                          <div>
-                            <button
-                              type="button"
-                              className="text-xs text-primary hover:underline flex items-center gap-1"
-                              data-testid="button-toggle-code-input"
-                              onClick={() => { setShowCodeInput(v => !v); setRegistrationCodeInput(""); }}
-                            >
-                              <Key className="w-3 h-3" />
-                              {showCodeInput ? "Never mind, I'll pay online" : "I have a registration code"}
-                            </button>
-                            {showCodeInput && (
-                              <div className="mt-2">
-                                <Input
-                                  data-testid="input-vendor-registration-code"
-                                  placeholder="Enter code (e.g. MARKET2026)"
-                                  className="rounded-xl uppercase tracking-widest font-mono"
-                                  value={registrationCodeInput}
-                                  onChange={e => setRegistrationCodeInput(e.target.value.toUpperCase())}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <Button
-                          className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 border-0 text-white"
-                          disabled={isRegistering || (hasEventMap && availableSpots.length > 0 && !selectedSpot)}
-                          onClick={() => {
-                            const code = showCodeInput && registrationCodeInput.trim() ? registrationCodeInput.trim() : undefined;
-                            registerSpace({ spotId: selectedSpot?.id, spotName: selectedSpot?.name, registrationCode: code }, {
-                              onSuccess: (data: any) => {
-                                setRegisterDialogOpen(false);
-                                setSelectedSpot(null);
-                                setShowCodeInput(false);
-                                setRegistrationCodeInput("");
-                                if (data?.checkoutUrl) {
-                                  window.location.href = data.checkoutUrl;
-                                } else {
-                                  setJustRegistered(true);
-                                  setIsDialogOpen(true);
-                                }
-                              }
-                            });
-                          }}
-                          data-testid="button-confirm-registration"
-                        >
-                          {isRegistering ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Registering...</> : (spotPrice > 0 && !(showCodeInput && registrationCodeInput.trim())) ? "Reserve & Pay" : "Register (Free)"}
-                        </Button>
-                        {!isAuthenticated && <p className="text-xs text-center text-muted-foreground">Please log in to register.</p>}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                ) : (
-                  <Button size="default" variant="outline" disabled className="rounded-xl gap-2 opacity-60">
-                    <ShieldCheck className="w-4 h-4" />No Spaces Left
-                  </Button>
-                )
+                </>
               )}
             </div>
           ) : (
