@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Store, Package, Users, ArrowRight, Loader2 } from "lucide-react";
+import { Store, Package, Users, ArrowRight, Loader2, Crown } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const TYPES = [
@@ -15,6 +15,7 @@ const TYPES = [
     label: "Event Owner",
     desc: "I organize and host local markets, craft fairs, and pop-up events.",
     color: "from-primary to-amber-500",
+    requiresPro: false,
   },
   {
     value: "vendor",
@@ -22,6 +23,7 @@ const TYPES = [
     label: "Vendor",
     desc: "I sell products, crafts, or food at local markets and events.",
     color: "from-blue-500 to-cyan-500",
+    requiresPro: true,
   },
   {
     value: "general",
@@ -29,6 +31,7 @@ const TYPES = [
     label: "Community Member",
     desc: "I attend local markets to discover products and support artisans.",
     color: "from-purple-500 to-pink-500",
+    requiresPro: false,
   },
 ];
 
@@ -93,7 +96,7 @@ export default function SetupPage() {
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-center text-foreground mb-6">What best describes you?</h2>
-            {TYPES.map(({ value, icon: Icon, label, desc, color }) => (
+            {TYPES.map(({ value, icon: Icon, label, desc, color, requiresPro }) => (
               <button
                 key={value}
                 data-testid={`type-${value}`}
@@ -106,7 +109,14 @@ export default function SetupPage() {
                   <Icon className="w-7 h-7" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-lg font-bold text-foreground">{label}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-lg font-bold text-foreground">{label}</p>
+                    {requiresPro && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                        <Crown className="w-3 h-3" />Vendor Pro
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground mt-1">{desc}</p>
                 </div>
                 {profileType === value && (
@@ -119,10 +129,20 @@ export default function SetupPage() {
             <Button
               className="w-full h-14 text-base rounded-2xl mt-6 bg-gradient-to-r from-primary to-amber-500"
               disabled={!profileType}
-              onClick={() => setStep(2)}
+              onClick={() => {
+                if (profileType === "vendor") {
+                  setLocation("/upgrade");
+                } else {
+                  setStep(2);
+                }
+              }}
               data-testid="button-next"
             >
-              Continue <ArrowRight className="ml-2 w-5 h-5" />
+              {profileType === "vendor" ? (
+                <><Crown className="mr-2 w-5 h-5" />Subscribe to Get Started</>
+              ) : (
+                <>Continue <ArrowRight className="ml-2 w-5 h-5" /></>
+              )}
             </Button>
           </div>
         )}

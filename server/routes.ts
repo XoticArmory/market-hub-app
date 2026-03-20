@@ -121,6 +121,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = req.user.claims.sub;
       const input = api.profile.upsert.input.parse(req.body);
+      // Vendor profile type requires an active Vendor Pro subscription
+      if (input.profileType === 'vendor') {
+        const existing = await storage.getUserProfile(userId);
+        const isAdmin = existing?.isAdmin === true;
+        const isVendorPro = existing?.subscriptionTier === 'vendor_pro' && existing?.subscriptionStatus === 'active';
+        if (!isAdmin && !isVendorPro) {
+          return res.status(403).json({ message: "Vendor Pro subscription required to use a vendor account." });
+        }
+      }
       const profile = await storage.upsertUserProfile(userId, input);
       res.json(profile);
     } catch (e) {
