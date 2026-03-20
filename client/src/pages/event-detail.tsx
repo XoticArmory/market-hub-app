@@ -224,7 +224,7 @@ export default function EventDetail() {
             <button
               onClick={() => bannerInputRef.current?.click()}
               disabled={bannerUploading || updateBanner.isPending}
-              className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-opacity backdrop-blur disabled:opacity-50"
+              className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-opacity backdrop-blur disabled:opacity-50"
               data-testid="button-change-banner"
             >
               {bannerUploading || updateBanner.isPending ? (
