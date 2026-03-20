@@ -43,13 +43,14 @@ These terms are governed by the laws of the jurisdiction in which the platform i
 By clicking "Accept & Subscribe", you confirm you have read, understood, and agree to these terms.`;
 
 const VENDOR_PRO_FEATURES = [
-  "Find events in your area",
-  "Register with events to show your attendance",
-  "Post up to 10 product photos per event",
+  "Post a vendor card at events to showcase what you're bringing",
+  "Upload up to 10 product photos per event",
+  "Register for vendor spaces at events — no platform fees",
   "Communicate directly with event owners",
   "Receive notifications of events in your area",
   "Register for notifications in multiple areas",
-  "View analytics such as inventory trackers and events you're attending",
+  "Track inventory brought and sold at each event",
+  "Crown badge displayed on your vendor card",
   "Link your personal or business website to drive traffic",
 ];
 

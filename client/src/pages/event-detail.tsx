@@ -415,8 +415,21 @@ export default function EventDetail() {
                 </Dialog>
               )}
 
+              {/* Vendor Pro upsell for free vendor accounts */}
+              {isVendor && !isVendorPro && !isAdmin && (
+                <Button
+                  size="default"
+                  variant="outline"
+                  className="rounded-xl gap-2 border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                  onClick={() => window.location.href = "/upgrade"}
+                  data-testid="button-upgrade-to-vend"
+                >
+                  <Crown className="w-4 h-4" />Upgrade to Vend Here
+                </Button>
+              )}
+
               {/* I'm Vending Here / Unregister Post */}
-              {(isVendor || isVendorPro || isAdmin || (!isEventOwner && !isOwner)) && (
+              {(isVendorPro || isAdmin) && (
                 myPost ? (
                   <>
                     <Button
@@ -491,7 +504,19 @@ export default function EventDetail() {
               )}
 
               {/* Vendor Space Registration / Unregister */}
-              {hasVendorSpaces && !isOwner && !isEventOwner && (
+              {hasVendorSpaces && !isOwner && !isEventOwner && !isVendorPro && !isAdmin && (
+                <Button
+                  size="default"
+                  variant="outline"
+                  className="rounded-xl gap-2 border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                  onClick={() => window.location.href = "/upgrade"}
+                  data-testid="button-upgrade-for-space"
+                >
+                  <Crown className="w-4 h-4" />Upgrade to Register for a Space
+                </Button>
+              )}
+
+              {hasVendorSpaces && !isOwner && !isEventOwner && (isVendorPro || isAdmin) && (
                 alreadyRegistered ? (
                   <>
                     <Button
@@ -539,16 +564,9 @@ export default function EventDetail() {
                         <DialogTitle className="text-2xl font-display">Register for Vendor Space</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 mt-2">
-                        {isVendorPro && (
-                          <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300">
-                            <ShieldCheck className="w-4 h-4 shrink-0" />
-                            <span>Vendor Pro — no platform fees applied!</span>
-                          </div>
-                        )}
                         <div className="p-4 bg-muted/50 rounded-xl space-y-2 text-sm">
                           <div className="flex justify-between"><span>Space price:</span><strong>${spotPriceDollars}</strong></div>
-                          {!isVendorPro && platformFee > 0 && <div className="flex justify-between text-amber-600"><span>Platform fee (0.5%):</span><strong>${platformFeeDollars}</strong></div>}
-                          <div className="flex justify-between font-bold border-t border-border/50 pt-2"><span>Total:</span><strong>${isVendorPro ? spotPriceDollars : totalDollars}</strong></div>
+                          <div className="flex justify-between font-bold border-t border-border/50 pt-2"><span>Total:</span><strong>${spotPriceDollars}</strong></div>
                         </div>
 
                         {hasEventMap && availableSpots.length > 0 && (
@@ -776,7 +794,7 @@ export default function EventDetail() {
                             <PlusCircle className="w-3.5 h-3.5" />Add Photo
                           </Button>
                         )}
-                        <span className="text-xs text-muted-foreground">{allImages.length}/{maxPhotos} photos{isVendorPro ? '' : ' (upgrade to Vendor Pro for up to 10)'}</span>
+                        <span className="text-xs text-muted-foreground">{allImages.length}/{maxPhotos} photos</span>
                       </div>
                     )}
                   </div>
@@ -858,7 +876,7 @@ export default function EventDetail() {
       <Dialog open={addPhotoDialogOpen} onOpenChange={open => { setAddPhotoDialogOpen(open); if (!open) setAddPhotoUrl(""); }}>
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader><DialogTitle className="text-xl font-display">Add a Photo</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">{allImages_count()} of {maxPhotos} photos used{isVendorPro ? '' : ' — upgrade to Vendor Pro for up to 10'}.</p>
+          <p className="text-sm text-muted-foreground">{allImages_count()} of {maxPhotos} photos used.</p>
           <div className="space-y-3 mt-2">
             <ImageUpload
               value={addPhotoUrl}
