@@ -7,7 +7,7 @@ import { useProfile } from "@/hooks/use-profile";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -62,6 +62,9 @@ export default function EventDetail() {
   const [addPhotoDialogOpen, setAddPhotoDialogOpen] = useState(false);
   const [addPhotoUrl, setAddPhotoUrl] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<any>(null);
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [registrationCodeInput, setRegistrationCodeInput] = useState("");
+  const [codeCopied, setCodeCopied] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -216,6 +219,32 @@ export default function EventDetail() {
               </div>
             )}
           </div>
+
+          {/* Owner-only: Registration Code display */}
+          {isOwner && (event as any).registrationCode && (
+            <div className="mt-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-2 flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5" />Offline Registration Code
+              </p>
+              <div className="flex items-center gap-3">
+                <code className="flex-1 font-mono font-bold text-lg text-amber-900 dark:text-amber-100 tracking-widest">{(event as any).registrationCode}</code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300"
+                  data-testid="button-copy-registration-code"
+                  onClick={() => {
+                    navigator.clipboard.writeText((event as any).registrationCode);
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  }}
+                >
+                  {codeCopied ? <><CheckCircle className="w-3.5 h-3.5 mr-1" />Copied!</> : <><Copy className="w-3.5 h-3.5 mr-1" />Copy</>}
+                </Button>
+              </div>
+              <p className="text-xs text-amber-700/70 dark:text-amber-300/70 mt-2">Share with vendors who paid outside VendorGrid. They enter this code to register for free.</p>
+            </div>
+          )}
 
           {(event.extraDates || []).length > 0 && (
             <div className="mb-6">
@@ -419,7 +448,7 @@ export default function EventDetail() {
                     </Dialog>
                   </>
                 ) : vendorSpacesLeft > 0 ? (
-                  <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
+                  <Dialog open={registerDialogOpen} onOpenChange={(open) => { setRegisterDialogOpen(open); if (!open) { setShowCodeInput(false); setRegistrationCodeInput(""); } }}>
                     <DialogTrigger asChild>
                       <Button
                         size="default"
@@ -467,14 +496,43 @@ export default function EventDetail() {
                           <p className="text-sm text-muted-foreground">You'll be assigned a space by the event organizer.</p>
                         )}
 
+                        {/* Registration code input (for vendors who paid outside VendorGrid) */}
+                        {spotPrice > 0 && (
+                          <div>
+                            <button
+                              type="button"
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                              data-testid="button-toggle-code-input"
+                              onClick={() => { setShowCodeInput(v => !v); setRegistrationCodeInput(""); }}
+                            >
+                              <Key className="w-3 h-3" />
+                              {showCodeInput ? "Never mind, I'll pay online" : "I have a registration code"}
+                            </button>
+                            {showCodeInput && (
+                              <div className="mt-2">
+                                <Input
+                                  data-testid="input-vendor-registration-code"
+                                  placeholder="Enter code (e.g. MARKET2026)"
+                                  className="rounded-xl uppercase tracking-widest font-mono"
+                                  value={registrationCodeInput}
+                                  onChange={e => setRegistrationCodeInput(e.target.value.toUpperCase())}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <Button
                           className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 border-0 text-white"
                           disabled={isRegistering || (hasEventMap && availableSpots.length > 0 && !selectedSpot)}
                           onClick={() => {
-                            registerSpace({ spotId: selectedSpot?.id, spotName: selectedSpot?.name }, {
+                            const code = showCodeInput && registrationCodeInput.trim() ? registrationCodeInput.trim() : undefined;
+                            registerSpace({ spotId: selectedSpot?.id, spotName: selectedSpot?.name, registrationCode: code }, {
                               onSuccess: (data: any) => {
                                 setRegisterDialogOpen(false);
                                 setSelectedSpot(null);
+                                setShowCodeInput(false);
+                                setRegistrationCodeInput("");
                                 if (data?.checkoutUrl) {
                                   window.location.href = data.checkoutUrl;
                                 } else {
@@ -486,7 +544,7 @@ export default function EventDetail() {
                           }}
                           data-testid="button-confirm-registration"
                         >
-                          {isRegistering ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Registering...</> : spotPrice > 0 ? "Reserve & Pay" : "Register (Free)"}
+                          {isRegistering ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Registering...</> : (spotPrice > 0 && !(showCodeInput && registrationCodeInput.trim())) ? "Reserve & Pay" : "Register (Free)"}
                         </Button>
                         {!isAuthenticated && <p className="text-xs text-center text-muted-foreground">Please log in to register.</p>}
                       </div>

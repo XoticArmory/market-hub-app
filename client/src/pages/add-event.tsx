@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -21,6 +21,7 @@ const formSchema = z.object({
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
   vendorSpaces: z.coerce.number().min(0).default(0),
   spotPrice: z.coerce.number().min(0).default(0),
+  registrationCode: z.string().optional(),
   vendorRegistrationType: z.enum(["vendorgrid", "external"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -52,6 +53,7 @@ export default function AddEvent() {
       date: "",
       vendorSpaces: 0,
       spotPrice: 0,
+      registrationCode: "",
       vendorRegistrationType: undefined,
       vendorRegistrationUrl: "",
     },
@@ -222,6 +224,28 @@ export default function AddEvent() {
                     </FormControl>
                   </div>
                   <p className="text-xs text-muted-foreground">Set to 0 for free registration. Vendors pay this when reserving their space.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
+            {/* Registration Code — only if "vendorgrid" chosen */}
+            {isEventOwnerPro && registrationType === "vendorgrid" && (
+              <FormField control={form.control} name="registrationCode" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2">
+                    <Key className="w-4 h-4 text-primary" />Offline Registration Code <span className="text-muted-foreground font-normal">(Optional)</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      data-testid="input-registration-code"
+                      placeholder="e.g. MARKET2026"
+                      className="h-14 rounded-xl text-base uppercase"
+                      {...field}
+                      onChange={e => field.onChange(e.target.value.toUpperCase())}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Share this code with vendors who paid outside VendorGrid so they can register for free.</p>
                   <FormMessage />
                 </FormItem>
               )} />

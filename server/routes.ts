@@ -166,7 +166,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
       const isCreatorProOrAdmin = isFeatured || creatorProfile?.isAdmin === true;
       const creatorWebsiteUrl = isCreatorProOrAdmin ? (creatorProfile?.websiteUrl || null) : null;
-      return { ...e, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
+      const { registrationCode: _rc, ...eventPublic } = e;
+      return { ...eventPublic, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
     }));
     // Sort: featured (pro) events in the area at top, then by date
     enriched.sort((a, b) => {
@@ -200,7 +201,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
     const isCreatorProOrAdmin = isFeatured || creatorProfile?.isAdmin === true;
     const creatorWebsiteUrl = isCreatorProOrAdmin ? (creatorProfile?.websiteUrl || null) : null;
-    res.json({ ...event, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
+    const requesterId = req.user?.claims?.sub;
+    const isEventOwnerReq = requesterId === event.createdBy || (await storage.getUserProfile(requesterId || ''))?.isAdmin === true;
+    const { registrationCode: rawCode, ...eventWithoutCode } = event;
+    const responseEvent = isEventOwnerReq ? { ...event } : { ...eventWithoutCode };
+    res.json({ ...responseEvent, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
   });
 
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
@@ -487,13 +492,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.vendorRegistrations.create.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const eventId = Number(req.params.eventId);
-    const { spotId, spotName } = req.body;
+    const { spotId, spotName, registrationCode } = req.body;
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+
+    const hasValidCode = !!(
+      event.registrationCode &&
+      registrationCode &&
+      registrationCode.trim().toUpperCase() === event.registrationCode.trim().toUpperCase()
+    );
+
+    if (registrationCode && !hasValidCode) {
+      return res.status(400).json({ message: "Invalid registration code. Please check with the event organizer." });
+    }
+
     const profile = await storage.getUserProfile(userId);
     const isPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
-    const spotPriceCents = event.spotPrice || 0;
-    const feeCents = isPro ? 0 : Math.round(spotPriceCents * 0.005);
+    const spotPriceCents = hasValidCode ? 0 : (event.spotPrice || 0);
+    const feeCents = (isPro || hasValidCode) ? 0 : Math.round(spotPriceCents * 0.005);
     const reg = await storage.createVendorRegistration({
       eventId,
       vendorId: userId,

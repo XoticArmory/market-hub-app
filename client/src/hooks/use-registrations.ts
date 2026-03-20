@@ -18,7 +18,7 @@ export function useRegisterVendorSpace(eventId: number) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (data: { spotId?: string; spotName?: string }) => {
+    mutationFn: async (data: { spotId?: string; spotName?: string; registrationCode?: string }) => {
       const res = await fetch(`/api/events/${eventId}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

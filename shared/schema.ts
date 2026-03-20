@@ -33,6 +33,7 @@ export const events = pgTable("events", {
   vendorSpaces: integer("vendor_spaces").default(0),
   vendorSpacesUsed: integer("vendor_spaces_used").default(0),
   spotPrice: integer("spot_price_cents").default(0),
+  registrationCode: text("registration_code"),
   vendorRegistrationType: text("vendor_registration_type"),
   vendorRegistrationUrl: text("vendor_registration_url"),
   createdBy: varchar("created_by").notNull().references(() => users.id),
