@@ -272,8 +272,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const eventId = Number(req.params.id);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
-    const isAdmin = await isAdminUser(userId);
+    const profile = await storage.getUserProfile(userId);
+    const isAdmin = profile?.isAdmin === true;
+    const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
+    if (!isEventOwnerPro && !isAdmin) return res.status(403).json({ message: "Event Owner Pro subscription required to cancel events." });
     if (event.canceledAt) return res.status(400).json({ message: "Event is already canceled" });
 
     await storage.cancelEvent(eventId);
