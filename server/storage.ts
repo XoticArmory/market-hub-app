@@ -29,6 +29,7 @@ export interface IStorage {
   createEvent(event: InsertEvent & { createdBy: string }): Promise<Event>;
   deleteEvent(id: number): Promise<void>;
   cancelEvent(id: number): Promise<void>;
+  updateEventBanner(id: number, bannerUrl: string | null): Promise<void>;
   updateVendorSpacesUsed(eventId: number, delta: number): Promise<void>;
 
   // Event Dates
@@ -186,6 +187,10 @@ export class DatabaseStorage implements IStorage {
 
   async cancelEvent(id: number): Promise<void> {
     await db.update(events).set({ canceledAt: new Date() }).where(eq(events.id, id));
+  }
+
+  async updateEventBanner(id: number, bannerUrl: string | null): Promise<void> {
+    await db.update(events).set({ bannerUrl }).where(eq(events.id, id));
   }
 
   async updateVendorSpacesUsed(eventId: number, delta: number): Promise<void> {

@@ -192,7 +192,7 @@ export default function Home() {
                       {/* Image — clickable link to event */}
                       <Link href={`/events/${event.id}`} className="block shrink-0">
                         <div className="h-48 bg-muted relative overflow-hidden">
-                          <img src={`https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <img src={(event as any).bannerUrl || `https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                           {event.canceledAt ? (
                             <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
                               CANCELED

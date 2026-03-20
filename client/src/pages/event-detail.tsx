@@ -7,7 +7,7 @@ import { useProfile } from "@/hooks/use-profile";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,13 +15,16 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EventMapEditor } from "@/components/EventMapEditor";
 import { ImageUpload } from "@/components/image-upload";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { api } from "@shared/routes";
 
 function normalizeUrl(url: string) {
   if (!url) return url;
@@ -65,6 +68,48 @@ export default function EventDetail() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [registrationCodeInput, setRegistrationCodeInput] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const updateBanner = useMutation({
+    mutationFn: async (bannerUrl: string | null) => {
+      const res = await fetch(`/api/events/${eventId}/banner`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ bannerUrl }),
+      });
+      if (!res.ok) throw new Error("Failed to update banner");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+      qc.invalidateQueries({ queryKey: [api.events.list.path] });
+      toast({ title: "Banner updated!" });
+    },
+    onError: () => toast({ title: "Failed to update banner.", variant: "destructive" }),
+  });
+
+  const handleBannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBannerUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+      updateBanner.mutate(url);
+    } catch {
+      toast({ title: "Upload failed.", variant: "destructive" });
+    } finally {
+      setBannerUploading(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -155,10 +200,41 @@ export default function EventDetail() {
         <ArrowLeft className="w-4 h-4" />Back to events
       </Link>
 
+      {/* Banner file input (hidden) */}
+      {(isOwner || isAdmin) && (
+        <input
+          ref={bannerInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleBannerFileChange}
+          data-testid="input-banner-file"
+        />
+      )}
+
       {/* Hero */}
       <div className="bg-card rounded-3xl overflow-hidden border border-border/50 shadow-lg mb-8">
-        <div className="h-48 md:h-64 bg-muted relative">
-          <img src={`https://images.unsplash.com/photo-1519999482648-25049ddd37b1?q=80&w=2000&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover" />
+        <div className="h-48 md:h-64 bg-muted relative group/banner">
+          <img
+            src={(event as any).bannerUrl || `https://images.unsplash.com/photo-1519999482648-25049ddd37b1?q=80&w=2000&auto=format&fit=crop&sig=${event.id}`}
+            alt={event.title}
+            className="w-full h-full object-cover"
+          />
+          {(isOwner || isAdmin) && (
+            <button
+              onClick={() => bannerInputRef.current?.click()}
+              disabled={bannerUploading || updateBanner.isPending}
+              className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium px-3 py-1.5 rounded-lg opacity-0 group-hover/banner:opacity-100 transition-opacity backdrop-blur disabled:opacity-50"
+              data-testid="button-change-banner"
+            >
+              {bannerUploading || updateBanner.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5" />
+              )}
+              {bannerUploading ? "Uploading…" : "Change banner"}
+            </button>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
           <div className="absolute bottom-6 left-6 md:left-10 text-white">
             {event.isFeatured && (

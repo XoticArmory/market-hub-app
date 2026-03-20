@@ -243,6 +243,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(204).end();
   });
 
+  app.patch('/api/events/:id/banner', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const isAdmin = await isAdminUser(userId);
+    if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
+    const { bannerUrl } = req.body;
+    await storage.updateEventBanner(eventId, bannerUrl || null);
+    res.json({ success: true });
+  });
+
   app.post('/api/events/:id/cancel', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const eventId = Number(req.params.id);
