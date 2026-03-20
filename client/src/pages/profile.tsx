@@ -114,6 +114,15 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
     },
   });
 
+  const logSale = useMutation({
+    mutationFn: ({ id, quantitySold }: { id: number; quantitySold: number }) =>
+      apiRequest("PATCH", `/api/vendor/inventory/${id}`, { quantitySold }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/analytics"] });
+    },
+  });
+
   // Catalog mutations
   const createCatalogItem = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/vendor/catalog", data),
@@ -428,28 +437,56 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
                   <tr className="border-b border-border">
                     <th className="text-left py-2 px-3 font-semibold text-muted-foreground">Item</th>
                     <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Brought</th>
-                    <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Sold</th>
+                    <th className="text-center py-2 px-3 font-semibold text-muted-foreground">Sold</th>
+                    <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Remaining</th>
                     <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Price</th>
                     <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Revenue</th>
                     <th className="py-2 px-3"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(inventory || []).map((item: any) => (
-                    <tr key={item.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors" data-testid={`inventory-item-${item.id}`}>
-                      <td className="py-3 px-3 font-medium">{item.itemName}</td>
-                      <td className="py-3 px-3 text-right">{item.quantityBrought}</td>
-                      <td className="py-3 px-3 text-right">{item.quantitySold}</td>
-                      <td className="py-3 px-3 text-right">${(item.priceCents / 100).toFixed(2)}</td>
-                      <td className="py-3 px-3 text-right text-green-600 font-semibold">${((item.quantitySold * item.priceCents) / 100).toFixed(2)}</td>
-                      <td className="py-3 px-3 text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(item)} data-testid={`button-edit-item-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteItem.mutate(item.id)} data-testid={`button-delete-item-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {(inventory || []).map((item: any) => {
+                    const remaining = Math.max(0, item.quantityBrought - item.quantitySold);
+                    const pct = item.quantityBrought > 0 ? remaining / item.quantityBrought : 0;
+                    const remainingColor = remaining === 0 ? "text-destructive font-bold" : pct <= 0.25 ? "text-amber-500 font-semibold" : "text-green-600 font-semibold";
+                    const isSaving = logSale.isPending;
+                    return (
+                      <tr key={item.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors" data-testid={`inventory-item-${item.id}`}>
+                        <td className="py-3 px-3 font-medium">{item.itemName}</td>
+                        <td className="py-3 px-3 text-right text-muted-foreground">{item.quantityBrought}</td>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              className="w-6 h-6 rounded-md bg-muted hover:bg-destructive/10 hover:text-destructive flex items-center justify-center text-muted-foreground transition-colors disabled:opacity-40"
+                              onClick={() => item.quantitySold > 0 && logSale.mutate({ id: item.id, quantitySold: item.quantitySold - 1 })}
+                              disabled={item.quantitySold <= 0 || isSaving}
+                              data-testid={`button-unsell-${item.id}`}
+                              title="Undo 1 sale"
+                            >−</button>
+                            <span className="w-8 text-center font-semibold tabular-nums" data-testid={`sold-count-${item.id}`}>{item.quantitySold}</span>
+                            <button
+                              className="w-6 h-6 rounded-md bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center font-bold transition-colors disabled:opacity-40"
+                              onClick={() => item.quantitySold < item.quantityBrought && logSale.mutate({ id: item.id, quantitySold: item.quantitySold + 1 })}
+                              disabled={item.quantitySold >= item.quantityBrought || isSaving}
+                              data-testid={`button-sell-${item.id}`}
+                              title="Log 1 sale"
+                            >+</button>
+                          </div>
+                        </td>
+                        <td className={`py-3 px-3 text-right ${remainingColor}`} data-testid={`remaining-${item.id}`}>
+                          {remaining === 0 ? "Sold out" : remaining}
+                        </td>
+                        <td className="py-3 px-3 text-right text-muted-foreground">${(item.priceCents / 100).toFixed(2)}</td>
+                        <td className="py-3 px-3 text-right text-green-600 font-semibold">${((item.quantitySold * item.priceCents) / 100).toFixed(2)}</td>
+                        <td className="py-3 px-3 text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(item)} data-testid={`button-edit-item-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteItem.mutate(item.id)} data-testid={`button-delete-item-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
