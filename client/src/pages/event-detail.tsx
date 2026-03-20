@@ -127,6 +127,8 @@ export default function EventDetail() {
   const isOwner = event?.createdBy === user?.id;
   const isVendorPro = (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active") || profile?.isAdmin === true;
   const isAdmin = profile?.isAdmin === true;
+  const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
+  const canEditBanner = isAdmin || (isOwner && isEventOwnerPro);
   const hasVendorSpaces = (event?.vendorSpaces || 0) > 0;
   const spotPrice = event?.spotPrice || 0;
   const spotPriceDollars = (spotPrice / 100).toFixed(2);
@@ -201,7 +203,7 @@ export default function EventDetail() {
       </Link>
 
       {/* Banner file input (hidden) */}
-      {(isOwner || isAdmin) && (
+      {canEditBanner && (
         <input
           ref={bannerInputRef}
           type="file"
@@ -220,7 +222,7 @@ export default function EventDetail() {
             alt={event.title}
             className="w-full h-full object-cover"
           />
-          {(isOwner || isAdmin) && (
+          {canEditBanner && (
             <button
               onClick={() => bannerInputRef.current?.click()}
               disabled={bannerUploading || updateBanner.isPending}
