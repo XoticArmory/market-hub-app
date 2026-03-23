@@ -27,6 +27,7 @@ import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
 import SetupPage from "@/pages/setup";
 import TourPage from "@/pages/tour";
+import AuthPage from "@/pages/auth";
 import UpgradePage from "@/pages/upgrade";
 import NotFound from "@/pages/not-found";
 
@@ -37,7 +38,7 @@ function OnboardingGuard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (location === "/tour" || location === "/setup" || location.startsWith("/api")) return;
+    if (location === "/tour" || location === "/setup" || location === "/auth" || location.startsWith("/api")) return;
     const profileLoaded = profileData !== undefined;
     if (!profileLoaded) return;
     const profile = profileData?.profile;
@@ -416,6 +417,7 @@ function Router() {
       <Route path="/chat" component={Chat} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/admin" component={AdminPage} />
+      <Route path="/auth" component={AuthPage} />
       <Route path="/tour" component={TourPage} />
       <Route path="/setup" component={SetupPage} />
       <Route path="/upgrade" component={UpgradePage} />

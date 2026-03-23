@@ -143,7 +143,7 @@ export function AppSidebar() {
             </button>
           </div>
         ) : (
-          <a href="/api/login" className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-all duration-200" data-testid="link-login">
+          <a href="/auth" className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-all duration-200" data-testid="link-login">
             <LogIn className="w-4 h-4" /><span>Sign In</span>
           </a>
         )}

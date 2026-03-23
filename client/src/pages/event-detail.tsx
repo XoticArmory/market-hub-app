@@ -678,7 +678,7 @@ export default function EventDetail() {
             </div>
           ) : (
             <Button asChild variant="outline" className="rounded-xl" data-testid="button-login-to-attend">
-              <a href="/api/login">Login to mark attendance</a>
+              <a href="/auth">Login to mark attendance</a>
             </Button>
           )}
         </div>
