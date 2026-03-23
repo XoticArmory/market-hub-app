@@ -26,6 +26,7 @@ import Chat from "@/pages/chat";
 import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
 import SetupPage from "@/pages/setup";
+import TourPage from "@/pages/tour";
 import UpgradePage from "@/pages/upgrade";
 import NotFound from "@/pages/not-found";
 
@@ -36,12 +37,18 @@ function OnboardingGuard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (location === "/setup" || location.startsWith("/api")) return;
+    if (location === "/tour" || location === "/setup" || location.startsWith("/api")) return;
     const profileLoaded = profileData !== undefined;
     if (!profileLoaded) return;
     const profile = profileData?.profile;
     if (!profile || !profile.onboardingComplete) {
-      setLocation("/setup");
+      const tourSeen = localStorage.getItem("vg_tour_seen");
+      if (tourSeen) {
+        setLocation("/setup");
+      } else {
+        localStorage.setItem("vg_tour_seen", "1");
+        setLocation("/tour");
+      }
     }
   }, [isAuthenticated, profileData, location]);
 
@@ -409,6 +416,7 @@ function Router() {
       <Route path="/chat" component={Chat} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/admin" component={AdminPage} />
+      <Route path="/tour" component={TourPage} />
       <Route path="/setup" component={SetupPage} />
       <Route path="/upgrade" component={UpgradePage} />
       <Route component={NotFound} />
