@@ -84,7 +84,7 @@ export default function AddEvent() {
       <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
         <Store className="w-16 h-16 text-primary mx-auto mb-6" />
         <h2 className="text-3xl font-display font-bold mb-4">Login Required</h2>
-        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><a href="/api/login">Login to Continue</a></Button>
+        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><a href="/auth">Login to Continue</a></Button>
       </div>
     );
   }
