@@ -856,7 +856,7 @@ export default function ProfilePage() {
       <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
         <User className="w-16 h-16 text-primary mx-auto mb-6" />
         <h2 className="text-3xl font-display font-bold mb-4">Sign In Required</h2>
-        <Button asChild size="lg" className="w-full rounded-xl"><a href="/api/login">Sign In</a></Button>
+        <Button asChild size="lg" className="w-full rounded-xl"><a href="/auth">Sign In</a></Button>
       </div>
     );
   }
