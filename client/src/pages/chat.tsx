@@ -63,7 +63,7 @@ export default function Chat() {
         <Store className="w-16 h-16 text-primary mx-auto mb-6" />
         <h2 className="text-3xl font-display font-bold mb-4">Join the Conversation</h2>
         <p className="text-muted-foreground mb-8">Login to chat with vendors in your area.</p>
-        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><a href="/api/login">Login to Chat</a></Button>
+        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><a href="/auth">Login to Chat</a></Button>
       </div>
     );
   }
