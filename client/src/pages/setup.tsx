@@ -64,7 +64,7 @@ export default function SetupPage() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">Please log in first</h2>
-          <Button asChild><a href="/api/login">Login</a></Button>
+          <Button asChild><a href="/auth">Login</a></Button>
         </div>
       </div>
     );
