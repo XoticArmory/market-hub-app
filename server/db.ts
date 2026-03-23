@@ -1,6 +1,10 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import dns from "dns";
+
+// Force IPv4 to ensure compatibility with Supabase from all hosting environments
+dns.setDefaultResultOrder("ipv4first");
 
 const { Pool } = pg;
 
