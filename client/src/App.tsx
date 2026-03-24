@@ -43,13 +43,7 @@ function OnboardingGuard() {
     if (!profileLoaded) return;
     const profile = profileData?.profile;
     if (!profile || !profile.onboardingComplete) {
-      const tourSeen = localStorage.getItem("vg_tour_seen");
-      if (tourSeen) {
-        setLocation("/setup");
-      } else {
-        localStorage.setItem("vg_tour_seen", "1");
-        setLocation("/tour");
-      }
+      setLocation("/tour");
     }
   }, [isAuthenticated, profileData, location]);
 
