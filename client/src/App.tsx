@@ -43,7 +43,8 @@ function OnboardingGuard() {
     if (!profileLoaded) return;
     const profile = profileData?.profile;
     if (!profile || !profile.onboardingComplete) {
-      setLocation("/tour");
+      const hasActiveSub = profile?.subscriptionStatus === "active" && profile?.subscriptionTier !== "free";
+      setLocation(hasActiveSub ? "/setup" : "/tour");
     }
   }, [isAuthenticated, profileData, location]);
 
