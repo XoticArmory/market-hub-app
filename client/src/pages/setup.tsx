@@ -130,7 +130,7 @@ export default function SetupPage() {
               className="w-full h-14 text-base rounded-2xl mt-6 bg-gradient-to-r from-primary to-amber-500"
               disabled={!profileType}
               onClick={() => {
-                if (profileType === "vendor") {
+                if (profileType === "vendor" || profileType === "event_owner") {
                   setLocation("/upgrade");
                 } else {
                   setStep(2);
@@ -138,7 +138,7 @@ export default function SetupPage() {
               }}
               data-testid="button-next"
             >
-              {profileType === "vendor" ? (
+              {(profileType === "vendor" || profileType === "event_owner") ? (
                 <><Crown className="mr-2 w-5 h-5" />Subscribe to Get Started</>
               ) : (
                 <>Continue <ArrowRight className="ml-2 w-5 h-5" /></>
