@@ -547,6 +547,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isVendorProCheck = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorProCheck) return res.status(403).json({ message: "Vendor Pro subscription required to register for vendor spaces." });
 
+    const existing = await storage.getVendorRegistrationForUser(eventId, userId);
+    if (existing) return res.status(409).json({ message: "You are already registered for this event." });
+
     const hasValidCode = !!(
       event.registrationCode &&
       registrationCode &&
