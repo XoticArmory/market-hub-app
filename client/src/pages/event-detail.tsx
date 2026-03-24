@@ -397,7 +397,7 @@ export default function EventDetail() {
               </Button>
 
               {/* Vendor Registration — Vendor Pro only, next to Mark Interested */}
-              {isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && (
+              {isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && !myPost && (
                 isVendorGridReg ? (
                   vendorSpacesLeft > 0 ? (
                     <Button

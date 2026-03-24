@@ -374,6 +374,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const profile = await storage.getUserProfile(userId);
       const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
       if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro subscription required to post a vendor listing." });
+      const existingPost = await storage.getVendorPostForUser(eventId, userId);
+      if (existingPost) return res.status(409).json({ message: "You already have a listing for this event. Remove your existing listing first." });
       const created = await storage.createVendorPost({ ...input, eventId, vendorId: userId, isVendorPro });
       const ev = await storage.getEvent(eventId);
       if (ev && (ev.vendorSpaces || 0) > 0) await storage.updateVendorSpacesUsed(eventId, 1);

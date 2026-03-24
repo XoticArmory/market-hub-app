@@ -48,6 +48,7 @@ export interface IStorage {
 
   // Vendor Posts
   getVendorPosts(eventId: number): Promise<VendorPost[]>;
+  getVendorPostForUser(eventId: number, vendorId: string): Promise<VendorPost | undefined>;
   createVendorPost(post: InsertVendorPost & { vendorId: string }): Promise<VendorPost>;
   deleteVendorPost(postId: number, vendorId?: string): Promise<void>;
   updateVendorPostImages(postId: number, vendorId: string, imageUrls: string[]): Promise<VendorPost>;
@@ -323,6 +324,12 @@ export class DatabaseStorage implements IStorage {
   // ---- Vendor Posts ----
   async getVendorPosts(eventId: number): Promise<VendorPost[]> {
     return await db.select().from(vendorPosts).where(eq(vendorPosts.eventId, eventId)).orderBy(desc(vendorPosts.createdAt));
+  }
+
+  async getVendorPostForUser(eventId: number, vendorId: string): Promise<VendorPost | undefined> {
+    const [p] = await db.select().from(vendorPosts)
+      .where(and(eq(vendorPosts.eventId, eventId), eq(vendorPosts.vendorId, vendorId)));
+    return p;
   }
 
   async createVendorPost(post: InsertVendorPost & { vendorId: string }): Promise<VendorPost> {
