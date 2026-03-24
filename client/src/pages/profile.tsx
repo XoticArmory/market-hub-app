@@ -155,8 +155,11 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
   const assignToEvent = useMutation({
     mutationFn: ({ id, eventId, quantityAssigned }: any) =>
       apiRequest("POST", `/api/vendor/catalog/${id}/assign`, { eventId, quantityAssigned }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const eid = Number(variables.eventId);
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/:eventId/posts", eid] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/:id", eid] });
       setShowAssignDialog(false);
       setAssignEventId("");
       setAssignQty("");
@@ -167,8 +170,11 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
   const removeAssignment = useMutation({
     mutationFn: ({ catalogItemId, eventId }: any) =>
       apiRequest("DELETE", `/api/vendor/catalog/${catalogItemId}/assign/${eventId}`),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const eid = Number(variables.eventId);
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/:eventId/posts", eid] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/:id", eid] });
       toast({ title: "Assignment removed." });
     },
   });

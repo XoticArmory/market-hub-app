@@ -182,7 +182,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEvent(id: number): Promise<void> {
-    await db.delete(events).where(eq(events.id, id));
+    await pool.query("DELETE FROM events WHERE id = $1", [id]);
   }
 
   async cancelEvent(id: number): Promise<void> {
@@ -212,7 +212,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEventDates(eventId: number): Promise<void> {
-    await db.delete(eventDates).where(eq(eventDates.eventId, eventId));
+    await pool.query("DELETE FROM event_dates WHERE event_id = $1", [eventId]);
   }
 
   // ---- Attendance ----
@@ -237,9 +237,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeAttendance(eventId: number, userId: string): Promise<void> {
-    await db.delete(eventAttendance).where(
-      and(eq(eventAttendance.eventId, eventId), eq(eventAttendance.userId, userId))
-    );
+    await pool.query("DELETE FROM event_attendance WHERE event_id = $1 AND user_id = $2", [eventId, userId]);
   }
 
   async getUserStatusForEvent(eventId: number, userId: string): Promise<string | null> {
@@ -333,9 +331,9 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVendorPost(postId: number, vendorId?: string): Promise<void> {
     if (vendorId) {
-      await db.delete(vendorPosts).where(and(eq(vendorPosts.id, postId), eq(vendorPosts.vendorId, vendorId)));
+      await pool.query("DELETE FROM vendor_posts WHERE id = $1 AND vendor_id = $2", [postId, vendorId]);
     } else {
-      await db.delete(vendorPosts).where(eq(vendorPosts.id, postId));
+      await pool.query("DELETE FROM vendor_posts WHERE id = $1", [postId]);
     }
   }
 
@@ -567,7 +565,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteVendorInventoryItem(id: number): Promise<void> {
-    await db.delete(vendorInventory).where(eq(vendorInventory.id, id));
+    await pool.query("DELETE FROM vendor_inventory WHERE id = $1", [id]);
   }
 
   async getVendorAnalytics(vendorId: string): Promise<any> {
@@ -644,8 +642,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteVendorCatalogItem(id: number): Promise<void> {
-    await db.delete(vendorCatalogAssignments).where(eq(vendorCatalogAssignments.catalogItemId, id));
-    await db.delete(vendorCatalog).where(eq(vendorCatalog.id, id));
+    await pool.query("DELETE FROM vendor_catalog_assignments WHERE catalog_item_id = $1", [id]);
+    await pool.query("DELETE FROM vendor_catalog WHERE id = $1", [id]);
   }
 
   async assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number): Promise<VendorCatalogAssignment> {
@@ -665,8 +663,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeCatalogItemFromEvent(catalogItemId: number, eventId: number): Promise<void> {
-    await db.delete(vendorCatalogAssignments)
-      .where(and(eq(vendorCatalogAssignments.catalogItemId, catalogItemId), eq(vendorCatalogAssignments.eventId, eventId)));
+    await pool.query("DELETE FROM vendor_catalog_assignments WHERE catalog_item_id = $1 AND event_id = $2", [catalogItemId, eventId]);
   }
 
   async getCatalogAssignmentsForEvent(eventId: number, vendorId: string): Promise<(VendorCatalogAssignment & { item: VendorCatalogItem })[]> {
@@ -697,7 +694,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteRoadmapItem(id: number): Promise<void> {
-    await db.delete(roadmapItems).where(eq(roadmapItems.id, id));
+    await pool.query("DELETE FROM roadmap_items WHERE id = $1", [id]);
   }
 
   // ---- Promo Codes ----
