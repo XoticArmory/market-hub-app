@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUpsertProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -47,6 +47,22 @@ export default function SetupPage() {
   const [businessName, setBusinessName] = useState("");
   const [bio, setBio] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const subscribed = params.get("subscribed");
+    if (subscribed) {
+      const tierToType: Record<string, string> = {
+        event_owner_pro: "event_owner",
+        vendor_pro: "vendor",
+      };
+      const type = tierToType[subscribed];
+      if (type) {
+        setProfileType(type);
+        setStep(2);
+      }
+    }
+  }, []);
 
   const completeOnboarding = useMutation({
     mutationFn: async () => {
