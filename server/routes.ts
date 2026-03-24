@@ -8,19 +8,19 @@ import { authStorage } from "./replit_integrations/auth/storage";
 import Stripe from "stripe";
 import multer from "multer";
 import path from "path";
-import fs from "fs";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-const uploadsDir = path.resolve(process.cwd(), "uploads");
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const UPLOAD_BUCKET = "vendor-photos";
+
+function getStorageClient() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createSupabaseClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadsDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) cb(null, true);
@@ -66,14 +66,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   await setupAuth(app);
   registerAuthRoutes(app);
 
-  // ---- FILE UPLOAD ----
-  const express = await import("express");
-  app.use("/uploads", express.static(uploadsDir));
+  // ---- ENSURE SUPABASE STORAGE BUCKET EXISTS ----
+  (async () => {
+    const supabase = getStorageClient();
+    if (!supabase) return;
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const exists = buckets?.some((b: any) => b.name === UPLOAD_BUCKET);
+    if (!exists) {
+      const { error } = await supabase.storage.createBucket(UPLOAD_BUCKET, { public: true });
+      if (error) console.error("Failed to create storage bucket:", error.message);
+      else console.log(`Created Supabase Storage bucket: ${UPLOAD_BUCKET}`);
+    }
+  })();
 
-  app.post("/api/upload", isAuthenticated, upload.single("file"), (req: any, res) => {
+  // ---- FILE UPLOAD ----
+  app.post("/api/upload", isAuthenticated, upload.single("file"), async (req: any, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
-    const url = `/uploads/${req.file.filename}`;
-    res.json({ url });
+    const supabase = getStorageClient();
+    if (!supabase) return res.status(500).json({ message: "Storage not configured." });
+    const ext = path.extname(req.file.originalname).toLowerCase() || ".jpg";
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    const { error } = await supabase.storage
+      .from(UPLOAD_BUCKET)
+      .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+    if (error) {
+      console.error("Supabase storage upload error:", error);
+      return res.status(500).json({ message: error.message });
+    }
+    const { data } = supabase.storage.from(UPLOAD_BUCKET).getPublicUrl(filename);
+    res.json({ url: data.publicUrl });
   });
 
   // ---- FEEDBACK ROUTE ----
