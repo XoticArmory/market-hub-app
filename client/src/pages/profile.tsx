@@ -158,6 +158,8 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
     onSuccess: (_data, variables) => {
       const eid = Number(variables.eventId);
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/analytics"] });
       queryClient.invalidateQueries({ queryKey: ["/api/events/:eventId/posts", eid] });
       queryClient.invalidateQueries({ queryKey: ["/api/events/:id", eid] });
       setShowAssignDialog(false);
@@ -173,6 +175,8 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
     onSuccess: (_data, variables) => {
       const eid = Number(variables.eventId);
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/analytics"] });
       queryClient.invalidateQueries({ queryKey: ["/api/events/:eventId/posts", eid] });
       queryClient.invalidateQueries({ queryKey: ["/api/events/:id", eid] });
       toast({ title: "Assignment removed." });
