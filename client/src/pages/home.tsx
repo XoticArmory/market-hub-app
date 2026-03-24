@@ -15,6 +15,7 @@ import { SiX, SiFacebook, SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
+import { useUserRegistrations } from "@/hooks/use-registrations";
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
@@ -91,6 +92,12 @@ export default function Home() {
   const profile = profileData?.profile;
   const isAdmin = profile?.isAdmin === true;
   const isVendorPro = isAdmin || (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active");
+  const { data: myRegistrations = [] } = useUserRegistrations();
+  const registeredEventIds = new Set(
+    (myRegistrations as any[])
+      .filter((r: any) => r.status !== "canceled")
+      .map((r: any) => r.eventId)
+  );
 
   const postQueries = useQueries({
     queries: (events || []).map((event) => ({
@@ -275,7 +282,11 @@ export default function Home() {
                           <div className="flex items-center gap-2">
                             {/* Vendor Registration button — only for active, non-owned events */}
                             {!event.canceledAt && event.createdBy !== user?.id && (
-                              isVendorPro ? (
+                              registeredEventIds.has(event.id) ? (
+                                <Badge className="rounded-xl gap-1.5 h-8 px-3 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-300 dark:border-green-700" data-testid={`badge-registered-${event.id}`}>
+                                  <ShieldCheck className="w-3.5 h-3.5" />Registered
+                                </Badge>
+                              ) : isVendorPro ? (
                                 <Button
                                   size="sm"
                                   className="rounded-xl gap-1.5 h-8 text-xs"
