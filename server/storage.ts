@@ -70,6 +70,7 @@ export interface IStorage {
 
   // Vendor Registrations
   getVendorRegistrations(eventId: number): Promise<VendorRegistration[]>;
+  getVendorRegistrationForUser(eventId: number, vendorId: string): Promise<VendorRegistration | undefined>;
   getUserRegistrations(userId: string): Promise<VendorRegistration[]>;
   createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt'>): Promise<VendorRegistration>;
   updateRegistrationStatus(id: number, status: string, paymentIntentId?: string): Promise<void>;
@@ -409,6 +410,16 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(vendorRegistrations)
       .where(eq(vendorRegistrations.eventId, eventId))
       .orderBy(desc(vendorRegistrations.createdAt));
+  }
+
+  async getVendorRegistrationForUser(eventId: number, vendorId: string): Promise<VendorRegistration | undefined> {
+    const [r] = await db.select().from(vendorRegistrations)
+      .where(and(
+        eq(vendorRegistrations.eventId, eventId),
+        eq(vendorRegistrations.vendorId, vendorId),
+        sql`status != 'canceled'`
+      ));
+    return r;
   }
 
   async getUserRegistrations(userId: string): Promise<VendorRegistration[]> {
