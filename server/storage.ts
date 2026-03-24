@@ -96,6 +96,7 @@ export interface IStorage {
 
   // Vendor Inventory
   getVendorInventory(vendorId: string, eventId?: number): Promise<VendorInventoryItem[]>;
+  getVendorInventoryByNameAndEvent(vendorId: string, eventId: number, itemName: string): Promise<VendorInventoryItem | undefined>;
   createVendorInventoryItem(vendorId: string, data: InsertVendorInventory): Promise<VendorInventoryItem>;
   updateVendorInventoryItem(id: number, data: Partial<InsertVendorInventory>): Promise<VendorInventoryItem>;
   deleteVendorInventoryItem(id: number): Promise<void>;
@@ -103,6 +104,7 @@ export interface IStorage {
 
   // Vendor Catalog
   getVendorCatalog(vendorId: string): Promise<(VendorCatalogItem & { assignments: VendorCatalogAssignment[] })[]>;
+  getCatalogItem(id: number): Promise<VendorCatalogItem | undefined>;
   createVendorCatalogItem(vendorId: string, data: InsertVendorCatalog): Promise<VendorCatalogItem>;
   updateVendorCatalogItem(id: number, data: Partial<InsertVendorCatalog>): Promise<VendorCatalogItem>;
   deleteVendorCatalogItem(id: number): Promise<void>;
@@ -569,6 +571,16 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(vendorInventory.createdAt));
   }
 
+  async getVendorInventoryByNameAndEvent(vendorId: string, eventId: number, itemName: string): Promise<VendorInventoryItem | undefined> {
+    const [item] = await db.select().from(vendorInventory)
+      .where(and(
+        eq(vendorInventory.vendorId, vendorId),
+        eq(vendorInventory.eventId, eventId),
+        eq(vendorInventory.itemName, itemName)
+      ));
+    return item;
+  }
+
   async createVendorInventoryItem(vendorId: string, data: InsertVendorInventory): Promise<VendorInventoryItem> {
     const [item] = await db.insert(vendorInventory).values({ vendorId, ...data }).returning();
     return item;
@@ -644,6 +656,11 @@ export class DatabaseStorage implements IStorage {
       ...item,
       assignments: assignments.filter(a => a.catalogItemId === item.id),
     }));
+  }
+
+  async getCatalogItem(id: number): Promise<VendorCatalogItem | undefined> {
+    const [item] = await db.select().from(vendorCatalog).where(eq(vendorCatalog.id, id));
+    return item;
   }
 
   async createVendorCatalogItem(vendorId: string, data: InsertVendorCatalog): Promise<VendorCatalogItem> {

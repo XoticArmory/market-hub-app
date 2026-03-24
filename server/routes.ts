@@ -825,6 +825,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { eventId, quantityAssigned } = req.body;
     if (!eventId || quantityAssigned === undefined) return res.status(400).json({ message: "eventId and quantityAssigned required" });
     const assignment = await storage.assignCatalogItemToEvent(catalogItemId, Number(eventId), userId, Number(quantityAssigned));
+
+    // Auto-create or update the inventory tracker entry for this event
+    const catalogItem = await storage.getCatalogItem(catalogItemId);
+    if (catalogItem) {
+      const existing = await storage.getVendorInventoryByNameAndEvent(userId, Number(eventId), catalogItem.itemName);
+      if (existing) {
+        await storage.updateVendorInventoryItem(existing.id, { quantityBrought: Number(quantityAssigned) });
+      } else {
+        await storage.createVendorInventoryItem(userId, {
+          eventId: Number(eventId),
+          itemName: catalogItem.itemName,
+          quantityBrought: Number(quantityAssigned),
+          quantitySold: 0,
+          priceCents: catalogItem.priceCents,
+        });
+      }
+    }
+
     res.json(assignment);
   });
 
@@ -833,7 +851,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.getUserProfile(userId);
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
-    await storage.removeCatalogItemFromEvent(Number(req.params.id), Number(req.params.eventId));
+    const catalogItemId = Number(req.params.id);
+    const eid = Number(req.params.eventId);
+
+    // Remove matching inventory entry (only if no sales have been logged)
+    const catalogItem = await storage.getCatalogItem(catalogItemId);
+    if (catalogItem) {
+      const existing = await storage.getVendorInventoryByNameAndEvent(userId, eid, catalogItem.itemName);
+      if (existing && existing.quantitySold === 0) {
+        await storage.deleteVendorInventoryItem(existing.id);
+      }
+    }
+
+    await storage.removeCatalogItemFromEvent(catalogItemId, eid);
     res.json({ ok: true });
   });
 
