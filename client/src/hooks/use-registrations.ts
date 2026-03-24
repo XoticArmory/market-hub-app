@@ -32,6 +32,8 @@ export function useRegisterVendorSpace(eventId: number) {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
       queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
       queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/registrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/analytics"] });
       if (data.clientSecret) {
         toast({ title: "Space reserved!", description: "Complete payment to confirm your spot." });
       } else {
@@ -74,6 +76,8 @@ export function useUnregisterVendorSpace(eventId: number) {
       queryClient.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
       queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
       queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/registrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/analytics"] });
       toast({ title: "Unregistered", description: "Your space registration has been canceled." });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
