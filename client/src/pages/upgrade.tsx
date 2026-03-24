@@ -138,9 +138,11 @@ export default function UpgradePage() {
   const handleAcceptAndSubscribe = () => {
     if (!selectedTier || !termsAccepted) return;
     setTermsOpen(false);
+    const isOnboarding = !profile?.onboardingComplete;
     checkout({
       tier: selectedTier,
       promoCode: promoResult?.valid ? promoInput.trim() : undefined,
+      returnTo: isOnboarding ? "/setup" : "/profile",
     });
   };
 
