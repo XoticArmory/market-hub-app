@@ -38,7 +38,7 @@ function OnboardingGuard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (location === "/tour" || location === "/setup" || location === "/auth" || location.startsWith("/api")) return;
+    if (location === "/tour" || location === "/setup" || location === "/upgrade" || location === "/auth" || location.startsWith("/api")) return;
     const profileLoaded = profileData !== undefined;
     if (!profileLoaded) return;
     const profile = profileData?.profile;
