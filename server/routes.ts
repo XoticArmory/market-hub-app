@@ -1101,7 +1101,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.stripe.checkout.path, isAuthenticated, async (req: any, res) => {
     const stripe = getStripe();
     if (!stripe) return res.status(503).json({ message: "Stripe not configured. Set STRIPE_SECRET_KEY in environment secrets." });
-    const { tier, promoCode } = req.body;
+    const { tier, promoCode, returnTo } = req.body;
     const tierInfo = PRO_TIERS[tier as keyof typeof PRO_TIERS];
     if (!tierInfo) return res.status(400).json({ message: "Invalid tier." });
     const userId = req.user.claims.sub;
@@ -1136,7 +1136,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           },
           quantity: 1,
         }],
-        success_url: `${getHost(req)}/profile?subscribed=${tier}&session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${getHost(req)}${returnTo || '/profile'}?subscribed=${tier}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${getHost(req)}/upgrade`,
         metadata: { userId, tier },
       };
