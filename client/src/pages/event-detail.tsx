@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,6 +65,7 @@ export default function EventDetail() {
   const [unregisterPostDialogOpen, setUnregisterPostDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [addPhotoDialogOpen, setAddPhotoDialogOpen] = useState(false);
+  const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [addPhotoUrl, setAddPhotoUrl] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<any>(null);
   const [showCodeInput, setShowCodeInput] = useState(false);
@@ -113,6 +114,27 @@ export default function EventDetail() {
     }
   };
 
+  const approveApplication = useMutation({
+    mutationFn: (regId: number) =>
+      fetch(`/api/events/${eventId}/registrations/${regId}/approve`, { method: "PATCH", credentials: "include" }).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
+      qc.invalidateQueries({ queryKey: ["/api/events/:id", eventId] });
+      toast({ title: "Application approved!" });
+    },
+    onError: () => toast({ title: "Failed to approve.", variant: "destructive" }),
+  });
+
+  const rejectApplication = useMutation({
+    mutationFn: (regId: number) =>
+      fetch(`/api/events/${eventId}/registrations/${regId}/reject`, { method: "PATCH", credentials: "include" }).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
+      toast({ title: "Application declined." });
+    },
+    onError: () => toast({ title: "Failed to decline.", variant: "destructive" }),
+  });
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("setup_listing") === "1") {
@@ -138,6 +160,7 @@ export default function EventDetail() {
   const regUrl = (event as any)?.vendorRegistrationUrl as string | null;
   const isVendorGridReg = regType === 'vendorgrid';
   const isExternalReg = regType === 'external' && !!regUrl;
+  const isFormReg = regType === 'form' && !!regUrl;
   const spotPrice = event?.spotPrice || 0;
   const spotPriceDollars = (spotPrice / 100).toFixed(2);
   const platformFee = isVendorPro ? 0 : Math.round(spotPrice * 0.005);
@@ -145,10 +168,11 @@ export default function EventDetail() {
   const totalDollars = ((spotPrice + platformFee) / 100).toFixed(2);
 
   const mapSpots: any[] = (mapData?.mapData as any)?.spots || [];
-  const bookedSpotIds = (registrations || []).filter((r: any) => r.status === 'paid').map((r: any) => r.spotId);
+  const bookedSpotIds = (registrations || []).filter((r: any) => ['paid', 'approved'].includes(r.status)).map((r: any) => r.spotId);
   const availableSpots = mapSpots.filter((s: any) => !bookedSpotIds.includes(s.id));
   const hasEventMap = mapSpots.length > 0;
-  const alreadyRegistered = (registrations || []).some((r: any) => r.vendorId === user?.id && r.status !== 'canceled');
+  const myRegistration = (registrations || []).find((r: any) => r.vendorId === user?.id && r.status !== 'canceled');
+  const alreadyRegistered = !!myRegistration;
 
   const myPost = posts?.find((p: any) => p.vendorId === user?.id);
   const myPostImages: string[] = myPost?.imageUrls || [];
@@ -422,6 +446,15 @@ export default function EventDetail() {
                   >
                     <ExternalLink className="w-4 h-4" />Vendor Registration
                   </Button>
+                ) : isFormReg ? (
+                  <Button
+                    size="default"
+                    className="rounded-xl gap-2"
+                    onClick={() => setApplyDialogOpen(true)}
+                    data-testid="button-vendor-apply"
+                  >
+                    <ClipboardList className="w-4 h-4" />Apply for a Space
+                  </Button>
                 ) : (
                   <Button
                     size="default"
@@ -432,6 +465,23 @@ export default function EventDetail() {
                     <Package className="w-4 h-4" />Vendor Registration
                   </Button>
                 )
+              )}
+
+              {/* Application status badges for form-based events */}
+              {isVendorPro && !isOwner && isFormReg && myRegistration?.status === 'awaiting_approval' && (
+                <Badge variant="outline" className="gap-1.5 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5" data-testid="badge-application-pending">
+                  <Clock3 className="w-3.5 h-3.5" />Application Pending
+                </Badge>
+              )}
+              {isVendorPro && !isOwner && isFormReg && myRegistration?.status === 'approved' && (
+                <Badge variant="outline" className="gap-1.5 text-green-600 border-green-300 bg-green-50 dark:bg-green-950/30 px-3 py-1.5" data-testid="badge-application-approved">
+                  <CheckCircle className="w-3.5 h-3.5" />Application Approved
+                </Badge>
+              )}
+              {isVendorPro && !isOwner && isFormReg && myRegistration?.status === 'rejected' && (
+                <Badge variant="outline" className="gap-1.5 text-red-600 border-red-300 bg-red-50 dark:bg-red-950/30 px-3 py-1.5" data-testid="badge-application-rejected">
+                  <X className="w-3.5 h-3.5" />Application Not Approved
+                </Badge>
               )}
 
               {/* Cancel Event — event owner pro only */}
@@ -861,28 +911,81 @@ export default function EventDetail() {
 
         {hasVendorSpaces && (
           <TabsContent value="spaces" className="mt-0">
-            <div className="space-y-4">
-              {(registrations || []).length === 0 ? (
-                <div className="text-center py-12 bg-card rounded-2xl border border-dashed">
-                  <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                  <p className="text-muted-foreground">No vendors registered yet.</p>
-                </div>
-              ) : (
-                (registrations || []).map((r: any) => (
-                  <div key={r.id} className="flex items-center gap-4 p-4 bg-card rounded-2xl border border-border/50 shadow-sm" data-testid={`registration-${r.id}`}>
-                    <Avatar className="w-10 h-10"><AvatarImage src={r.vendorAvatar || ""} /><AvatarFallback><User className="w-4 h-4" /></AvatarFallback></Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{r.vendorName || "Vendor"}</p>
-                      {r.spotName && <p className="text-sm text-muted-foreground">Spot: {r.spotName}</p>}
-                    </div>
-                    <div className="text-right shrink-0">
-                      {r.amountCents > 0 && <p className="text-sm font-medium">${(r.amountCents / 100).toFixed(2)}</p>}
-                    </div>
-                    <Badge variant={r.status === 'paid' ? 'default' : r.status === 'canceled' ? 'destructive' : 'outline'} className={r.status === 'paid' ? 'bg-green-500' : ''}>{r.status}</Badge>
-                    {r.isPro && <Badge variant="outline" className="text-blue-600 border-blue-300 text-xs gap-1"><Crown className="w-3 h-3" />Pro</Badge>}
+            <div className="space-y-6">
+              {/* Pending Applications section — visible to owner when form-based */}
+              {canManageEvent && isFormReg && (registrations || []).some((r: any) => r.status === 'awaiting_approval') && (
+                <div>
+                  <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+                    <Clock3 className="w-4 h-4 text-amber-500" />Pending Applications
+                    <Badge variant="secondary" className="text-xs">{(registrations || []).filter((r: any) => r.status === 'awaiting_approval').length}</Badge>
+                  </h3>
+                  <div className="space-y-3">
+                    {(registrations || []).filter((r: any) => r.status === 'awaiting_approval').map((r: any) => (
+                      <div key={r.id} className="flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl" data-testid={`application-${r.id}`}>
+                        <Avatar className="w-10 h-10"><AvatarImage src={r.vendorAvatar || ""} /><AvatarFallback><User className="w-4 h-4" /></AvatarFallback></Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold truncate">{r.vendorName || "Vendor"}</p>
+                          <p className="text-xs text-muted-foreground">Applied {format(new Date(r.createdAt), 'MMM d, h:mm a')}</p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl gap-1.5 h-8 text-xs border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                            onClick={() => rejectApplication.mutate(r.id)}
+                            disabled={rejectApplication.isPending}
+                            data-testid={`button-reject-${r.id}`}
+                          >
+                            <ThumbsDown className="w-3.5 h-3.5" />Decline
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="rounded-xl gap-1.5 h-8 text-xs bg-green-600 hover:bg-green-700"
+                            onClick={() => approveApplication.mutate(r.id)}
+                            disabled={approveApplication.isPending}
+                            data-testid={`button-approve-${r.id}`}
+                          >
+                            <ThumbsUp className="w-3.5 h-3.5" />Approve
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))
+                </div>
               )}
+
+              {/* Confirmed registrations */}
+              <div>
+                {canManageEvent && isFormReg && <h3 className="text-base font-semibold mb-3">Confirmed Vendors</h3>}
+                {(registrations || []).filter((r: any) => r.status !== 'awaiting_approval').length === 0 ? (
+                  <div className="text-center py-12 bg-card rounded-2xl border border-dashed">
+                    <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-muted-foreground">No vendors registered yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(registrations || []).filter((r: any) => r.status !== 'awaiting_approval').map((r: any) => (
+                      <div key={r.id} className="flex items-center gap-4 p-4 bg-card rounded-2xl border border-border/50 shadow-sm" data-testid={`registration-${r.id}`}>
+                        <Avatar className="w-10 h-10"><AvatarImage src={r.vendorAvatar || ""} /><AvatarFallback><User className="w-4 h-4" /></AvatarFallback></Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold truncate">{r.vendorName || "Vendor"}</p>
+                          {r.spotName && <p className="text-sm text-muted-foreground">Spot: {r.spotName}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          {r.amountCents > 0 && <p className="text-sm font-medium">${(r.amountCents / 100).toFixed(2)}</p>}
+                        </div>
+                        <Badge
+                          variant={r.status === 'paid' || r.status === 'approved' ? 'default' : r.status === 'rejected' ? 'destructive' : r.status === 'canceled' ? 'destructive' : 'outline'}
+                          className={r.status === 'paid' || r.status === 'approved' ? 'bg-green-500' : ''}
+                        >
+                          {r.status === 'paid' ? 'Paid' : r.status === 'approved' ? 'Approved' : r.status === 'rejected' ? 'Declined' : r.status === 'canceled' ? 'Canceled' : r.status}
+                        </Badge>
+                        {r.isPro && <Badge variant="outline" className="text-blue-600 border-blue-300 text-xs gap-1"><Crown className="w-3 h-3" />Pro</Badge>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </TabsContent>
         )}
@@ -896,6 +999,46 @@ export default function EventDetail() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Apply for Space Dialog (form-based events) */}
+      <Dialog open={applyDialogOpen} onOpenChange={setApplyDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />Apply for a Vendor Space
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-1">
+            <div className="bg-muted/60 rounded-xl p-4 space-y-2">
+              <p className="text-sm font-medium">Step 1 — Complete the application form</p>
+              <p className="text-sm text-muted-foreground">The event organizer requires all vendors to fill out an application form before registering.</p>
+              <Button
+                variant="outline"
+                className="w-full rounded-xl gap-2 mt-1"
+                onClick={() => window.open(regUrl!, '_blank')}
+                data-testid="button-open-application-form"
+              >
+                <ExternalLink className="w-4 h-4" />Open Application Form
+              </Button>
+            </div>
+            <div className="bg-muted/60 rounded-xl p-4 space-y-2">
+              <p className="text-sm font-medium">Step 2 — Submit your application on VendorGrid</p>
+              <p className="text-sm text-muted-foreground">Once you've completed the form, click below. The event owner will review and approve your application.</p>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setApplyDialogOpen(false)}>Cancel</Button>
+              <Button
+                className="flex-1 rounded-xl gap-2"
+                onClick={() => registerSpace({}, { onSuccess: () => { setApplyDialogOpen(false); } })}
+                disabled={isRegistering}
+                data-testid="button-submit-application"
+              >
+                {isRegistering ? <><Loader2 className="w-4 h-4 animate-spin" />Submitting...</> : <><CheckCircle className="w-4 h-4" />I've Completed the Form</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Photo Dialog */}
       <Dialog open={addPhotoDialogOpen} onOpenChange={open => { setAddPhotoDialogOpen(open); if (!open) setAddPhotoUrl(""); }}>
