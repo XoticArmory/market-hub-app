@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3 } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,6 +72,7 @@ export default function EventDetail() {
   const [registrationCodeInput, setRegistrationCodeInput] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -329,6 +330,36 @@ export default function EventDetail() {
               </div>
             )}
           </div>
+
+          {/* Description / Details & Guidelines */}
+          {event.description && (() => {
+            const THRESHOLD = 280;
+            const isLong = event.description.length > THRESHOLD;
+            const displayed = isLong && !descExpanded
+              ? event.description.slice(0, THRESHOLD).trimEnd() + "…"
+              : event.description;
+            return (
+              <div className="mb-6 p-4 rounded-2xl bg-muted/30 border border-border/50">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Details &amp; Guidelines</p>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap" data-testid="text-event-description">
+                  {displayed}
+                </p>
+                {isLong && (
+                  <button
+                    className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                    onClick={() => setDescExpanded(v => !v)}
+                    data-testid="button-toggle-description"
+                  >
+                    {descExpanded ? (
+                      <><ChevronUp className="w-3.5 h-3.5" />Show less</>
+                    ) : (
+                      <><ChevronDown className="w-3.5 h-3.5" />Read more</>
+                    )}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Owner-only: Registration Code display */}
           {canManageEvent && (event as any).registrationCode && (
