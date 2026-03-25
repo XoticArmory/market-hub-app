@@ -187,7 +187,16 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEvent(id: number): Promise<void> {
     await pool.query("DELETE FROM vendor_catalog_assignments WHERE event_id = $1", [id]);
-    await pool.query("DELETE FROM vendor_inventory WHERE event_id = $1", [id]);
+    // Preserve inventory history: snapshot event title/date, then null the FK
+    await pool.query(
+      `UPDATE vendor_inventory vi
+       SET event_title = e.title,
+           event_date  = e.date,
+           event_id    = NULL
+       FROM events e
+       WHERE vi.event_id = $1 AND e.id = $1`,
+      [id]
+    );
     await pool.query("DELETE FROM vendor_registrations WHERE event_id = $1", [id]);
     await pool.query("DELETE FROM vendor_posts WHERE event_id = $1", [id]);
     await pool.query("DELETE FROM event_attendance WHERE event_id = $1", [id]);

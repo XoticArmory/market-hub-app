@@ -776,8 +776,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const { eventId, itemName, quantityBrought, quantitySold, priceCents } = req.body;
-    if (!eventId || !itemName) return res.status(400).json({ message: "eventId and itemName required" });
-    const item = await storage.createVendorInventoryItem(userId, { eventId: Number(eventId), itemName, quantityBrought: Number(quantityBrought) || 0, quantitySold: Number(quantitySold) || 0, priceCents: Number(priceCents) || 0 });
+    if (!itemName) return res.status(400).json({ message: "itemName required" });
+    let eventTitle: string | null = null;
+    let eventDate: Date | null = null;
+    if (eventId) {
+      const event = await storage.getEvent(Number(eventId));
+      if (event) { eventTitle = event.title; eventDate = event.date; }
+    }
+    const item = await storage.createVendorInventoryItem(userId, {
+      eventId: eventId ? Number(eventId) : null,
+      eventTitle,
+      eventDate,
+      itemName,
+      quantityBrought: Number(quantityBrought) || 0,
+      quantitySold: Number(quantitySold) || 0,
+      priceCents: Number(priceCents) || 0,
+    });
     res.json(item);
   });
 
@@ -897,12 +911,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Auto-create or update the inventory tracker entry for this event
     const catalogItem = await storage.getCatalogItem(catalogItemId);
     if (catalogItem) {
+      const ev = await storage.getEvent(Number(eventId));
       const existing = await storage.getVendorInventoryByNameAndEvent(userId, Number(eventId), catalogItem.itemName);
       if (existing) {
         await storage.updateVendorInventoryItem(existing.id, { quantityBrought: Number(quantityAssigned) });
       } else {
         await storage.createVendorInventoryItem(userId, {
           eventId: Number(eventId),
+          eventTitle: ev?.title || null,
+          eventDate: ev?.date || null,
           itemName: catalogItem.itemName,
           quantityBrought: Number(quantityAssigned),
           quantitySold: 0,

@@ -47,10 +47,9 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
   const { toast } = useToast();
 
   // Inventory tracker state
-  const [selectedEventId, setSelectedEventId] = useState<number | "">("");
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [itemForm, setItemForm] = useState({ itemName: "", quantityBrought: "", quantitySold: "", priceCents: "" });
+  const [itemForm, setItemForm] = useState({ eventId: "", itemName: "", quantityBrought: "", quantitySold: "", priceCents: "" });
 
   // Catalog state
   const [showCatalogDialog, setShowCatalogDialog] = useState(false);
@@ -66,10 +65,9 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
   });
 
   const { data: inventory, isLoading: isLoadingInventory } = useQuery<any[]>({
-    queryKey: ["/api/vendor/inventory", selectedEventId],
+    queryKey: ["/api/vendor/inventory"],
     queryFn: async () => {
-      const url = selectedEventId ? `/api/vendor/inventory?eventId=${selectedEventId}` : "/api/vendor/inventory";
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch("/api/vendor/inventory", { credentials: "include" });
       return res.json();
     },
   });
@@ -89,7 +87,7 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/analytics"] });
       setShowItemDialog(false);
-      setItemForm({ itemName: "", quantityBrought: "", quantitySold: "", priceCents: "" });
+      setItemForm({ eventId: "", itemName: "", quantityBrought: "", quantitySold: "", priceCents: "" });
       toast({ title: "Item added!" });
     },
   });
@@ -228,24 +226,25 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
 
   const openAdd = () => {
     setEditingItem(null);
-    setItemForm({ itemName: "", quantityBrought: "", quantitySold: "", priceCents: "" });
+    setItemForm({ eventId: "", itemName: "", quantityBrought: "", quantitySold: "", priceCents: "" });
     setShowItemDialog(true);
   };
 
   const openEdit = (item: any) => {
     setEditingItem(item);
     setItemForm({
+      eventId: item.eventId ? String(item.eventId) : "",
       itemName: item.itemName,
       quantityBrought: String(item.quantityBrought),
       quantitySold: String(item.quantitySold),
-      priceCents: String(item.priceCents),
+      priceCents: String(item.priceCents / 100),
     });
     setShowItemDialog(true);
   };
 
   const handleSaveItem = () => {
     const payload = {
-      eventId: selectedEventId || undefined,
+      eventId: itemForm.eventId ? Number(itemForm.eventId) : undefined,
       itemName: itemForm.itemName,
       quantityBrought: Number(itemForm.quantityBrought) || 0,
       quantitySold: Number(itemForm.quantitySold) || 0,
@@ -254,7 +253,6 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
     if (editingItem) {
       updateItem.mutate({ id: editingItem.id, ...payload });
     } else {
-      if (!payload.eventId) { toast({ title: "Select an event first", variant: "destructive" }); return; }
       createItem.mutate(payload);
     }
   };
@@ -414,93 +412,108 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
             <CardTitle className="flex items-center gap-2"><Package className="w-5 h-5 text-primary" />Inventory Tracker</CardTitle>
             <CardDescription>Log items you brought to each event and track what you sold.</CardDescription>
           </div>
-          <Button size="sm" className="rounded-xl" onClick={openAdd} data-testid="button-add-item" disabled={!selectedEventId}>
+          <Button size="sm" className="rounded-xl" onClick={openAdd} data-testid="button-add-item">
             <Plus className="w-4 h-4 mr-1" />Add Item
           </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="text-sm font-semibold mb-2 block">Filter by Event</label>
-            <select
-              className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
-              value={selectedEventId}
-              onChange={e => setSelectedEventId(e.target.value ? Number(e.target.value) : "")}
-              data-testid="select-inventory-event"
-            >
-              <option value="">All Events</option>
-              {attendedEvents.map((ev: any) => (
-                <option key={ev.id} value={ev.id}>{ev.title} — {format(new Date(ev.date), "MMM d, yyyy")}</option>
-              ))}
-            </select>
-          </div>
+        <CardContent className="space-y-6">
           {isLoadingInventory ? (
             <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
           ) : (inventory || []).length === 0 ? (
             <div className="text-center py-10 bg-muted/30 rounded-2xl border border-dashed">
               <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm text-muted-foreground">{selectedEventId ? "No items tracked for this event yet." : "No inventory items yet."} {!selectedEventId && "Select an event to add items."}</p>
+              <p className="text-sm text-muted-foreground">No inventory items yet. Click <strong>Add Item</strong> to start tracking.</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 font-semibold text-muted-foreground">Item</th>
-                    <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Brought</th>
-                    <th className="text-center py-2 px-3 font-semibold text-muted-foreground">Sold</th>
-                    <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Remaining</th>
-                    <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Price</th>
-                    <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Revenue</th>
-                    <th className="py-2 px-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(inventory || []).map((item: any) => {
-                    const remaining = Math.max(0, item.quantityBrought - item.quantitySold);
-                    const pct = item.quantityBrought > 0 ? remaining / item.quantityBrought : 0;
-                    const remainingColor = remaining === 0 ? "text-destructive font-bold" : pct <= 0.25 ? "text-amber-500 font-semibold" : "text-green-600 font-semibold";
-                    const isSaving = logSale.isPending;
-                    return (
-                      <tr key={item.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors" data-testid={`inventory-item-${item.id}`}>
-                        <td className="py-3 px-3 font-medium">{item.itemName}</td>
-                        <td className="py-3 px-3 text-right text-muted-foreground">{item.quantityBrought}</td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              className="w-6 h-6 rounded-md bg-muted hover:bg-destructive/10 hover:text-destructive flex items-center justify-center text-muted-foreground transition-colors disabled:opacity-40"
-                              onClick={() => item.quantitySold > 0 && logSale.mutate({ id: item.id, quantitySold: item.quantitySold - 1 })}
-                              disabled={item.quantitySold <= 0 || isSaving}
-                              data-testid={`button-unsell-${item.id}`}
-                              title="Undo 1 sale"
-                            >−</button>
-                            <span className="w-8 text-center font-semibold tabular-nums" data-testid={`sold-count-${item.id}`}>{item.quantitySold}</span>
-                            <button
-                              className="w-6 h-6 rounded-md bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center font-bold transition-colors disabled:opacity-40"
-                              onClick={() => item.quantitySold < item.quantityBrought && logSale.mutate({ id: item.id, quantitySold: item.quantitySold + 1 })}
-                              disabled={item.quantitySold >= item.quantityBrought || isSaving}
-                              data-testid={`button-sell-${item.id}`}
-                              title="Log 1 sale"
-                            >+</button>
-                          </div>
-                        </td>
-                        <td className={`py-3 px-3 text-right ${remainingColor}`} data-testid={`remaining-${item.id}`}>
-                          {remaining === 0 ? "Sold out" : remaining}
-                        </td>
-                        <td className="py-3 px-3 text-right text-muted-foreground">${(item.priceCents / 100).toFixed(2)}</td>
-                        <td className="py-3 px-3 text-right text-green-600 font-semibold">${((item.quantitySold * item.priceCents) / 100).toFixed(2)}</td>
-                        <td className="py-3 px-3 text-right">
-                          <div className="flex gap-1 justify-end">
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(item)} data-testid={`button-edit-item-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteItem.mutate(item.id)} data-testid={`button-delete-item-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          ) : (() => {
+            // Group by month, newest first
+            const groups: Record<string, { sortKey: number; items: any[] }> = {};
+            for (const item of (inventory || [])) {
+              const raw = item.eventDate || item.createdAt;
+              const d = raw ? new Date(raw) : null;
+              const label = d ? format(d, "MMMM yyyy") : "No Date";
+              const sortKey = d ? d.getTime() : 0;
+              if (!groups[label]) groups[label] = { sortKey, items: [] };
+              groups[label].items.push(item);
+            }
+            const sorted = Object.entries(groups).sort((a, b) => b[1].sortKey - a[1].sortKey);
+            return (
+              <div className="space-y-6">
+                {sorted.map(([month, { items: monthItems }]) => {
+                  const monthRevenue = monthItems.reduce((s, i) => s + (i.quantitySold * i.priceCents), 0) / 100;
+                  const isSaving = logSale.isPending;
+                  return (
+                    <div key={month} className="rounded-2xl border border-border/60 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border/60">
+                        <span className="font-semibold text-sm text-foreground" data-testid={`month-header-${month.replace(/\s/g, "-")}`}>{month}</span>
+                        <span className="text-xs font-medium text-green-600">${monthRevenue.toFixed(2)} earned · {monthItems.length} item{monthItems.length !== 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border/40 bg-background">
+                              <th className="text-left py-2 px-3 font-semibold text-muted-foreground">Item</th>
+                              <th className="text-left py-2 px-3 font-semibold text-muted-foreground hidden sm:table-cell">Event</th>
+                              <th className="text-right py-2 px-3 font-semibold text-muted-foreground">Brought</th>
+                              <th className="text-center py-2 px-3 font-semibold text-muted-foreground">Sold</th>
+                              <th className="text-right py-2 px-3 font-semibold text-muted-foreground hidden md:table-cell">Left</th>
+                              <th className="text-right py-2 px-3 font-semibold text-muted-foreground hidden md:table-cell">Revenue</th>
+                              <th className="py-2 px-3"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {monthItems.map((item: any) => {
+                              const remaining = Math.max(0, item.quantityBrought - item.quantitySold);
+                              const pct = item.quantityBrought > 0 ? remaining / item.quantityBrought : 0;
+                              const remainingColor = remaining === 0 ? "text-destructive font-bold" : pct <= 0.25 ? "text-amber-500 font-semibold" : "text-green-600 font-semibold";
+                              const displayEvent = item.eventTitle || (item.eventId ? attendedEvents.find((e: any) => e.id === item.eventId)?.title : null);
+                              return (
+                                <tr key={item.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors" data-testid={`inventory-item-${item.id}`}>
+                                  <td className="py-3 px-3 font-medium">{item.itemName}</td>
+                                  <td className="py-3 px-3 text-muted-foreground text-xs hidden sm:table-cell">
+                                    {displayEvent ? <span className="bg-muted px-2 py-0.5 rounded-full">{displayEvent}</span> : <span className="opacity-40">—</span>}
+                                  </td>
+                                  <td className="py-3 px-3 text-right text-muted-foreground">{item.quantityBrought}</td>
+                                  <td className="py-2 px-3">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        className="w-6 h-6 rounded-md bg-muted hover:bg-destructive/10 hover:text-destructive flex items-center justify-center text-muted-foreground transition-colors disabled:opacity-40"
+                                        onClick={() => item.quantitySold > 0 && logSale.mutate({ id: item.id, quantitySold: item.quantitySold - 1 })}
+                                        disabled={item.quantitySold <= 0 || isSaving}
+                                        data-testid={`button-unsell-${item.id}`}
+                                        title="Undo 1 sale"
+                                      >−</button>
+                                      <span className="w-8 text-center font-semibold tabular-nums" data-testid={`sold-count-${item.id}`}>{item.quantitySold}</span>
+                                      <button
+                                        className="w-6 h-6 rounded-md bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center font-bold transition-colors disabled:opacity-40"
+                                        onClick={() => item.quantitySold < item.quantityBrought && logSale.mutate({ id: item.id, quantitySold: item.quantitySold + 1 })}
+                                        disabled={item.quantitySold >= item.quantityBrought || isSaving}
+                                        data-testid={`button-sell-${item.id}`}
+                                        title="Log 1 sale"
+                                      >+</button>
+                                    </div>
+                                  </td>
+                                  <td className={`py-3 px-3 text-right hidden md:table-cell ${remainingColor}`} data-testid={`remaining-${item.id}`}>
+                                    {remaining === 0 ? "Sold out" : remaining}
+                                  </td>
+                                  <td className="py-3 px-3 text-right text-green-600 font-semibold hidden md:table-cell">${((item.quantitySold * item.priceCents) / 100).toFixed(2)}</td>
+                                  <td className="py-3 px-3 text-right">
+                                    <div className="flex gap-1 justify-end">
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(item)} data-testid={`button-edit-item-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteItem.mutate(item.id)} data-testid={`button-delete-item-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
@@ -586,6 +599,20 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
         <DialogContent className="rounded-2xl">
           <DialogHeader><DialogTitle>{editingItem ? "Edit Item" : "Add Inventory Item"}</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-semibold mb-2 block">Link to Event <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <select
+                className="w-full h-11 rounded-xl border border-border px-3 bg-background text-foreground text-sm"
+                value={itemForm.eventId}
+                onChange={e => setItemForm(f => ({ ...f, eventId: e.target.value }))}
+                data-testid="select-item-event"
+              >
+                <option value="">— No event —</option>
+                {allEvents.map((ev: any) => (
+                  <option key={ev.id} value={ev.id}>{ev.title} — {format(new Date(ev.date), "MMM d, yyyy")}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="text-sm font-semibold mb-2 block">Item Name</label>
               <Input data-testid="input-item-name" placeholder="e.g. Hand-poured candles" value={itemForm.itemName} onChange={e => setItemForm(f => ({ ...f, itemName: e.target.value }))} className="rounded-xl" />

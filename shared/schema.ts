@@ -138,7 +138,9 @@ export const profileViews = pgTable("profile_views", {
 export const vendorInventory = pgTable("vendor_inventory", {
   id: serial("id").primaryKey(),
   vendorId: varchar("vendor_id").notNull().references(() => users.id),
-  eventId: integer("event_id").notNull().references(() => events.id),
+  eventId: integer("event_id").references(() => events.id),
+  eventTitle: text("event_title"),
+  eventDate: timestamp("event_date"),
   itemName: text("item_name").notNull(),
   quantityBrought: integer("quantity_brought").notNull().default(0),
   quantitySold: integer("quantity_sold").notNull().default(0),

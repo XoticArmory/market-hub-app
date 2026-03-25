@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { pool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -60,6 +61,22 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Schema migrations: add nullable event context columns to vendor_inventory
+  try {
+    await pool.query(`
+      ALTER TABLE vendor_inventory
+        ALTER COLUMN event_id DROP NOT NULL,
+        ADD COLUMN IF NOT EXISTS event_title text,
+        ADD COLUMN IF NOT EXISTS event_date timestamptz;
+    `);
+    log("Schema migration: vendor_inventory columns ensured");
+  } catch (e: any) {
+    // Columns may already exist or NOT NULL constraint already dropped — safe to ignore
+    if (!e.message?.includes("already exists") && !e.message?.includes("does not exist")) {
+      log(`Schema migration warning: ${e.message}`);
+    }
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
