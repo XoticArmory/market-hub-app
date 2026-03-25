@@ -77,6 +77,28 @@ app.use((req, res, next) => {
     }
   }
 
+  // Reset all serial sequences to prevent duplicate key errors after data imports
+  try {
+    const serialTables = [
+      'events', 'event_dates', 'event_attendance', 'event_maps',
+      'vendor_registrations', 'vendor_posts', 'vendor_catalog', 'vendor_catalog_assignments',
+      'vendor_inventory', 'notifications', 'roadmap_items', 'promo_codes',
+      'user_profiles',
+    ];
+    for (const table of serialTables) {
+      await pool.query(`
+        SELECT setval(
+          pg_get_serial_sequence('${table}', 'id'),
+          COALESCE((SELECT MAX(id) FROM "${table}"), 0) + 1,
+          false
+        );
+      `);
+    }
+    log("Schema migration: serial sequences reset");
+  } catch (e: any) {
+    log(`Sequence reset warning: ${e.message}`);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
