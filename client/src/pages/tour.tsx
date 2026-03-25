@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import {
   Store, Package, Users, Crown, ArrowRight, ArrowLeft,
@@ -121,14 +122,17 @@ const SLIDES = [
 
 export default function TourPage() {
   const [, setLocation] = useLocation();
+  const { isAuthenticated } = useAuth();
   const [slide, setSlide] = useState(0);
   const current = SLIDES[slide];
   const isLast = slide === SLIDES.length - 1;
   const isFirst = slide === 0;
 
+  const endDest = isAuthenticated ? "/setup" : "/auth?mode=signup";
+
   const goNext = () => {
     if (isLast) {
-      setLocation("/setup");
+      setLocation(endDest);
     } else {
       setSlide(s => s + 1);
     }
@@ -136,7 +140,7 @@ export default function TourPage() {
 
   const goPrev = () => setSlide(s => s - 1);
 
-  const skip = () => setLocation("/setup");
+  const skip = () => setLocation(endDest);
 
   return (
     <div className={`min-h-screen bg-gradient-to-br ${current.bg} flex items-center justify-center p-4 transition-all duration-500`}>
@@ -297,7 +301,7 @@ export default function TourPage() {
                     data-testid="button-continue-free"
                     variant="outline"
                     className="w-full h-10 rounded-xl border-purple-300 dark:border-purple-700 text-sm mt-2"
-                    onClick={() => setLocation("/setup")}
+                    onClick={() => setLocation(endDest)}
                   >
                     Continue Free
                   </Button>
@@ -342,9 +346,9 @@ export default function TourPage() {
               <Button
                 data-testid="button-get-started"
                 className="rounded-xl bg-gradient-to-r from-primary to-amber-500"
-                onClick={() => setLocation("/setup")}
+                onClick={() => setLocation(endDest)}
               >
-                Get Started <ArrowRight className="w-4 h-4 ml-2" />
+                {isAuthenticated ? "Get Started" : "Create Account"} <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             )}
           </div>
