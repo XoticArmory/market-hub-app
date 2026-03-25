@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -22,11 +22,14 @@ const formSchema = z.object({
   vendorSpaces: z.coerce.number().min(0).default(0),
   spotPrice: z.coerce.number().min(0).default(0),
   registrationCode: z.string().optional(),
-  vendorRegistrationType: z.enum(["vendorgrid", "external"]).optional(),
+  vendorRegistrationType: z.enum(["vendorgrid", "external", "form"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.vendorRegistrationType === "external" && !data.vendorRegistrationUrl?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter your market website URL", path: ["vendorRegistrationUrl"] });
+  }
+  if (data.vendorRegistrationType === "form" && !data.vendorRegistrationUrl?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter the application form URL", path: ["vendorRegistrationUrl"] });
   }
 });
 
@@ -196,6 +199,21 @@ export default function AddEvent() {
                         <p className="text-xs text-muted-foreground mt-0.5">Send vendors to your own registration page</p>
                       </div>
                     </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-register-form"
+                      onClick={() => field.onChange("form")}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "form" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "form" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <ClipboardList className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Application form + approval</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors apply via your form and await your approval</p>
+                      </div>
+                    </button>
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -251,19 +269,25 @@ export default function AddEvent() {
               )} />
             )}
 
-            {/* Registration URL — only if "external" chosen */}
-            {isEventOwnerPro && registrationType === "external" && (
+            {/* Registration URL — shown for "external" or "form" */}
+            {isEventOwnerPro && (registrationType === "external" || registrationType === "form") && (
               <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-base font-semibold flex items-center gap-2"><Globe className="w-4 h-4 text-primary" />Market Website / Registration URL</FormLabel>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2">
+                    {registrationType === "form" ? <ClipboardList className="w-4 h-4 text-primary" /> : <Globe className="w-4 h-4 text-primary" />}
+                    {registrationType === "form" ? "Application Form URL" : "Market Website / Registration URL"}
+                  </FormLabel>
                   <FormControl>
                     <Input
                       data-testid="input-registration-url"
-                      placeholder="https://yourmarket.com/register"
+                      placeholder={registrationType === "form" ? "https://forms.google.com/..." : "https://yourmarket.com/register"}
                       className="h-14 rounded-xl text-base"
                       {...field}
                     />
                   </FormControl>
+                  {registrationType === "form" && (
+                    <p className="text-xs text-muted-foreground">Vendors will be linked to this form before submitting their application on VendorGrid.</p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />

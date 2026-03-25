@@ -439,6 +439,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ---- APPLICATION APPROVAL ----
+  app.patch('/api/events/:eventId/registrations/:regId/approve', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.eventId);
+    const regId = Number(req.params.regId);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.createdBy !== userId) {
+      const profile = await storage.getUserProfile(userId);
+      if (!profile?.isAdmin) return res.status(403).json({ message: "Only the event owner can approve applications." });
+    }
+    await storage.updateRegistrationStatus(regId, 'approved');
+    await storage.updateVendorSpacesUsed(eventId, 1);
+    res.json({ success: true });
+  });
+
+  app.patch('/api/events/:eventId/registrations/:regId/reject', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.eventId);
+    const regId = Number(req.params.regId);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.createdBy !== userId) {
+      const profile = await storage.getUserProfile(userId);
+      if (!profile?.isAdmin) return res.status(403).json({ message: "Only the event owner can reject applications." });
+    }
+    await storage.updateRegistrationStatus(regId, 'rejected');
+    res.json({ success: true });
+  });
+
   // ---- MESSAGES ----
   app.get(api.messages.list.path, async (req: any, res) => {
     const areaCode = req.query.areaCode as string | undefined;
@@ -573,6 +603,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const existing = await storage.getVendorRegistrationForUser(eventId, userId);
     if (existing) return res.status(409).json({ message: "You are already registered for this event." });
 
+    const isPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+
+    // Application-form flow: create a pending-approval registration and stop
+    if (event.vendorRegistrationType === 'form') {
+      const reg = await storage.createVendorRegistration({
+        eventId,
+        vendorId: userId,
+        spotId: spotId || null,
+        spotName: spotName || null,
+        amountCents: 0,
+        feeCents: 0,
+        isPro,
+        status: 'awaiting_approval',
+        stripePaymentIntentId: null,
+      });
+      return res.json(reg);
+    }
+
     const hasValidCode = !!(
       event.registrationCode &&
       registrationCode &&
@@ -582,7 +630,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (registrationCode && !hasValidCode) {
       return res.status(400).json({ message: "Invalid registration code. Please check with the event organizer." });
     }
-    const isPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     const spotPriceCents = hasValidCode ? 0 : (event.spotPrice || 0);
     const feeCents = (isPro || hasValidCode) ? 0 : Math.round(spotPriceCents * 0.005);
     const reg = await storage.createVendorRegistration({
