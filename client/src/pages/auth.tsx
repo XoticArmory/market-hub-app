@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,13 +9,23 @@ import { Store, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-reac
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup">(
+    new URLSearchParams(search).get("mode") === "signup" ? "signup" : "login"
+  );
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) setLocation("/");
   }, [isAuthenticated, isLoading]);
+
+  // Sync mode when URL search params change (e.g. navigating back from tour)
+  useEffect(() => {
+    const m = new URLSearchParams(search).get("mode");
+    if (m === "signup") setMode("signup");
+    else if (m === "login") setMode("login");
+  }, [search]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -98,7 +108,7 @@ export default function AuthPage() {
             <button
               data-testid="tab-signup"
               className={`flex-1 py-4 text-sm font-semibold transition-colors ${mode === "signup" ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
+              onClick={() => setLocation("/tour")}
             >
               Create Account
             </button>
@@ -203,7 +213,15 @@ export default function AuthPage() {
               {mode === "login" ? "Don't have an account? " : "Already have an account? "}
               <button
                 className="text-primary font-semibold hover:underline"
-                onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setSuccess(""); }}
+                onClick={() => {
+                  if (mode === "login") {
+                    setLocation("/tour");
+                  } else {
+                    setMode("login");
+                    setError("");
+                    setSuccess("");
+                  }
+                }}
               >
                 {mode === "login" ? "Create one free" : "Sign in"}
               </button>
