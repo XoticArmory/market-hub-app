@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +37,171 @@ const postSchema = z.object({
   imageUrl: z.string().url("Please enter a valid image URL").optional().or(z.literal("")),
 });
 type PostFormValues = z.infer<typeof postSchema>;
+
+const editEventSchema = z.object({
+  title: z.string().min(3, "Title must be at least 3 characters"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+  location: z.string().min(3, "Location required"),
+  areaCode: z.string().optional(),
+  date: z.string().min(1, "Date required"),
+  vendorSpaces: z.coerce.number().min(0),
+  spotPrice: z.coerce.number().min(0),
+  vendorRegistrationType: z.string().optional(),
+  vendorRegistrationUrl: z.string().optional(),
+  registrationCode: z.string().optional(),
+});
+type EditEventValues = z.infer<typeof editEventSchema>;
+
+function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
+  event: any;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSubmit: (data: Record<string, any>) => void;
+  isPending: boolean;
+}) {
+  const form = useForm<EditEventValues>({
+    resolver: zodResolver(editEventSchema),
+    values: {
+      title: event?.title || "",
+      description: event?.description || "",
+      location: event?.location || "",
+      areaCode: event?.areaCode || "",
+      date: event?.date ? new Date(event.date).toISOString().slice(0, 16) : "",
+      vendorSpaces: event?.vendorSpaces || 0,
+      spotPrice: event?.spotPrice ? event.spotPrice / 100 : 0,
+      vendorRegistrationType: event?.vendorRegistrationType || "",
+      vendorRegistrationUrl: event?.vendorRegistrationUrl || "",
+      registrationCode: event?.registrationCode || "",
+    },
+  });
+
+  function handleSubmit(vals: EditEventValues) {
+    onSubmit({
+      title: vals.title,
+      description: vals.description,
+      location: vals.location,
+      areaCode: vals.areaCode || null,
+      date: vals.date,
+      vendorSpaces: vals.vendorSpaces,
+      spotPrice: Math.round((vals.spotPrice || 0) * 100),
+      vendorRegistrationType: vals.vendorRegistrationType || null,
+      vendorRegistrationUrl: vals.vendorRegistrationUrl || null,
+      registrationCode: vals.registrationCode || null,
+    });
+  }
+
+  return (
+    <>
+      <Button
+        size="default"
+        variant="outline"
+        className="rounded-xl gap-2"
+        onClick={() => onOpenChange(true)}
+        data-testid="button-edit-event"
+      >
+        <Pencil className="w-4 h-4" />Edit Event
+      </Button>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display">Edit Event</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 mt-2">
+              <FormField control={form.control} name="title" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Event Title</FormLabel>
+                  <FormControl><Input {...field} data-testid="input-edit-title" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="description" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl><Textarea {...field} rows={4} data-testid="input-edit-description" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="location" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <FormControl><Input {...field} data-testid="input-edit-location" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="areaCode" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Area Code</FormLabel>
+                    <FormControl><Input {...field} placeholder="e.g. NYC" data-testid="input-edit-areacode" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <FormField control={form.control} name="date" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date &amp; Time</FormLabel>
+                  <FormControl><Input type="datetime-local" {...field} data-testid="input-edit-date" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="vendorSpaces" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vendor Spaces</FormLabel>
+                    <FormControl><Input type="number" min={0} {...field} data-testid="input-edit-spaces" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="spotPrice" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Spot Price ($)</FormLabel>
+                    <FormControl><Input type="number" min={0} step="0.01" {...field} data-testid="input-edit-price" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <FormField control={form.control} name="vendorRegistrationType" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Registration Type</FormLabel>
+                  <FormControl>
+                    <select {...field} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background" data-testid="select-edit-regtype">
+                      <option value="">None</option>
+                      <option value="vendorgrid">VendorGrid</option>
+                      <option value="external">External URL</option>
+                      <option value="form">Form URL</option>
+                    </select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Registration URL</FormLabel>
+                  <FormControl><Input {...field} placeholder="https://..." data-testid="input-edit-regurl" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="registrationCode" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Registration Code</FormLabel>
+                  <FormControl><Input {...field} placeholder="Optional code for vendors" data-testid="input-edit-regcode" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button type="submit" className="flex-1 rounded-xl" disabled={isPending} data-testid="button-save-event">
+                  {isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -73,6 +238,7 @@ export default function EventDetail() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -134,6 +300,26 @@ export default function EventDetail() {
       toast({ title: "Application declined." });
     },
     onError: () => toast({ title: "Failed to decline.", variant: "destructive" }),
+  });
+
+  const updateEvent = useMutation({
+    mutationFn: async (data: Record<string, any>) => {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Failed"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+      qc.invalidateQueries({ queryKey: [api.events.list.path] });
+      setEditDialogOpen(false);
+      toast({ title: "Event updated!" });
+    },
+    onError: (e: any) => toast({ title: e.message || "Failed to update event.", variant: "destructive" }),
   });
 
   useEffect(() => {
@@ -516,6 +702,16 @@ export default function EventDetail() {
               )}
 
               {/* Cancel Event — event owner pro only */}
+              {canManageEvent && !event.canceledAt && (
+                <EditEventDialog
+                  event={event}
+                  open={editDialogOpen}
+                  onOpenChange={setEditDialogOpen}
+                  onSubmit={(data) => updateEvent.mutate(data)}
+                  isPending={updateEvent.isPending}
+                />
+              )}
+
               {canManageEvent && !event.canceledAt && (
                 <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
                   <DialogTrigger asChild>
