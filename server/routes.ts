@@ -281,6 +281,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(204).end();
   });
 
+  app.patch('/api/events/:id', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const profile = await storage.getUserProfile(userId);
+    const isAdmin = profile?.isAdmin === true;
+    const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
+    if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
+    if (!isEventOwnerPro && !isAdmin) return res.status(403).json({ message: "Event Owner Pro required to edit events." });
+    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'vendorSpaces', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl'];
+    const data: Record<string, any> = {};
+    for (const key of allowed) {
+      if (key in req.body) data[key] = req.body[key];
+    }
+    if (data.date) data.date = new Date(data.date);
+    if (data.vendorSpaces !== undefined) data.vendorSpaces = Number(data.vendorSpaces);
+    if (data.spotPrice !== undefined) data.spotPrice = Number(data.spotPrice);
+    const updated = await storage.updateEvent(eventId, data);
+    res.json(updated);
+  });
+
+  app.post('/api/admin/events/:id/transfer', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const isAdmin = await isAdminUser(userId);
+    if (!isAdmin) return res.status(403).json({ message: "Admin only" });
+    const { newOwnerId } = req.body;
+    if (!newOwnerId) return res.status(400).json({ message: "newOwnerId required" });
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const newOwner = await storage.getUserProfile(newOwnerId);
+    if (!newOwner) return res.status(404).json({ message: "User not found" });
+    const updated = await storage.transferEventOwnership(eventId, newOwnerId);
+    res.json(updated);
+  });
+
   app.patch('/api/events/:id/banner', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const eventId = Number(req.params.id);
