@@ -29,6 +29,8 @@ export interface IStorage {
   createEvent(event: InsertEvent & { createdBy: string }): Promise<Event>;
   deleteEvent(id: number): Promise<void>;
   cancelEvent(id: number): Promise<void>;
+  updateEvent(id: number, data: Partial<InsertEvent>): Promise<Event>;
+  transferEventOwnership(eventId: number, newOwnerId: string): Promise<Event>;
   updateEventBanner(id: number, bannerUrl: string | null): Promise<void>;
   updateVendorSpacesUsed(eventId: number, delta: number): Promise<void>;
 
@@ -208,6 +210,16 @@ export class DatabaseStorage implements IStorage {
 
   async cancelEvent(id: number): Promise<void> {
     await db.update(events).set({ canceledAt: new Date() }).where(eq(events.id, id));
+  }
+
+  async updateEvent(id: number, data: Partial<InsertEvent>): Promise<Event> {
+    const [updated] = await db.update(events).set(data).where(eq(events.id, id)).returning();
+    return updated;
+  }
+
+  async transferEventOwnership(eventId: number, newOwnerId: string): Promise<Event> {
+    const [updated] = await db.update(events).set({ createdBy: newOwnerId }).where(eq(events.id, eventId)).returning();
+    return updated;
   }
 
   async updateEventBanner(id: number, bannerUrl: string | null): Promise<void> {

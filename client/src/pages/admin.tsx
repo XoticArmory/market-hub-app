@@ -229,6 +229,9 @@ export default function AdminPage() {
   const [subDialog, setSubDialog] = useState<any>(null);
   const [subTier, setSubTier] = useState("free");
   const [subStatus, setSubStatus] = useState("active");
+  const [transferEvent, setTransferEvent] = useState<any>(null);
+  const [transferUserId, setTransferUserId] = useState("");
+  const [userSearch, setUserSearch] = useState("");
 
   const toggleAdmin = useMutation({
     mutationFn: ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) =>
@@ -239,6 +242,19 @@ export default function AdminPage() {
   const deleteEvent = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/events/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/events"] }); toast({ title: "Event deleted." }); },
+  });
+
+  const transferOwnership = useMutation({
+    mutationFn: ({ eventId, newOwnerId }: { eventId: number; newOwnerId: string }) =>
+      apiRequest("POST", `/api/admin/events/${eventId}/transfer`, { newOwnerId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/events"] });
+      setTransferEvent(null);
+      setTransferUserId("");
+      setUserSearch("");
+      toast({ title: "Ownership transferred." });
+    },
+    onError: (e: any) => toast({ title: e.message || "Transfer failed.", variant: "destructive" }),
   });
 
   const updateSubscription = useMutation({
@@ -473,9 +489,12 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold truncate">{e.title}</p>
                         <p className="text-sm text-muted-foreground">{e.location} · {new Date(e.date).toLocaleDateString()}</p>
-                        <p className="text-xs text-muted-foreground">By {e.creatorName} · {e.attendingCount} attending</p>
+                        <p className="text-xs text-muted-foreground">Owner: {e.creatorName || "Unknown"} · {e.attendingCount} attending</p>
                       </div>
                       {e.areaCode && <Badge variant="outline">{e.areaCode}</Badge>}
+                      <Button size="sm" variant="outline" className="rounded-xl h-8 shrink-0 gap-1" onClick={() => { setTransferEvent(e); setTransferUserId(""); setUserSearch(""); }} data-testid={`button-transfer-${e.id}`}>
+                        Transfer
+                      </Button>
                       <Button size="sm" variant="destructive" className="rounded-xl h-8 shrink-0" onClick={() => deleteEvent.mutate(e.id)}>
                         <Trash2 className="w-3 h-3 mr-1" />Delete
                       </Button>
@@ -604,6 +623,68 @@ export default function AdminPage() {
                 {updateSubscription.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Save Changes"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Ownership Dialog */}
+      <Dialog open={!!transferEvent} onOpenChange={(v) => { if (!v) { setTransferEvent(null); setTransferUserId(""); setUserSearch(""); } }}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display">Transfer Event Ownership</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Transferring: <span className="font-medium text-foreground">{transferEvent?.title}</span></p>
+          <p className="text-xs text-muted-foreground mt-1">Current owner: {transferEvent?.creatorName || "Unknown"}</p>
+          <div className="mt-4 space-y-3">
+            <Input
+              placeholder="Search users by name or email..."
+              value={userSearch}
+              onChange={(e) => { setUserSearch(e.target.value); setTransferUserId(""); }}
+              data-testid="input-transfer-search"
+            />
+            <div className="max-h-56 overflow-y-auto space-y-1 border border-border rounded-xl p-2">
+              {(users || [])
+                .filter((u: any) => {
+                  const q = userSearch.toLowerCase();
+                  return !q || (u.displayName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+                })
+                .map((u: any) => (
+                  <button
+                    key={u.userId}
+                    type="button"
+                    onClick={() => setTransferUserId(u.userId)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${transferUserId === u.userId ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    data-testid={`option-transfer-user-${u.userId}`}
+                  >
+                    <Avatar className="w-7 h-7 shrink-0">
+                      <AvatarImage src={u.avatarUrl || undefined} />
+                      <AvatarFallback className="text-xs">{(u.displayName || u.email || "?")[0].toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{u.displayName || u.email}</p>
+                      {u.displayName && <p className="text-xs opacity-70 truncate">{u.email}</p>}
+                    </div>
+                    {u.subscriptionTier && u.subscriptionTier !== "free" && (
+                      <Badge variant="secondary" className="ml-auto shrink-0 text-xs">{TIER_LABELS[u.subscriptionTier] || u.subscriptionTier}</Badge>
+                    )}
+                  </button>
+                ))}
+              {(users || []).filter((u: any) => {
+                const q = userSearch.toLowerCase();
+                return !q || (u.displayName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+              }).length === 0 && <p className="text-sm text-muted-foreground text-center py-3">No users found.</p>}
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setTransferEvent(null); setTransferUserId(""); setUserSearch(""); }}>Cancel</Button>
+            <Button
+              className="flex-1 rounded-xl"
+              disabled={!transferUserId || transferOwnership.isPending}
+              onClick={() => transferOwnership.mutate({ eventId: transferEvent.id, newOwnerId: transferUserId })}
+              data-testid="button-confirm-transfer"
+            >
+              {transferOwnership.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Transferring...</> : "Transfer Ownership"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
