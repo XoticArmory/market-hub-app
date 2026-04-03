@@ -22,6 +22,25 @@ function normalizeUrl(url: string): string {
   return url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
 }
 
+function getAnonSessionId(): string {
+  const key = "vg_session_id";
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem(key, id);
+  }
+  return id;
+}
+
+function trackAnonEventClick(eventId: number) {
+  const sessionId = getAnonSessionId();
+  fetch("/api/track/event-click", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventId, sessionId }),
+  }).catch(() => {});
+}
+
 function ShareButton({ eventId, eventTitle }: { eventId: number; eventTitle: string }) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -235,7 +254,7 @@ export default function Home() {
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.4 }} key={event.id}>
                     <div className="group h-full bg-card rounded-2xl overflow-hidden border border-border/50 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
                       {/* Image — clickable link to event */}
-                      <Link href={`/events/${event.id}`} className="block shrink-0">
+                      <Link href={`/events/${event.id}`} className="block shrink-0" onClick={() => { if (!isAuthenticated) trackAnonEventClick(event.id); }}>
                         <div className="h-48 bg-muted relative overflow-hidden">
                           <img src={(event as any).bannerUrl || `https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                           {event.canceledAt ? (
