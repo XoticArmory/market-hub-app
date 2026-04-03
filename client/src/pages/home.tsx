@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown } from "lucide-react";
+import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -85,6 +85,7 @@ function ShareButton({ eventId, eventTitle }: { eventId: number; eventTitle: str
 export default function Home() {
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<"nearest" | "furthest">("nearest");
   const { data: events, isLoading: isLoadingEvents } = useEvents(areaFilter);
   const [, navigate] = useLocation();
   const { user, isAuthenticated } = useAuth();
@@ -113,6 +114,15 @@ export default function Home() {
 
   const isLoadingPosts = postQueries.some((q) => q.isLoading);
   const allPosts = postQueries.flatMap((q) => q.data || []);
+
+  const postsByEventId = new Map(
+    (events || []).map((event, i) => [event.id, postQueries[i]?.data || []])
+  );
+
+  const sortedEvents = [...(events || [])].sort((a, b) => {
+    const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
+    return sortOrder === "nearest" ? diff : -diff;
+  });
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-12">
@@ -168,6 +178,26 @@ export default function Home() {
                 </Button>
               )}
             </div>
+            <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-xl p-1 h-10">
+              <Button
+                size="sm"
+                variant={sortOrder === "nearest" ? "default" : "ghost"}
+                className="rounded-lg h-8 px-3 gap-1.5 text-xs font-medium"
+                onClick={() => setSortOrder("nearest")}
+                data-testid="button-sort-nearest"
+              >
+                <ArrowUp className="w-3 h-3" />Nearest
+              </Button>
+              <Button
+                size="sm"
+                variant={sortOrder === "furthest" ? "default" : "ghost"}
+                className="rounded-lg h-8 px-3 gap-1.5 text-xs font-medium"
+                onClick={() => setSortOrder("furthest")}
+                data-testid="button-sort-furthest"
+              >
+                <ArrowDown className="w-3 h-3" />Furthest
+              </Button>
+            </div>
             <TabsList className="bg-muted/50 p-1 rounded-xl h-10 w-fit">
               <TabsTrigger value="markets" className="rounded-lg px-5 h-8 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-sm">
                 <Calendar className="w-3.5 h-3.5" />Markets
@@ -198,8 +228,8 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events?.map((event, i) => {
-                const eventPosts = postQueries[i]?.data || [];
+              {sortedEvents.map((event, i) => {
+                const eventPosts = postsByEventId.get(event.id) || [];
                 const uniqueVendors = Array.from(new Set(eventPosts.map((p: any) => p.vendorId)));
                 return (
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.4 }} key={event.id}>
