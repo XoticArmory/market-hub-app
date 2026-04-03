@@ -4,7 +4,7 @@ import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, roadmapItems,
-  promoCodes, promoCodeUses,
+  promoCodes, promoCodeUses, anonymousEventClicks,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -91,6 +91,8 @@ export interface IStorage {
 
   // Admin Stats
   getAdminStats(): Promise<any>;
+  recordAnonymousClick(eventId: number, sessionId: string): Promise<void>;
+  getAnonymousClickStats(): Promise<any>;
 
   // Profile Views
   recordProfileView(profileUserId: string, viewerUserId?: string): Promise<void>;
@@ -571,6 +573,38 @@ export class DatabaseStorage implements IStorage {
       nonProAccounts: tierCounts['free'],
       totalRevenueCents,
       estimatedMonthlyProRevenueCents: proRevenue,
+    };
+  }
+
+  async recordAnonymousClick(eventId: number, sessionId: string): Promise<void> {
+    await db.insert(anonymousEventClicks).values({ eventId, sessionId });
+  }
+
+  async getAnonymousClickStats(): Promise<any> {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(anonymousEventClicks);
+    const [{ todayTotal }] = await db.select({ todayTotal: sql<number>`count(*)::int` }).from(anonymousEventClicks).where(gte(anonymousEventClicks.createdAt, todayStart));
+    const [{ weekTotal }] = await db.select({ weekTotal: sql<number>`count(*)::int` }).from(anonymousEventClicks).where(gte(anonymousEventClicks.createdAt, weekStart));
+    const [{ uniqueSessions }] = await db.select({ uniqueSessions: sql<number>`count(distinct session_id)::int` }).from(anonymousEventClicks);
+
+    const topEventsRaw = await pool.query(`
+      SELECT ac.event_id, e.title, count(*)::int as clicks, count(distinct ac.session_id)::int as unique_sessions
+      FROM anonymous_event_clicks ac
+      LEFT JOIN events e ON e.id = ac.event_id
+      GROUP BY ac.event_id, e.title
+      ORDER BY clicks DESC
+      LIMIT 10
+    `);
+
+    return {
+      total,
+      todayTotal,
+      weekTotal,
+      uniqueSessions,
+      topEvents: topEventsRaw.rows,
     };
   }
 
