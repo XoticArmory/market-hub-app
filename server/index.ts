@@ -77,6 +77,23 @@ app.use((req, res, next) => {
     }
   }
 
+  // Create anonymous event clicks table if not exists
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS anonymous_event_clicks (
+        id SERIAL PRIMARY KEY,
+        event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+        session_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_anon_clicks_event_id ON anonymous_event_clicks(event_id);
+      CREATE INDEX IF NOT EXISTS idx_anon_clicks_created_at ON anonymous_event_clicks(created_at);
+    `);
+    log("Schema migration: anonymous_event_clicks table ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
   // Reset all serial sequences to prevent duplicate key errors after data imports
   try {
     const serialTables = [

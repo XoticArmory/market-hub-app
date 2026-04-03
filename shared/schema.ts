@@ -266,6 +266,13 @@ export type EventResponse = Event & {
   userStatus?: string | null;
   isFeatured?: boolean;
 };
+export const anonymousEventClicks = pgTable("anonymous_event_clicks", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").references(() => events.id, { onDelete: "set null" }),
+  sessionId: text("session_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export type VendorPostResponse = VendorPost & { vendorName?: string | null; vendorAvatar?: string | null };
 export type MessageResponse = Message & { senderName?: string | null; senderAvatar?: string | null };
 export type UserProfileResponse = UserProfile & { user?: any };

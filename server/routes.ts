@@ -66,6 +66,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // ---- ANONYMOUS EVENT CLICK TRACKING (public, no auth required) ----
+  app.post('/api/track/event-click', async (req, res) => {
+    try {
+      const { eventId, sessionId } = req.body;
+      if (!eventId || !sessionId || typeof eventId !== 'number' || typeof sessionId !== 'string') {
+        return res.status(400).json({ message: "eventId and sessionId required" });
+      }
+      await storage.recordAnonymousClick(eventId, sessionId);
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: true }); // silently succeed even on error
+    }
+  });
+
+  app.get('/api/admin/anonymous-clicks', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const stats = await storage.getAnonymousClickStats();
+    res.json(stats);
+  });
+
   // ---- ENSURE SUPABASE STORAGE BUCKET EXISTS ----
   (async () => {
     const supabase = getStorageClient();
