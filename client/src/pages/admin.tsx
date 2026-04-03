@@ -36,6 +36,19 @@ function useAdminStats() {
   });
 }
 
+function useAnonymousClickStats() {
+  return useQuery({
+    queryKey: ["/api/admin/anonymous-clicks"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/anonymous-clicks", { credentials: "include" });
+      if (res.status === 403) return null;
+      if (!res.ok) return null;
+      return res.json();
+    },
+    retry: false,
+  });
+}
+
 function useAdminAllEvents() {
   return useQuery({
     queryKey: ["/api/admin/events"],
@@ -220,6 +233,7 @@ export default function AdminPage() {
   const { mutate: upsertSetting, isPending: savingSetting } = useUpsertSetting();
   const { mutate: claimAdmin, isPending: claimingAdmin } = useClaimAdmin();
   const { data: stats, isLoading: loadingStats } = useAdminStats();
+  const { data: anonClicks, isLoading: loadingAnonClicks } = useAnonymousClickStats();
   const { data: allEvents, isLoading: loadingEvents } = useAdminAllEvents();
   const { data: registrations, isLoading: loadingRegs } = useAdminRegistrations();
   const { toast } = useToast();
@@ -343,6 +357,63 @@ export default function AdminPage() {
                   <StatCard key={tier} label={TIER_LABELS[tier] || tier} value={count as number} sub={tier === 'event_owner_pro' ? `~$${((count as number) * 19.95).toFixed(2)}/mo` : tier === 'vendor_pro' ? `~$${((count as number) * 9.95).toFixed(2)}/mo` : `~$${((count as number) * 4.95).toFixed(2)}/mo`} />
                 ))}
               </div>
+
+              {/* Anonymous Visitor Clicks */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-primary" />
+                    Anonymous Browse Activity
+                  </CardTitle>
+                  <CardDescription>Users who clicked an event card without signing in or subscribing.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingAnonClicks ? (
+                    <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                  ) : anonClicks ? (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-muted/50 rounded-xl p-4 text-center">
+                          <p className="text-2xl font-bold text-foreground" data-testid="stat-anon-total">{anonClicks.total ?? 0}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Total Clicks</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-xl p-4 text-center">
+                          <p className="text-2xl font-bold text-foreground" data-testid="stat-anon-today">{anonClicks.todayTotal ?? 0}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Today</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-xl p-4 text-center">
+                          <p className="text-2xl font-bold text-foreground" data-testid="stat-anon-week">{anonClicks.weekTotal ?? 0}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Last 7 Days</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-xl p-4 text-center">
+                          <p className="text-2xl font-bold text-primary" data-testid="stat-anon-sessions">{anonClicks.uniqueSessions ?? 0}</p>
+                          <p className="text-xs text-muted-foreground mt-1">Unique Visitors</p>
+                        </div>
+                      </div>
+                      {(anonClicks.topEvents || []).length > 0 && (
+                        <div>
+                          <p className="text-sm font-semibold text-foreground mb-3">Most Browsed Events</p>
+                          <div className="space-y-2 max-h-56 overflow-y-auto">
+                            {(anonClicks.topEvents || []).map((e: any, idx: number) => (
+                              <div key={e.event_id ?? idx} className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
+                                <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">#{idx + 1}</span>
+                                <p className="flex-1 text-sm font-medium truncate">{e.title || "Deleted Event"}</p>
+                                <Badge variant="secondary" className="shrink-0">{e.clicks} click{e.clicks !== 1 ? "s" : ""}</Badge>
+                                <Badge variant="outline" className="shrink-0 text-xs">{e.unique_sessions} visitor{e.unique_sessions !== 1 ? "s" : ""}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(anonClicks.topEvents || []).length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">No anonymous clicks recorded yet.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No data available.</p>
+                  )}
+                </CardContent>
+              </Card>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
