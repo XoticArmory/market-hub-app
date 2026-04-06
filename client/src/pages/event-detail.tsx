@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -170,6 +170,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
                       <option value="vendorgrid">VendorGrid</option>
                       <option value="external">External URL</option>
                       <option value="form">Form URL</option>
+                      <option value="email">Register via Email</option>
                     </select>
                   </FormControl>
                   <FormMessage />
@@ -231,6 +232,8 @@ export default function EventDetail() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [addPhotoDialogOpen, setAddPhotoDialogOpen] = useState(false);
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
+  const [emailCopyOpen, setEmailCopyOpen] = useState(false);
+  const [emailCopied, setEmailCopied] = useState(false);
   const [addPhotoUrl, setAddPhotoUrl] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<any>(null);
   const [showCodeInput, setShowCodeInput] = useState(false);
@@ -348,6 +351,7 @@ export default function EventDetail() {
   const isVendorGridReg = regType === 'vendorgrid';
   const isExternalReg = regType === 'external' && !!regUrl;
   const isFormReg = regType === 'form' && !!regUrl;
+  const isEmailReg = regType === 'email' && !!regUrl;
   const spotPrice = event?.spotPrice || 0;
   const spotPriceDollars = (spotPrice / 100).toFixed(2);
   const platformFee = isVendorPro ? 0 : Math.round(spotPrice * 0.005);
@@ -671,6 +675,15 @@ export default function EventDetail() {
                     data-testid="button-vendor-apply"
                   >
                     <ClipboardList className="w-4 h-4" />Apply for a Space
+                  </Button>
+                ) : isEmailReg ? (
+                  <Button
+                    size="default"
+                    className="rounded-xl gap-2"
+                    onClick={() => setEmailCopyOpen(true)}
+                    data-testid="button-vendor-email-register"
+                  >
+                    <Mail className="w-4 h-4" />Register via Email
                   </Button>
                 ) : (
                   <Button
@@ -1226,6 +1239,58 @@ export default function EventDetail() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Register via Email — copy prompt dialog */}
+      <Dialog open={emailCopyOpen} onOpenChange={(o) => { setEmailCopyOpen(o); if (!o) setEmailCopied(false); }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display flex items-center gap-2">
+              <Mail className="w-5 h-5 text-primary" />Register via Email
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-1">
+            <p className="text-sm text-muted-foreground">
+              This event accepts vendor applications by email. Copy the address below and send your application directly to the organizer.
+            </p>
+            <div className="flex items-center gap-2 bg-muted rounded-xl px-4 py-3">
+              <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="flex-1 text-sm font-medium break-all select-all" data-testid="text-owner-email">{regUrl}</span>
+              <button
+                type="button"
+                data-testid="button-copy-email"
+                className="shrink-0 p-1.5 rounded-lg hover:bg-background transition-colors"
+                onClick={() => {
+                  if (regUrl) {
+                    navigator.clipboard.writeText(regUrl).then(() => {
+                      setEmailCopied(true);
+                      setTimeout(() => setEmailCopied(false), 2500);
+                    });
+                  }
+                }}
+              >
+                {emailCopied ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+              </button>
+            </div>
+            {emailCopied && (
+              <p className="text-xs text-green-600 text-center font-medium" data-testid="text-email-copied">Email address copied!</p>
+            )}
+            <Button
+              className="w-full rounded-xl gap-2"
+              onClick={() => {
+                if (regUrl) {
+                  navigator.clipboard.writeText(regUrl).then(() => {
+                    setEmailCopied(true);
+                    setTimeout(() => setEmailCopied(false), 2500);
+                  });
+                }
+              }}
+              data-testid="button-copy-email-main"
+            >
+              <Copy className="w-4 h-4" />{emailCopied ? "Copied!" : "Copy Email Address"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Apply for Space Dialog (form-based events) */}
       <Dialog open={applyDialogOpen} onOpenChange={setApplyDialogOpen}>

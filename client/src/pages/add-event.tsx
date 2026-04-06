@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -22,7 +22,7 @@ const formSchema = z.object({
   vendorSpaces: z.coerce.number().min(0).default(0),
   spotPrice: z.coerce.number().min(0).default(0),
   registrationCode: z.string().optional(),
-  vendorRegistrationType: z.enum(["vendorgrid", "external", "form"]).optional(),
+  vendorRegistrationType: z.enum(["vendorgrid", "external", "form", "email"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.vendorRegistrationType === "external" && !data.vendorRegistrationUrl?.trim()) {
@@ -30,6 +30,12 @@ const formSchema = z.object({
   }
   if (data.vendorRegistrationType === "form" && !data.vendorRegistrationUrl?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter the application form URL", path: ["vendorRegistrationUrl"] });
+  }
+  if (data.vendorRegistrationType === "email" && !data.vendorRegistrationUrl?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter the email address vendors should contact", path: ["vendorRegistrationUrl"] });
+  }
+  if (data.vendorRegistrationType === "email" && data.vendorRegistrationUrl?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.vendorRegistrationUrl.trim())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter a valid email address", path: ["vendorRegistrationUrl"] });
   }
 });
 
@@ -214,6 +220,21 @@ export default function AddEvent() {
                         <p className="text-xs text-muted-foreground mt-0.5">Vendors apply via your form and await your approval</p>
                       </div>
                     </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-register-email"
+                      onClick={() => { field.onChange("email"); form.setValue("vendorRegistrationUrl", ""); }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "email" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "email" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Register via email</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors email you directly to apply for a space</p>
+                      </div>
+                    </button>
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -270,6 +291,27 @@ export default function AddEvent() {
             )}
 
             {/* Registration URL — shown for "external" or "form" */}
+            {isEventOwnerPro && registrationType === "email" && (
+              <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-primary" />Contact Email for Applications
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      data-testid="input-registration-email"
+                      type="email"
+                      placeholder="you@yourmarket.com"
+                      className="h-14 rounded-xl text-base"
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Vendors will be shown this email to contact you directly. It will be displayed as a copy-to-clipboard prompt.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
             {isEventOwnerPro && (registrationType === "external" || registrationType === "form") && (
               <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
                 <FormItem>
