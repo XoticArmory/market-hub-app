@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, ImageIcon as ImgIcon, X as XIcon } from "lucide-react";
+import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SiX, SiFacebook, SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -42,144 +41,9 @@ function trackAnonEventClick(eventId: number) {
   }).catch(() => {});
 }
 
-async function generateShareCard(event: any): Promise<{ dataUrl: string; blob: Blob }> {
-  const W = 800, H = 440;
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext("2d")!;
-
-  const drawRoundedRect = (x: number, y: number, w: number, h: number, r: number) => {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  };
-
-  const wrapText = (text: string, x: number, y: number, maxW: number, lineH: number, maxLines = 2) => {
-    const words = text.split(" ");
-    let line = "";
-    let linesDrawn = 0;
-    for (let i = 0; i < words.length; i++) {
-      const test = line + words[i] + " ";
-      if (ctx.measureText(test).width > maxW && i > 0) {
-        if (linesDrawn === maxLines - 1) { ctx.fillText(line.trimEnd() + "…", x, y); return; }
-        ctx.fillText(line.trimEnd(), x, y);
-        line = words[i] + " ";
-        y += lineH;
-        linesDrawn++;
-      } else { line = test; }
-    }
-    ctx.fillText(line.trimEnd(), x, y);
-  };
-
-  const BannerH = 280;
-
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.src = event.bannerUrl || `https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`;
-  await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
-
-  if (img.naturalWidth > 0) {
-    const aspect = img.naturalWidth / img.naturalHeight;
-    const dw = Math.max(W, BannerH * aspect);
-    const dh = Math.max(BannerH, W / aspect);
-    const dx = (W - dw) / 2;
-    const dy = (BannerH - dh) / 2;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, W, BannerH);
-    ctx.clip();
-    ctx.drawImage(img, dx, dy, dw, dh);
-    ctx.restore();
-  } else {
-    const grad = ctx.createLinearGradient(0, 0, W, BannerH);
-    grad.addColorStop(0, "#6366f1");
-    grad.addColorStop(1, "#8b5cf6");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, BannerH);
-  }
-
-  ctx.fillStyle = "rgba(0,0,0,0.38)";
-  ctx.fillRect(0, 0, W, BannerH);
-
-  const dateStr = format(new Date(event.date), "MMM d, yyyy");
-  const datePad = 12, dateFontSize = 15;
-  ctx.font = `bold ${dateFontSize}px system-ui, sans-serif`;
-  const dateW = ctx.measureText(dateStr).width + datePad * 2;
-  const dateH = 34;
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  drawRoundedRect(W - dateW - 20, 20, dateW, dateH, 8);
-  ctx.fill();
-  ctx.fillStyle = "#1a1a2e";
-  ctx.textAlign = "center";
-  ctx.fillText(dateStr, W - dateW / 2 - 20, 20 + dateH / 2 + 5);
-  ctx.textAlign = "left";
-
-  if (event.areaCode) {
-    ctx.font = `bold 13px system-ui, sans-serif`;
-    const acW = ctx.measureText(`#${event.areaCode}`).width + 20;
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    drawRoundedRect(20, 20, acW, 30, 6);
-    ctx.fill();
-    ctx.fillStyle = "#1a1a2e";
-    ctx.fillText(`#${event.areaCode}`, 30, 40);
-  }
-
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, BannerH, W, H - BannerH);
-
-  ctx.font = `bold 26px system-ui, sans-serif`;
-  ctx.fillStyle = "#1a1a2e";
-  wrapText(event.title, 28, BannerH + 38, W - 56, 32, 2);
-
-  ctx.font = `15px system-ui, sans-serif`;
-  ctx.fillStyle = "#64748b";
-  const loc = event.location || "";
-  wrapText(loc.length > 70 ? loc.slice(0, 68) + "…" : loc, 28, BannerH + 82, W - 56, 20, 1);
-
-  const infoY = BannerH + 108;
-  ctx.font = `13px system-ui, sans-serif`;
-  ctx.fillStyle = "#94a3b8";
-  const attending = event.attendingCount || 0;
-  const interested = event.interestedCount || 0;
-  ctx.fillText(`${attending} attending · ${interested} interested`, 28, infoY);
-
-  ctx.fillStyle = "#e2e8f0";
-  ctx.fillRect(0, H - 44, W, 44);
-  ctx.font = `bold 14px system-ui, sans-serif`;
-  ctx.fillStyle = "#6366f1";
-  ctx.fillText("VendorGrid", 28, H - 16);
-  ctx.font = `13px system-ui, sans-serif`;
-  ctx.fillStyle = "#64748b";
-  const eventPath = `/events/${event.id}`;
-  ctx.textAlign = "right";
-  ctx.fillText(`vendorgrid.net${eventPath}`, W - 28, H - 16);
-  ctx.textAlign = "left";
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) { reject(new Error("Canvas toBlob failed")); return; }
-      resolve({ dataUrl: canvas.toDataURL("image/png"), blob });
-    }, "image/png");
-  });
-}
-
 function ShareButton({ event }: { event: any }) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const [cardOpen, setCardOpen] = useState(false);
-  const [cardLoading, setCardLoading] = useState(false);
-  const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
-  const [cardBlob, setCardBlob] = useState<Blob | null>(null);
-  const [imgCopied, setImgCopied] = useState(false);
   const eventId = event.id;
   const eventTitle = event.title;
   const eventUrl = `${window.location.origin}/events/${eventId}`;
@@ -207,142 +71,38 @@ function ShareButton({ event }: { event: any }) {
     window.open(urls[platform], "_blank", "noopener,noreferrer,width=600,height=500");
   };
 
-  const handleShareCard = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setCardLoading(true);
-    setCardDataUrl(null);
-    setCardBlob(null);
-    setCardOpen(true);
-    try {
-      const { dataUrl, blob } = await generateShareCard(event);
-      setCardDataUrl(dataUrl);
-      setCardBlob(blob);
-    } catch {
-      toast({ title: "Couldn't generate card", description: "Please try again.", variant: "destructive" });
-      setCardOpen(false);
-    } finally {
-      setCardLoading(false);
-    }
-  };
-
-  const handleCopyImage = async () => {
-    if (!cardBlob) return;
-    try {
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": cardBlob })]);
-      setImgCopied(true);
-      toast({ title: "Image copied!", description: "Paste it into any post or message." });
-      setTimeout(() => setImgCopied(false), 2500);
-    } catch {
-      toast({ title: "Copy not supported", description: "Try downloading and sharing the image instead.", variant: "destructive" });
-    }
-  };
-
-  const handleDownload = () => {
-    if (!cardDataUrl) return;
-    const a = document.createElement("a");
-    a.href = cardDataUrl;
-    a.download = `vendorgrid-event-${eventId}.png`;
-    a.click();
-  };
-
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-            title="Share event"
-            data-testid={`button-share-event-${eventId}`}
-          >
-            <Share2 className="w-3.5 h-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-          <DropdownMenuItem onClick={handleCopy} data-testid={`menu-share-copy-${eventId}`} className="gap-2">
-            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
-            {copied ? "Copied!" : "Copy Link"}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleShareCard} data-testid={`menu-share-card-${eventId}`} className="gap-2">
-            <ImgIcon className="w-4 h-4" /> Share Event Card
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleShare("twitter")} data-testid={`menu-share-twitter-${eventId}`} className="gap-2">
-            <SiX className="w-4 h-4" /> Share on X
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleShare("facebook")} data-testid={`menu-share-facebook-${eventId}`} className="gap-2">
-            <SiFacebook className="w-4 h-4" /> Share on Facebook
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleShare("whatsapp")} data-testid={`menu-share-whatsapp-${eventId}`} className="gap-2">
-            <SiWhatsapp className="w-4 h-4" /> Share on WhatsApp
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog open={cardOpen} onOpenChange={(open) => { if (!open) setCardOpen(false); }}>
-        <DialogContent className="max-w-xl" onClick={(e) => e.stopPropagation()} data-testid={`dialog-share-card-${eventId}`}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Share2 className="w-4 h-4 text-primary" />Share Event Card</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {cardLoading ? (
-              <div className="flex flex-col items-center justify-center h-48 gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Generating card…</p>
-              </div>
-            ) : cardDataUrl ? (
-              <>
-                <a
-                  href={eventUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-xl overflow-hidden border border-border shadow-md hover:shadow-lg transition-shadow cursor-pointer"
-                  title="Click to open the event page"
-                  data-testid={`link-share-card-preview-${eventId}`}
-                >
-                  <img src={cardDataUrl} alt={eventTitle} className="w-full h-auto" />
-                </a>
-                <p className="text-xs text-center text-muted-foreground">Click the image to open the event page</p>
-                <div className="flex gap-2 justify-center flex-wrap">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl gap-2"
-                    onClick={handleCopyImage}
-                    data-testid={`button-copy-card-image-${eventId}`}
-                  >
-                    {imgCopied ? <Check className="w-4 h-4 text-green-500" /> : <ImgIcon className="w-4 h-4" />}
-                    {imgCopied ? "Image Copied!" : "Copy Image"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl gap-2"
-                    onClick={handleDownload}
-                    data-testid={`button-download-card-${eventId}`}
-                  >
-                    <Download className="w-4 h-4" /> Download
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl gap-2"
-                    onClick={handleCopy}
-                    data-testid={`button-copy-link-from-card-${eventId}`}
-                  >
-                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
-                    {copied ? "Link Copied!" : "Copy Link"}
-                  </Button>
-                </div>
-              </>
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          title="Share event"
+          data-testid={`button-share-event-${eventId}`}
+        >
+          <Share2 className="w-3.5 h-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+        <DropdownMenuItem onClick={handleCopy} data-testid={`menu-share-copy-${eventId}`} className="gap-2">
+          {copied ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
+          {copied ? "Copied!" : "Copy Link"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleShare("twitter")} data-testid={`menu-share-twitter-${eventId}`} className="gap-2">
+          <SiX className="w-4 h-4" /> Share on X
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleShare("facebook")} data-testid={`menu-share-facebook-${eventId}`} className="gap-2">
+          <SiFacebook className="w-4 h-4" /> Share on Facebook
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleShare("whatsapp")} data-testid={`menu-share-whatsapp-${eventId}`} className="gap-2">
+          <SiWhatsapp className="w-4 h-4" /> Share on WhatsApp
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
+
 
 export default function Home() {
   const [areaInput, setAreaInput] = useState("");
