@@ -258,11 +258,9 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
     }
   };
 
-  if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-
-  const attendedEvents = analytics?.attendedEvents || [];
-  const profileViewCount = analytics?.profileViewCount ?? 0;
-  const itemSummary = analytics?.itemSummary || {};
+  const attendedEvents: any[] = analytics?.attendedEvents || [];
+  const profileViewCount: number = analytics?.profileViewCount ?? 0;
+  const itemSummary: Record<string, any> = analytics?.itemSummary || {};
   const inventoryByEvent: Record<number, any[]> = analytics?.inventoryByEvent || {};
 
   const totalRevenueCents = Object.values(itemSummary).reduce((sum: number, v: any) => sum + (v.totalRevenueCents || 0), 0);
@@ -270,7 +268,7 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
 
   const activeEvents = (allEvents as any[]).filter((e: any) => !e.canceledAt);
 
-  // Pareto: revenue by event, sorted descending, with cumulative %
+  // Pareto: revenue by event, sorted descending, with cumulative % — must be before any early return
   const paretoData = useMemo(() => {
     const byEvent: { eventId: number; eventTitle: string; revenueCents: number }[] = [];
     for (const ev of attendedEvents) {
@@ -278,7 +276,7 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
       const revenueCents = items.reduce((s: number, i: any) => s + (i.quantitySold || 0) * (i.priceCents || 0), 0);
       byEvent.push({ eventId: ev.id, eventTitle: ev.title, revenueCents });
     }
-    const sorted = byEvent.sort((a, b) => b.revenueCents - a.revenueCents);
+    const sorted = [...byEvent].sort((a, b) => b.revenueCents - a.revenueCents);
     const grandTotal = sorted.reduce((s, e) => s + e.revenueCents, 0);
     let cumulative = 0;
     return sorted.map((e) => {
@@ -293,6 +291,8 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
   }, [attendedEvents, inventoryByEvent]);
 
   const hasParetoData = paretoData.some((d) => d.revenue > 0);
+
+  if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-6">
