@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -292,6 +292,17 @@ export default function Home() {
                           <Link href={`/events/${event.id}`} className="flex-1 min-w-0">
                             <h3 className="text-xl font-display font-bold text-foreground group-hover:text-primary transition-colors">{event.title}</h3>
                           </Link>
+                          {(event as any).contactEmail && (
+                            <a
+                              href={`mailto:${(event as any).contactEmail}`}
+                              className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title={`Email organizer: ${(event as any).contactEmail}`}
+                              data-testid={`link-event-email-${event.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                           {(event as any).creatorWebsiteUrl && (
                             <a
                               href={normalizeUrl((event as any).creatorWebsiteUrl)}
