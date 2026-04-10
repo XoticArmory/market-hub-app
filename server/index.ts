@@ -94,6 +94,14 @@ app.use((req, res, next) => {
     log(`Schema migration warning: ${e.message}`);
   }
 
+  // Add contact_email column to events table
+  try {
+    await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS contact_email text;`);
+    log("Schema migration: events.contact_email column ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
   // Reset all serial sequences to prevent duplicate key errors after data imports
   try {
     const serialTables = [
