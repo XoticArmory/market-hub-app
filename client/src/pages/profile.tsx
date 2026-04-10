@@ -292,6 +292,27 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
 
   const hasParetoData = paretoData.some((d) => d.revenue > 0);
 
+  // Pareto: units sold by item name, sorted descending, with cumulative %
+  const itemParetoData = useMemo(() => {
+    const entries = Object.entries(itemSummary).map(([name, data]: [string, any]) => ({
+      name: name.length > 18 ? name.slice(0, 16) + "…" : name,
+      fullName: name,
+      sold: data.totalSold as number,
+    }));
+    const sorted = [...entries].sort((a, b) => b.sold - a.sold);
+    const grandTotal = sorted.reduce((s, e) => s + e.sold, 0);
+    let cumulative = 0;
+    return sorted.map((e) => {
+      cumulative += e.sold;
+      return {
+        ...e,
+        cumulativePct: grandTotal > 0 ? Math.round((cumulative / grandTotal) * 100) : 0,
+      };
+    });
+  }, [itemSummary]);
+
+  const hasItemParetoData = itemParetoData.some((d) => d.sold > 0);
+
   if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
   return (
@@ -380,6 +401,80 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
                     dot={{ r: 4, fill: "#ef4444", strokeWidth: 0 }}
                     activeDot={{ r: 6 }}
                     data-testid="pareto-line"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pareto Chart — Units Sold by Item */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><ShoppingBag className="w-5 h-5 text-primary" />Units Sold by Item</CardTitle>
+          <CardDescription>Bars show total units sold per item (left axis). The red line tracks cumulative % of all units sold (right axis). Updates live as you edit your inventory.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!hasItemParetoData ? (
+            <div className="text-center py-10 bg-muted/30 rounded-2xl border border-dashed">
+              <ShoppingBag className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm text-muted-foreground">No units sold yet. Log sold quantities in the Inventory Tracker to see your item Pareto analysis.</p>
+            </div>
+          ) : (
+            <div className="w-full" style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={itemParetoData} margin={{ top: 8, right: 40, left: 0, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    angle={-35}
+                    textAnchor="end"
+                    interval={0}
+                    height={56}
+                  />
+                  <YAxis
+                    yAxisId="bar"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(v: number) => String(Math.round(v))}
+                    allowDecimals={false}
+                    width={40}
+                  />
+                  <YAxis
+                    yAxisId="line"
+                    orientation="right"
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(v: number) => `${v}%`}
+                    width={40}
+                  />
+                  <Tooltip
+                    contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--popover))", color: "hsl(var(--popover-foreground))" }}
+                    formatter={(value: any, name: string) => {
+                      if (name === "sold") return [value, "Units Sold"];
+                      if (name === "cumulativePct") return [`${value}%`, "Cumulative"];
+                      return [value, name];
+                    }}
+                    labelFormatter={(_label: any, payload: any[]) => payload?.[0]?.payload?.fullName || _label}
+                  />
+                  <Bar yAxisId="bar" dataKey="sold" radius={[6, 6, 0, 0]} maxBarSize={64} data-testid="item-pareto-bar">
+                    {itemParetoData.map((_entry, index) => (
+                      <Cell
+                        key={`cell-item-${index}`}
+                        fill={`hsl(var(--primary) / ${Math.max(0.4, 1 - index * (0.5 / Math.max(itemParetoData.length - 1, 1)))})`}
+                      />
+                    ))}
+                  </Bar>
+                  <Line
+                    yAxisId="line"
+                    type="monotone"
+                    dataKey="cumulativePct"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    dot={{ r: 4, fill: "#ef4444", strokeWidth: 0 }}
+                    activeDot={{ r: 6 }}
+                    data-testid="item-pareto-line"
                   />
                 </ComposedChart>
               </ResponsiveContainer>
