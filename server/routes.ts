@@ -8,7 +8,9 @@ import { authStorage } from "./replit_integrations/auth/storage";
 import Stripe from "stripe";
 import multer from "multer";
 import path from "path";
+import fs from "fs";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { pool } from "./db";
 
 const UPLOAD_BUCKET = "vendor-photos";
 
@@ -1504,6 +1506,67 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     await storage.redeemPromoCode(code, userId, 'temp_admin');
     await storage.upsertUserProfile(userId, { isAdmin: true });
     res.json({ success: true });
+  });
+
+  // Open Graph meta tag injection for social link previews on event pages.
+  // X, Facebook, and WhatsApp scrape the page URL server-side (no JS) and
+  // read OG tags to build the link preview card shown in the compose window.
+  app.get('/events/:id', async (req: any, res, next) => {
+    const accept = req.headers['accept'] || '';
+    if (!accept.includes('text/html')) return next();
+
+    const eventId = Number(req.params.id);
+    if (isNaN(eventId)) return next();
+
+    try {
+      const result = await pool.query(
+        `SELECT title, description, location, date, banner_url, area_code FROM events WHERE id = $1`,
+        [eventId]
+      );
+      if (result.rows.length === 0) return next();
+
+      const ev = result.rows[0];
+      const siteUrl = 'https://www.vendorgrid.net';
+      const eventUrl = `${siteUrl}/events/${eventId}`;
+      const imageUrl = ev.banner_url ||
+        `https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=1200&auto=format&fit=crop&sig=${eventId}`;
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const evDate = ev.date ? new Date(ev.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+      const ogTitle = esc(`${ev.title} | VendorGrid`);
+      const ogDesc = esc([ev.location, evDate].filter(Boolean).join(' \u2022 '));
+      const ogImage = esc(imageUrl);
+      const ogUrl = esc(eventUrl);
+
+      const ogTags = `
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="VendorGrid" />
+    <meta property="og:url" content="${ogUrl}" />
+    <meta property="og:title" content="${ogTitle}" />
+    <meta property="og:description" content="${ogDesc}" />
+    <meta property="og:image" content="${ogImage}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@VendorGrid" />
+    <meta name="twitter:title" content="${ogTitle}" />
+    <meta name="twitter:description" content="${ogDesc}" />
+    <meta name="twitter:image" content="${ogImage}" />`;
+
+      let html: string;
+      if (process.env.NODE_ENV === 'production') {
+        const distPath = path.resolve(__dirname, 'public', 'index.html');
+        html = fs.readFileSync(distPath, 'utf8');
+      } else {
+        const devPath = path.resolve(__dirname, '..', 'client', 'index.html');
+        html = fs.readFileSync(devPath, 'utf8');
+      }
+
+      html = html.replace('</head>', `${ogTags}\n  </head>`);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
+    } catch {
+      next();
+    }
   });
 
   return httpServer;
