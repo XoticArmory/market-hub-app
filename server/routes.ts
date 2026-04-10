@@ -311,7 +311,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
     if (!isEventOwnerPro && !isAdmin) return res.status(403).json({ message: "Event Owner Pro required to edit events." });
-    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'vendorSpaces', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl'];
+    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'vendorSpaces', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail'];
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (key in req.body) data[key] = req.body[key];
