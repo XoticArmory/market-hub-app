@@ -49,6 +49,7 @@ const editEventSchema = z.object({
   vendorRegistrationType: z.string().optional(),
   vendorRegistrationUrl: z.string().optional(),
   registrationCode: z.string().optional(),
+  contactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
 });
 type EditEventValues = z.infer<typeof editEventSchema>;
 
@@ -72,6 +73,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
       vendorRegistrationType: event?.vendorRegistrationType || "",
       vendorRegistrationUrl: event?.vendorRegistrationUrl || "",
       registrationCode: event?.registrationCode || "",
+      contactEmail: event?.contactEmail || "",
     },
   });
 
@@ -87,6 +89,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
       vendorRegistrationType: vals.vendorRegistrationType || null,
       vendorRegistrationUrl: vals.vendorRegistrationUrl || null,
       registrationCode: vals.registrationCode || null,
+      contactEmail: vals.contactEmail || null,
     });
   }
 
@@ -187,6 +190,14 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
                 <FormItem>
                   <FormLabel>Registration Code</FormLabel>
                   <FormControl><Input {...field} placeholder="Optional code for vendors" data-testid="input-edit-regcode" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="contactEmail" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-primary" />Contact Email</FormLabel>
+                  <FormControl><Input {...field} type="email" placeholder="yourname@email.com" data-testid="input-edit-contact-email" /></FormControl>
+                  <p className="text-xs text-muted-foreground">Shown on the event card so anyone can email you.</p>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -615,6 +626,17 @@ export default function EventDetail() {
                 )}
                 {event.isFeatured && <Badge className="text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300"><Star className="w-3 h-3 mr-1" />Featured</Badge>}
               </div>
+            )}
+            {(event as any).contactEmail && (
+              <a
+                href={`mailto:${(event as any).contactEmail}`}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                title={`Email organizer: ${(event as any).contactEmail}`}
+                data-testid="link-contact-email-detail"
+              >
+                <Mail className="w-4 h-4 text-primary" />
+                <span>{(event as any).contactEmail}</span>
+              </a>
             )}
           </div>
 

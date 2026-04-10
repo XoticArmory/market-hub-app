@@ -21,6 +21,7 @@ const formSchema = z.object({
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
   vendorSpaces: z.coerce.number().min(0).default(0),
   spotPrice: z.coerce.number().min(0).default(0),
+  contactEmail: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
   registrationCode: z.string().optional(),
   vendorRegistrationType: z.enum(["vendorgrid", "external", "form", "email"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
@@ -62,6 +63,7 @@ export default function AddEvent() {
       date: "",
       vendorSpaces: 0,
       spotPrice: 0,
+      contactEmail: "",
       registrationCode: "",
       vendorRegistrationType: undefined,
       vendorRegistrationUrl: "",
@@ -166,6 +168,26 @@ export default function AddEvent() {
                 </FormItem>
               )} />
             </div>
+
+            {/* Contact Email — available to all event owners */}
+            <FormField control={form.control} name="contactEmail" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base font-semibold flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-primary" />Contact Email <span className="text-muted-foreground font-normal">(Optional)</span>
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    data-testid="input-contact-email"
+                    type="email"
+                    placeholder="yourname@email.com"
+                    className="h-14 rounded-xl text-base"
+                    {...field}
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Shown on your event card so anyone can email you directly with questions.</p>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             {/* Vendor Registration Method — Event Owner Pro only */}
             {isEventOwnerPro && (
