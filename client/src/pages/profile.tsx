@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { ImageUpload } from "@/components/image-upload";
 import { useProfile, useUpsertProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
@@ -269,6 +270,30 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
 
   const activeEvents = (allEvents as any[]).filter((e: any) => !e.canceledAt);
 
+  // Pareto: revenue by event, sorted descending, with cumulative %
+  const paretoData = useMemo(() => {
+    const byEvent: { eventId: number; eventTitle: string; revenueCents: number }[] = [];
+    for (const ev of attendedEvents) {
+      const items: any[] = inventoryByEvent[ev.id] || [];
+      const revenueCents = items.reduce((s: number, i: any) => s + (i.quantitySold || 0) * (i.priceCents || 0), 0);
+      byEvent.push({ eventId: ev.id, eventTitle: ev.title, revenueCents });
+    }
+    const sorted = byEvent.sort((a, b) => b.revenueCents - a.revenueCents);
+    const grandTotal = sorted.reduce((s, e) => s + e.revenueCents, 0);
+    let cumulative = 0;
+    return sorted.map((e) => {
+      cumulative += e.revenueCents;
+      return {
+        name: e.eventTitle.length > 18 ? e.eventTitle.slice(0, 16) + "…" : e.eventTitle,
+        fullName: e.eventTitle,
+        revenue: e.revenueCents / 100,
+        cumulativePct: grandTotal > 0 ? Math.round((cumulative / grandTotal) * 100) : 0,
+      };
+    });
+  }, [attendedEvents, inventoryByEvent]);
+
+  const hasParetoData = paretoData.some((d) => d.revenue > 0);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -287,6 +312,81 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
           </div>
         ))}
       </div>
+
+      {/* Pareto Chart — Revenue by Event */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-primary" />Revenue by Event</CardTitle>
+          <CardDescription>Bars show revenue per event (left axis). The red line tracks cumulative % of total (right axis). Updates live as you edit your inventory.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          ) : !hasParetoData ? (
+            <div className="text-center py-10 bg-muted/30 rounded-2xl border border-dashed">
+              <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm text-muted-foreground">No sales data yet. Log sold quantities in the Inventory Tracker to see your Pareto analysis.</p>
+            </div>
+          ) : (
+            <div className="w-full" style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={paretoData} margin={{ top: 8, right: 40, left: 0, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    angle={-35}
+                    textAnchor="end"
+                    interval={0}
+                    height={56}
+                  />
+                  <YAxis
+                    yAxisId="bar"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(v: number) => `$${v % 1 === 0 ? v : v.toFixed(2)}`}
+                    width={56}
+                  />
+                  <YAxis
+                    yAxisId="line"
+                    orientation="right"
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(v: number) => `${v}%`}
+                    width={40}
+                  />
+                  <Tooltip
+                    contentStyle={{ borderRadius: "12px", border: "1px solid hsl(var(--border))", background: "hsl(var(--popover))", color: "hsl(var(--popover-foreground))" }}
+                    formatter={(value: any, name: string) => {
+                      if (name === "revenue") return [`$${Number(value).toFixed(2)}`, "Revenue"];
+                      if (name === "cumulativePct") return [`${value}%`, "Cumulative"];
+                      return [value, name];
+                    }}
+                    labelFormatter={(_label: any, payload: any[]) => payload?.[0]?.payload?.fullName || _label}
+                  />
+                  <Bar yAxisId="bar" dataKey="revenue" radius={[6, 6, 0, 0]} maxBarSize={64} data-testid="pareto-bar">
+                    {paretoData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={`hsl(var(--primary) / ${Math.max(0.4, 1 - index * (0.5 / Math.max(paretoData.length - 1, 1)))})`}
+                      />
+                    ))}
+                  </Bar>
+                  <Line
+                    yAxisId="line"
+                    type="monotone"
+                    dataKey="cumulativePct"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    dot={{ r: 4, fill: "#ef4444", strokeWidth: 0 }}
+                    activeDot={{ r: 6 }}
+                    data-testid="pareto-line"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* My Items Catalog */}
       <Card>
