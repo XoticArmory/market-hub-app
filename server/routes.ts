@@ -1511,10 +1511,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Open Graph meta tag injection for social link previews on event pages.
   // X, Facebook, and WhatsApp scrape the page URL server-side (no JS) and
   // read OG tags to build the link preview card shown in the compose window.
+  // NOTE: Facebook's bot sends Accept: */* — do NOT filter on Accept header.
   app.get('/events/:id', async (req: any, res, next) => {
-    const accept = req.headers['accept'] || '';
-    if (!accept.includes('text/html')) return next();
-
     const eventId = Number(req.params.id);
     if (isNaN(eventId)) return next();
 
