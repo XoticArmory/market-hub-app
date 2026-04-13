@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { CalendarDays, MessageCircle, PlusCircle, Store, LogIn, LogOut, User, ShieldCheck, Crown, Bell } from "lucide-react";
+import { CalendarDays, MessageCircle, PlusCircle, Store, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile, useRealProfile } from "@/hooks/use-profile";
 import { useUnreadCount } from "@/hooks/use-notifications";
+import { useAdminPreview } from "@/contexts/admin-preview";
 
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "VendorGrid Pro",
@@ -21,12 +22,15 @@ export function AppSidebar() {
   const { data: profileData } = useProfile();
   const { data: realProfileData } = useRealProfile();
   const { data: unreadData } = useUnreadCount();
+  const { previewTier, setPreviewTier } = useAdminPreview();
   const profile = profileData?.profile;
   const realProfile = realProfileData?.profile;
   const isAdmin = realProfile?.isAdmin === true;
   const hasActivePro = profile?.subscriptionStatus === "active" && profile?.subscriptionTier && profile.subscriptionTier !== "free";
   const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const unreadCount = unreadData?.count || 0;
+
+  const previewLabel: Record<string, string> = { admin: "Admin", vendor_pro: "Pro user", free: "Free user" };
 
   const navItems = [
     { title: "Market Events", url: "/", icon: CalendarDays },
@@ -46,6 +50,21 @@ export function AppSidebar() {
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Grid</p>
           </div>
         </div>
+
+        {isAdmin && previewTier && (
+          <div className="mx-4 mb-3 flex items-center gap-2 bg-amber-500/10 border border-amber-400/40 text-amber-700 dark:text-amber-300 text-xs font-medium px-3 py-2 rounded-xl">
+            <Eye className="w-3.5 h-3.5 shrink-0" />
+            <span className="flex-1">Preview: <span className="font-semibold">{previewLabel[previewTier]}</span></span>
+            <button
+              onClick={() => setPreviewTier(null)}
+              className="opacity-60 hover:opacity-100 transition-opacity"
+              title="Exit preview mode"
+              data-testid="button-exit-preview"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Navigation</SidebarGroupLabel>
