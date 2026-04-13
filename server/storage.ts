@@ -4,7 +4,7 @@ import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, roadmapItems,
-  promoCodes, promoCodeUses, anonymousEventClicks,
+  promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -12,7 +12,9 @@ import {
   type VendorInventoryItem, type InsertVendorInventory,
   type RoadmapItem, type InsertRoadmapItem,
   type VendorCatalogItem, type InsertVendorCatalog, type VendorCatalogAssignment,
+  type EventVendorEntry,
 } from "@shared/schema";
+import { users } from "@shared/models/auth";
 
 export interface IStorage {
   // Profiles
@@ -129,6 +131,12 @@ export interface IStorage {
   validatePromoCode(code: string, tier: string): Promise<{ valid: boolean; promoCode?: any; error?: string }>;
   redeemPromoCode(code: string, userId: string, tier: string): Promise<any>;
   revokePromoCodeAccess(promoCodeId: number): Promise<void>;
+
+  // Event Vendor Entries (owner-added)
+  getEventVendorEntries(eventId: number): Promise<EventVendorEntry[]>;
+  createEventVendorEntry(data: { eventId: number; addedBy: string; name: string; description?: string; email?: string; verificationCode?: string; matchedUserId?: string }): Promise<EventVendorEntry>;
+  deleteEventVendorEntry(id: number): Promise<void>;
+  getUserByEmail(email: string): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string | null } | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -843,6 +851,29 @@ export class DatabaseStorage implements IStorage {
       await db.update(userProfiles).set({ isAdmin: false }).where(eq(userProfiles.userId, uid));
     }
     await db.update(promoCodes).set({ isActive: false }).where(eq(promoCodes.id, promoCodeId));
+  }
+
+  // ---- Event Vendor Entries ----
+  async getEventVendorEntries(eventId: number): Promise<EventVendorEntry[]> {
+    return await db.select().from(eventVendorEntries)
+      .where(eq(eventVendorEntries.eventId, eventId))
+      .orderBy(desc(eventVendorEntries.createdAt));
+  }
+
+  async createEventVendorEntry(data: { eventId: number; addedBy: string; name: string; description?: string; email?: string; verificationCode?: string; matchedUserId?: string }): Promise<EventVendorEntry> {
+    const [entry] = await db.insert(eventVendorEntries).values(data).returning();
+    return entry;
+  }
+
+  async deleteEventVendorEntry(id: number): Promise<void> {
+    await pool.query("DELETE FROM event_vendor_entries WHERE id = $1", [id]);
+  }
+
+  async getUserByEmail(email: string): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string | null } | undefined> {
+    const [u] = await db.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email })
+      .from(users)
+      .where(eq(users.email, email.toLowerCase().trim()));
+    return u;
   }
 }
 

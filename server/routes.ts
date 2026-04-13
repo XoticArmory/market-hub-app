@@ -389,6 +389,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true, notified: allUserIds.length });
   });
 
+  // ---- EVENT VENDOR ENTRIES (owner-added) ----
+  app.get('/api/events/:id/vendor-entries', async (req: any, res) => {
+    const eventId = Number(req.params.id);
+    const entries = await storage.getEventVendorEntries(eventId);
+    res.json(entries);
+  });
+
+  app.post('/api/events/:id/vendor-entries/lookup-email', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const profile = await storage.getUserProfile(userId);
+    if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email required" });
+    const user = await storage.getUserByEmail(email);
+    if (!user) return res.json({ found: false });
+    res.json({ found: true, userId: user.id, userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email });
+  });
+
+  app.post('/api/events/:id/vendor-entries', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const profile = await storage.getUserProfile(userId);
+    if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+    if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required." });
+    const { name, description, email, matchedUserId, sendNotification } = req.body;
+    if (!name?.trim()) return res.status(400).json({ message: "Vendor name is required" });
+    const verificationCode = sendNotification && matchedUserId
+      ? Math.random().toString(36).slice(2, 8).toUpperCase()
+      : undefined;
+    const entry = await storage.createEventVendorEntry({
+      eventId, addedBy: userId,
+      name: name.trim(),
+      description: description?.trim() || undefined,
+      email: email?.trim() || undefined,
+      verificationCode,
+      matchedUserId: matchedUserId || undefined,
+    });
+    if (sendNotification && matchedUserId && verificationCode) {
+      await storage.createNotification({
+        userId: matchedUserId,
+        fromUserId: userId,
+        type: "vendor_invite",
+        title: `You've been added to ${event.title}`,
+        message: `${profile?.businessName || 'An event owner'} added you as a vendor at "${event.title}". Your verification code is: ${verificationCode}`,
+        eventId,
+      });
+    }
+    res.status(201).json(entry);
+  });
+
+  app.delete('/api/events/:id/vendor-entries/:entryId', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const entryId = Number(req.params.entryId);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const profile = await storage.getUserProfile(userId);
+    if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteEventVendorEntry(entryId);
+    res.status(204).end();
+  });
+
   // ---- ATTENDANCE ROUTES ----
   app.post(api.attendance.setStatus.path, isAuthenticated, async (req: any, res) => {
     try {

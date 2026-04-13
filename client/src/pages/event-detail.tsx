@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +23,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EventMapEditor } from "@/components/EventMapEditor";
 import { ImageUpload } from "@/components/image-upload";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@shared/routes";
 
@@ -253,6 +253,13 @@ export default function EventDetail() {
   const [bannerUploading, setBannerUploading] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [addVendorOpen, setAddVendorOpen] = useState(false);
+  const [addVendorName, setAddVendorName] = useState("");
+  const [addVendorDesc, setAddVendorDesc] = useState("");
+  const [addVendorEmail, setAddVendorEmail] = useState("");
+  const [emailLookup, setEmailLookup] = useState<{ found: boolean; userId?: string; userName?: string } | null>(null);
+  const [emailLooking, setEmailLooking] = useState(false);
+  const [sendVendorNotif, setSendVendorNotif] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -335,6 +342,65 @@ export default function EventDetail() {
     },
     onError: (e: any) => toast({ title: e.message || "Failed to update event.", variant: "destructive" }),
   });
+
+  const { data: vendorEntries, isLoading: isLoadingEntries } = useQuery<any[]>({
+    queryKey: [`/api/events/${eventId}/vendor-entries`],
+    queryFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/vendor-entries`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!eventId,
+  });
+
+  const addVendorEntry = useMutation({
+    mutationFn: async (data: { name: string; description?: string; email?: string; matchedUserId?: string; sendNotification?: boolean }) => {
+      const res = await fetch(`/api/events/${eventId}/vendor-entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Failed"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/events/${eventId}/vendor-entries`] });
+      setAddVendorOpen(false);
+      setAddVendorName(""); setAddVendorDesc(""); setAddVendorEmail("");
+      setEmailLookup(null); setSendVendorNotif(false);
+      toast({ title: "Vendor added!" });
+    },
+    onError: (e: any) => toast({ title: e.message || "Failed to add vendor.", variant: "destructive" }),
+  });
+
+  const removeVendorEntry = useMutation({
+    mutationFn: async (entryId: number) => {
+      const res = await fetch(`/api/events/${eventId}/vendor-entries/${entryId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to remove");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/events/${eventId}/vendor-entries`] });
+      toast({ title: "Vendor removed." });
+    },
+    onError: () => toast({ title: "Failed to remove vendor.", variant: "destructive" }),
+  });
+
+  const lookupEmail = async (email: string) => {
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setEmailLookup(null); return; }
+    setEmailLooking(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/vendor-entries/lookup-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) setEmailLookup(await res.json());
+      else setEmailLookup(null);
+    } catch { setEmailLookup(null); }
+    finally { setEmailLooking(false); }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1017,9 +1083,112 @@ export default function EventDetail() {
         </TabsList>
 
         <TabsContent value="vendors" className="mt-0">
-          {isLoadingPosts ? (
+          {/* Add Vendor button — event owners only */}
+          {canManageEvent && (
+            <div className="flex justify-end mb-4">
+              <Button
+                size="sm"
+                className="rounded-xl gap-2 bg-gradient-to-r from-primary to-amber-500"
+                onClick={() => setAddVendorOpen(true)}
+                data-testid="button-add-vendor"
+              >
+                <PlusCircle className="w-4 h-4" />Add Vendor
+              </Button>
+            </div>
+          )}
+
+          {/* Add Vendor Dialog */}
+          <Dialog open={addVendorOpen} onOpenChange={(v) => {
+            setAddVendorOpen(v);
+            if (!v) { setAddVendorName(""); setAddVendorDesc(""); setAddVendorEmail(""); setEmailLookup(null); setSendVendorNotif(false); }
+          }}>
+            <DialogContent className="sm:max-w-md rounded-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-display">Add a Vendor</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-1.5 block">Vendor Name <span className="text-destructive">*</span></label>
+                  <Input
+                    value={addVendorName}
+                    onChange={e => setAddVendorName(e.target.value)}
+                    placeholder="e.g. Sunshine Candle Co."
+                    data-testid="input-vendor-name"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-1.5 block">Description <span className="text-xs text-muted-foreground font-normal">(optional)</span></label>
+                  <Textarea
+                    value={addVendorDesc}
+                    onChange={e => setAddVendorDesc(e.target.value)}
+                    placeholder="What will this vendor be selling?"
+                    rows={2}
+                    data-testid="input-vendor-desc"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-foreground mb-1.5 block">Email <span className="text-xs text-muted-foreground font-normal">(optional)</span></label>
+                  <Input
+                    type="email"
+                    value={addVendorEmail}
+                    onChange={e => { setAddVendorEmail(e.target.value); setEmailLookup(null); setSendVendorNotif(false); }}
+                    onBlur={e => lookupEmail(e.target.value)}
+                    placeholder="vendor@example.com"
+                    data-testid="input-vendor-email"
+                  />
+                  {emailLooking && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Looking up email…</p>}
+                  {emailLookup?.found && (
+                    <div className="mt-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <p className="text-sm font-medium text-green-800 dark:text-green-300 flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 shrink-0" />Registered user: <span className="font-bold">{emailLookup.userName}</span>
+                      </p>
+                      <p className="text-xs text-green-700 dark:text-green-400 mt-2 mb-2">Send them a push notification with a verification code?</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSendVendorNotif(true)}
+                          className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${sendVendorNotif ? 'bg-green-600 text-white border-green-600' : 'bg-white dark:bg-gray-800 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30'}`}
+                          data-testid="button-send-notif-yes"
+                        >
+                          Yes, send code
+                        </button>
+                        <button
+                          onClick={() => setSendVendorNotif(false)}
+                          className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${!sendVendorNotif ? 'bg-gray-200 dark:bg-gray-700 text-foreground border-gray-300 dark:border-gray-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-muted-foreground hover:bg-gray-50'}`}
+                          data-testid="button-send-notif-no"
+                        >
+                          No thanks
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {emailLookup && !emailLookup.found && addVendorEmail.trim() && (
+                    <p className="text-xs text-muted-foreground mt-1">No registered user found for this email.</p>
+                  )}
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAddVendorOpen(false)}>Cancel</Button>
+                  <Button
+                    className="flex-1 rounded-xl bg-gradient-to-r from-primary to-amber-500"
+                    disabled={!addVendorName.trim() || addVendorEntry.isPending}
+                    onClick={() => addVendorEntry.mutate({
+                      name: addVendorName,
+                      description: addVendorDesc || undefined,
+                      email: addVendorEmail || undefined,
+                      matchedUserId: emailLookup?.found ? emailLookup.userId : undefined,
+                      sendNotification: sendVendorNotif,
+                    })}
+                    data-testid="button-confirm-add-vendor"
+                  >
+                    {addVendorEntry.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Adding…</> : "Add Vendor"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {isLoadingPosts || isLoadingEntries ? (
             <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
-          ) : posts?.length === 0 ? (
+          ) : (posts?.length === 0 && (!vendorEntries || vendorEntries.length === 0)) ? (
             <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-medium mb-2">No vendors listed yet</h3>
@@ -1027,6 +1196,42 @@ export default function EventDetail() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Owner-added vendor entries */}
+              {(vendorEntries || []).map((entry: any) => (
+                <div key={`entry-${entry.id}`} className="bg-card p-5 rounded-2xl border border-border/50 shadow-sm relative" data-testid={`vendor-entry-${entry.id}`}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-800">
+                      <Store className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-semibold text-foreground">{entry.name}</h4>
+                        <Badge variant="outline" className="text-[10px] px-2 py-0 border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400">Added by owner</Badge>
+                      </div>
+                      {entry.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{entry.description}</p>}
+                      {canManageEvent && entry.email && (
+                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Mail className="w-3 h-3" />{entry.email}</p>
+                      )}
+                      {canManageEvent && entry.verificationCode && (
+                        <p className="text-xs mt-1 font-mono bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded text-amber-800 dark:text-amber-300 inline-flex items-center gap-1">
+                          <Key className="w-3 h-3" />Code: {entry.verificationCode}
+                        </p>
+                      )}
+                    </div>
+                    {canManageEvent && (
+                      <button
+                        onClick={() => removeVendorEntry.mutate(entry.id)}
+                        disabled={removeVendorEntry.isPending}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                        title="Remove vendor"
+                        data-testid={`button-remove-entry-${entry.id}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
               {posts?.map((post: any) => {
                 const isMyPost = post.vendorId === user?.id;
                 const postImages: string[] = post.imageUrls || [];

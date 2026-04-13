@@ -182,6 +182,18 @@ export const vendorCatalogAssignments = pgTable("vendor_catalog_assignments", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [unique("vendor_catalog_assignment_unique").on(t.catalogItemId, t.eventId)]);
 
+export const eventVendorEntries = pgTable("event_vendor_entries", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  addedBy: varchar("added_by").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  email: text("email"),
+  verificationCode: text("verification_code"),
+  matchedUserId: varchar("matched_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const promoCodes = pgTable("promo_codes", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -217,6 +229,7 @@ export const insertVendorInventorySchema = createInsertSchema(vendorInventory).o
 export const insertRoadmapItemSchema = createInsertSchema(roadmapItems).omit({ id: true, createdBy: true, createdAt: true, updatedAt: true });
 export const insertVendorCatalogSchema = createInsertSchema(vendorCatalog).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
 export const insertVendorCatalogAssignmentSchema = createInsertSchema(vendorCatalogAssignments).omit({ id: true, vendorId: true, createdAt: true });
+export const insertEventVendorEntrySchema = createInsertSchema(eventVendorEntries).omit({ id: true, addedBy: true, createdAt: true });
 export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({ id: true, createdBy: true, usesCount: true, createdAt: true });
 export type PromoCode = typeof promoCodes.$inferSelect;
 export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
@@ -255,6 +268,8 @@ export type VendorCatalogItem = typeof vendorCatalog.$inferSelect;
 export type InsertVendorCatalog = z.infer<typeof insertVendorCatalogSchema>;
 export type VendorCatalogAssignment = typeof vendorCatalogAssignments.$inferSelect;
 export type InsertVendorCatalogAssignment = z.infer<typeof insertVendorCatalogAssignmentSchema>;
+export type EventVendorEntry = typeof eventVendorEntries.$inferSelect;
+export type InsertEventVendorEntry = z.infer<typeof insertEventVendorEntrySchema>;
 
 // ---- API Contract Types ----
 export type EventResponse = Event & {
