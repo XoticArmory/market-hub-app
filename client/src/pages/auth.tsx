@@ -16,8 +16,10 @@ export default function AuthPage() {
     new URLSearchParams(search).get("mode") === "signup" ? "signup" : "login"
   );
 
+  const nextParam = new URLSearchParams(search).get("next") || "/";
+
   useEffect(() => {
-    if (!isLoading && isAuthenticated) setLocation("/");
+    if (!isLoading && isAuthenticated) setLocation(nextParam);
   }, [isAuthenticated, isLoading]);
 
   // Sync mode when URL search params change (e.g. navigating back from tour)
@@ -82,7 +84,7 @@ export default function AuthPage() {
     if (!res.ok) throw new Error("Failed to authenticate with server");
     await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     await queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
-    setLocation("/");
+    setLocation(nextParam);
   };
 
   return (

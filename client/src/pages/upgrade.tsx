@@ -97,7 +97,7 @@ export default function UpgradePage() {
   const hasActivePro = profile?.subscriptionStatus === "active" && currentTier !== "free";
 
   const handleUpgrade = (tierId: string) => {
-    if (!isAuthenticated) { window.location.href = "/auth"; return; }
+    if (!isAuthenticated) { window.location.href = "/auth?mode=signup&next=/upgrade"; return; }
     setSelectedTier(tierId);
     setPromoInput("");
     setPromoResult(null);

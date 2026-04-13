@@ -258,9 +258,9 @@ export default function TourPage() {
                   <Button
                     data-testid="button-subscribe-pro"
                     className="w-full h-10 rounded-xl bg-gradient-to-r from-primary to-amber-500 text-sm mt-2"
-                    onClick={() => setLocation("/upgrade?plan=vendor_pro&next=/setup")}
+                    onClick={() => setLocation(isAuthenticated ? "/upgrade" : "/auth?mode=signup&next=/upgrade")}
                   >
-                    Subscribe
+                    {isAuthenticated ? "Subscribe" : "Sign Up & Subscribe"}
                   </Button>
                 </div>
 
