@@ -2,13 +2,13 @@
 
 ## Overview
 
-VendorGrid is a comprehensive multi-tier subscription marketplace for local artisan markets and vendors. It allows event owners to create and manage market events with interactive vendor maps, vendors to register for event spaces and post what they're bringing, and community members to browse events, track attendance, and chat. The platform features three Pro subscription tiers and a full super-admin control panel.
+VendorGrid is a comprehensive subscription marketplace for local artisan markets and vendors. It allows event owners to create and manage market events with interactive vendor maps, vendors to register for event spaces and post what they're bringing, and community members to browse events, track attendance, and chat. The platform features a single unified Pro tier and a full super-admin control panel.
 
 Key features:
 - Browse and create artisan market events (all authenticated users, no fee required)
-- 2 Pro subscription tiers: Event Owner Pro ($19.95/mo), Vendor Pro ($9.95/mo)
-- Event Owner Pro: push notifications to local Vendor Pros, event analytics, interactive map builder, boosted listings
-- Vendor Pro: 0% platform fee on space registrations, notification receipt, full Vendor Analytics dashboard
+- 1 Pro subscription tier: VendorGrid Pro ($14.95/mo) — includes all features for both event owners and vendors
+- VendorGrid Pro: push notifications to local Pro users, event analytics, interactive map builder, boosted listings, 0% platform fee on space registrations, notification receipt, full Vendor Analytics dashboard
+- Legacy tier: event_owner_pro recognized server-side for backward compat (existing subscribers keep full Pro access)
 - Vendor Analytics (Vendor Pro + Admin): events attended, profile view count, per-event inventory tracking (items brought/sold/price), sales summary, revenue calculation
 - Profile view tracking: automatically logged when authenticated users view another user's profile
 - Vendor inventory management: add/edit/delete items per event with quantities and prices

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 
-export type PreviewTier = "admin" | "event_owner_pro" | "vendor_pro" | "free" | null;
+export type PreviewTier = "admin" | "vendor_pro" | "free" | null;
 
 interface AdminPreviewContextType {
   previewTier: PreviewTier;
@@ -26,8 +26,7 @@ export function useAdminPreview() {
 }
 
 export const PREVIEW_OVERRIDES: Record<string, Partial<any>> = {
-  admin: { isAdmin: true, subscriptionTier: "event_owner_pro", subscriptionStatus: "active", profileType: "event_owner" },
-  event_owner_pro: { isAdmin: false, subscriptionTier: "event_owner_pro", subscriptionStatus: "active", profileType: "event_owner" },
-  vendor_pro: { isAdmin: false, subscriptionTier: "vendor_pro", subscriptionStatus: "active", profileType: "vendor" },
+  admin: { isAdmin: true, subscriptionTier: "vendor_pro", subscriptionStatus: "active", profileType: "pro" },
+  vendor_pro: { isAdmin: false, subscriptionTier: "vendor_pro", subscriptionStatus: "active", profileType: "pro" },
   free: { isAdmin: false, subscriptionTier: "free", subscriptionStatus: "inactive", profileType: "general" },
 };

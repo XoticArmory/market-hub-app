@@ -31,16 +31,13 @@ const PROFILE_TYPES = [
 ];
 
 const TIER_LABELS: Record<string, string> = {
-  event_owner_pro: "Event Owner Pro",
-  vendor_pro: "Vendor Pro",
+  event_owner_pro: "VendorGrid Pro",
+  vendor_pro: "VendorGrid Pro",
   free: "Free",
 };
 
-function tierToProfileType(tier?: string | null, status?: string | null): string {
-  if (status === "active") {
-    if (tier === "event_owner_pro") return "event_owner";
-    if (tier === "vendor_pro") return "vendor";
-  }
+function tierToProfileType(_tier?: string | null, status?: string | null): string {
+  if (status === "active") return "pro";
   return "general";
 }
 
@@ -837,8 +834,7 @@ function VendorAnalyticsTab({ userId }: { userId: string }) {
 }
 
 const TIER_LABELS_PROMO: Record<string, string> = {
-  event_owner_pro: "Event Owner Pro",
-  vendor_pro: "Vendor Pro",
+  vendor_pro: "VendorGrid Pro",
 };
 
 function AdminPromoSection({ userId }: { userId: string }) {
@@ -909,9 +905,8 @@ function AdminPromoSection({ userId }: { userId: string }) {
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Applicable Tier</label>
               <select className="w-full h-10 rounded-xl border border-border px-3 bg-background text-foreground text-sm" value={promoForm.applicableTier} onChange={e => setPromoForm(f => ({ ...f, applicableTier: e.target.value }))}>
-                <option value="all">Both tiers</option>
-                <option value="event_owner_pro">Event Owner Pro only</option>
-                <option value="vendor_pro">Vendor Pro only</option>
+                <option value="all">All tiers</option>
+                <option value="vendor_pro">VendorGrid Pro only</option>
               </select>
             </div>
             <div>
@@ -984,8 +979,8 @@ export default function ProfilePage() {
   const userId = user?.id;
   const isAdmin = profile?.isAdmin === true;
 
-  const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
-  const isVendorPro = isAdmin || (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active");
+  const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
+  const isVendorPro = isEventOwnerPro;
   const hasActivePro = isAdmin || (profile?.subscriptionStatus === "active" && (profile?.subscriptionTier !== "free" && profile?.subscriptionTier !== null));
 
   const { data: analytics } = useOwnerAnalytics(isEventOwnerPro ? userId : undefined);
@@ -1325,8 +1320,7 @@ export default function ProfilePage() {
                     onChange={e => setNotifForm(f => ({ ...f, targetAudience: e.target.value }))}
                     data-testid="select-target-audience"
                   >
-                    <option value="vendor_pro">Vendor Pro accounts</option>
-                    <option value="event_owner_pro">Event Owner Pro accounts</option>
+                    <option value="vendor_pro">Pro accounts</option>
                     <option value="general">General (free) accounts</option>
                     <option value="all">All accounts</option>
                   </select>

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CheckCircle, Store, Package, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X } from "lucide-react";
+import { CheckCircle, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X } from "lucide-react";
 
 const TERMS = `VENDORGRID PRO — SUBSCRIPTION TERMS OF SERVICE
 
@@ -42,47 +42,34 @@ These terms are governed by the laws of the jurisdiction in which the platform i
 
 By clicking "Accept & Subscribe", you confirm you have read, understood, and agree to these terms.`;
 
-const VENDOR_PRO_FEATURES = [
+const PRO_FEATURES = [
+  "Post unlimited multi-day events",
+  "View who is interested and who is planning to attend",
+  "Allow vendors to register for your event spaces",
+  "Customizable event map to track filled spaces",
+  "Event analytics: repeat vendors, attendance trends",
   "Post a vendor card at events to showcase what you're bringing",
   "Upload up to 10 product photos per event",
   "Register for vendor spaces at events — no platform fees",
-  "Communicate directly with event owners",
+  "Communicate directly with event owners and vendors",
   "Receive notifications of events in your area",
   "Register for notifications in multiple areas",
   "Track inventory brought and sold at each event",
   "Crown badge displayed on your vendor card",
   "Link your personal or business website to drive traffic",
+  "Send notifications to vendors in your event's area",
 ];
 
 const TIERS = [
   {
-    id: "event_owner_pro",
-    label: "Event Owner Pro",
-    price: "$24.95",
-    period: "/month",
-    icon: Store,
-    color: "from-primary to-amber-500",
-    badge: "Most Popular",
-    features: [
-      "Post Unlimited Multi-day Events",
-      "View who is interested and who is planning to attend",
-      "Allow vendors to register for your event",
-      "Track how many spaces are filled with customizable event mapping",
-      "View event analytics such as repeat vendors and all vendors across your posted events",
-      "Link your personal or company website to drive traffic",
-      "Send notifications to vendors in your event's area",
-      "Plus much more!",
-    ],
-  },
-  {
     id: "vendor_pro",
-    label: "Vendor Pro",
+    label: "VendorGrid Pro",
     price: "$14.95",
     period: "/month",
-    icon: Package,
-    color: "from-blue-500 to-cyan-500",
-    badge: null,
-    features: VENDOR_PRO_FEATURES,
+    icon: Crown,
+    color: "from-primary to-amber-500",
+    badge: "Everything Included",
+    features: PRO_FEATURES,
   },
 ];
 
@@ -157,22 +144,23 @@ export default function UpgradePage() {
     <div className="max-w-4xl mx-auto pb-12 space-y-10">
       <div className="text-center">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 text-amber-600 text-sm font-medium mb-6 border border-amber-500/20">
-          <Crown className="w-4 h-4" /> Pro Plans
+          <Crown className="w-4 h-4" /> VendorGrid Pro
         </div>
         <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">Upgrade Your Account</h1>
-        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">Unlock premium features tailored to your role in the artisan community.</p>
+        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">Unlock every premium feature in one plan — for event owners and vendors alike.</p>
         {hasActivePro && (
           <div className="mt-6 p-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 inline-flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-green-500" />
-            <span className="text-green-700 dark:text-green-300 font-medium">You have an active {TIERS.find(t => t.id === currentTier)?.label || currentTier} subscription.</span>
+            <span className="text-green-700 dark:text-green-300 font-medium">You have an active VendorGrid Pro subscription.</span>
             <Button size="sm" variant="outline" onClick={() => portal()} className="rounded-xl ml-2">Manage</Button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+      <div className="flex justify-center">
+        <div className="w-full max-w-md">
         {TIERS.map(({ id, label, price, period, icon: Icon, color, badge, features }) => {
-          const isCurrentPlan = currentTier === id && hasActivePro;
+          const isCurrentPlan = hasActivePro && (currentTier === id || currentTier === "event_owner_pro");
           return (
             <div key={id} className={`relative bg-card rounded-3xl border-2 shadow-lg flex flex-col ${isCurrentPlan ? 'border-primary' : 'border-border/50'} overflow-hidden`} data-testid={`tier-${id}`}>
               {badge && (
@@ -213,6 +201,7 @@ export default function UpgradePage() {
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* Admin Access Code */}

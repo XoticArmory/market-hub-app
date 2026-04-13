@@ -209,8 +209,7 @@ function RoadmapButton() {
   };
 
   const tierOptions = [
-    { value: "event_owner_pro", label: "Event Owner Pro" },
-    { value: "vendor_pro", label: "Vendor Pro" },
+    { value: "vendor_pro", label: "VendorGrid Pro" },
     { value: "all", label: "All Users" },
   ];
 

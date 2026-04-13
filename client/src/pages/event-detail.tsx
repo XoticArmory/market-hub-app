@@ -354,7 +354,7 @@ export default function EventDetail() {
   const isOwner = previewTier === "vendor_pro" ? false : realIsOwner;
   const isVendorPro = (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active") || profile?.isAdmin === true;
   const isAdmin = profile?.isAdmin === true;
-  const isEventOwnerPro = isAdmin || (profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active");
+  const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const canManageEvent = isAdmin || (isOwner && isEventOwnerPro);
   const hasVendorSpaces = (event?.vendorSpaces || 0) > 0;
   const regType = (event as any)?.vendorRegistrationType as string | null;

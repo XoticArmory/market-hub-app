@@ -18,8 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 const TIER_LABELS: Record<string, string> = {
-  event_owner_pro: "Event Owner Pro",
-  vendor_pro: "Vendor Pro",
+  event_owner_pro: "VendorGrid Pro (legacy)",
+  vendor_pro: "VendorGrid Pro",
   free: "Free",
 };
 
@@ -161,8 +161,7 @@ function PromoCodesTab() {
                     <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All tiers</SelectItem>
-                      <SelectItem value="event_owner_pro">Event Owner Pro only</SelectItem>
-                      <SelectItem value="vendor_pro">Vendor Pro only</SelectItem>
+                      <SelectItem value="vendor_pro">VendorGrid Pro only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -309,8 +308,7 @@ export default function AdminPage() {
               <SelectContent>
                 <SelectItem value="none">— My real view —</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="event_owner_pro">Event Owner Pro</SelectItem>
-                <SelectItem value="vendor_pro">Vendor Pro</SelectItem>
+                <SelectItem value="vendor_pro">Pro user</SelectItem>
                 <SelectItem value="free">Free user</SelectItem>
               </SelectContent>
             </Select>
@@ -354,7 +352,7 @@ export default function AdminPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {Object.entries(stats.tierCounts || {}).filter(([k]) => k !== 'free').map(([tier, count]) => (
-                  <StatCard key={tier} label={TIER_LABELS[tier] || tier} value={count as number} sub={tier === 'event_owner_pro' ? `~$${((count as number) * 19.95).toFixed(2)}/mo` : tier === 'vendor_pro' ? `~$${((count as number) * 9.95).toFixed(2)}/mo` : `~$${((count as number) * 4.95).toFixed(2)}/mo`} />
+                  <StatCard key={tier} label={TIER_LABELS[tier] || tier} value={count as number} sub={`~$${((count as number) * 14.95).toFixed(2)}/mo`} />
                 ))}
               </div>
 
@@ -668,8 +666,7 @@ export default function AdminPage() {
                 <SelectTrigger className="rounded-xl" data-testid="select-sub-tier"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="event_owner_pro">Event Owner Pro ($19.95/mo)</SelectItem>
-                  <SelectItem value="vendor_pro">Vendor Pro ($9.95/mo)</SelectItem>
+                  <SelectItem value="vendor_pro">VendorGrid Pro ($14.95/mo)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -337,9 +337,6 @@ export class DatabaseStorage implements IStorage {
           .where(and(inArray(eventAttendance.eventId, ownerEventIds), eq(userProfiles.subscriptionTier, 'vendor_pro')));
         profiles = [...profiles, ...historic];
       }
-    } else if (targetAudience === 'event_owner_pro') {
-      profiles = await db.select({ userId: userProfiles.userId }).from(userProfiles)
-        .where(and(eq(userProfiles.subscriptionTier, 'event_owner_pro'), eq(userProfiles.subscriptionStatus, 'active'), eq(userProfiles.areaCode, areaCode)));
     } else if (targetAudience === 'general') {
       // Free/general users in area
       profiles = await db.select({ userId: userProfiles.userId }).from(userProfiles)
@@ -539,12 +536,12 @@ export class DatabaseStorage implements IStorage {
       vendorsByArea[key] = (vendorsByArea[key] || 0) + 1;
     }
 
-    // Pro tier counts
-    const tierCounts: Record<string, number> = { event_owner_pro: 0, vendor_pro: 0, free: 0 };
+    // Pro tier counts (all active pro subscriptions grouped under vendor_pro)
+    const tierCounts: Record<string, number> = { vendor_pro: 0, free: 0 };
     for (const p of allProfiles) {
       const tier = p.subscriptionTier || 'free';
       if (p.subscriptionStatus === 'active' && tier !== 'free') {
-        tierCounts[tier] = (tierCounts[tier] || 0) + 1;
+        tierCounts['vendor_pro'] = (tierCounts['vendor_pro'] || 0) + 1;
       } else {
         tierCounts['free'] = (tierCounts['free'] || 0) + 1;
       }
@@ -555,10 +552,8 @@ export class DatabaseStorage implements IStorage {
       .filter(r => r.status === 'paid')
       .reduce((sum, r) => sum + (r.feeCents || 0), 0);
 
-    // Monthly revenue estimate from pro subscriptions
-    const proRevenue =
-      tierCounts['event_owner_pro'] * 2495 +
-      tierCounts['vendor_pro'] * 1495;
+    // Monthly revenue estimate from pro subscriptions ($14.95/mo each)
+    const proRevenue = tierCounts['vendor_pro'] * 1495;
 
     return {
       totalEvents: allEvents.length,
@@ -569,7 +564,7 @@ export class DatabaseStorage implements IStorage {
       totalVendors: allProfiles.filter(p => p.profileType === 'vendor').length,
       totalEventOwners: allProfiles.filter(p => p.profileType === 'event_owner').length,
       tierCounts,
-      totalProAccounts: tierCounts['event_owner_pro'] + tierCounts['vendor_pro'],
+      totalProAccounts: tierCounts['vendor_pro'],
       nonProAccounts: tierCounts['free'],
       totalRevenueCents,
       estimatedMonthlyProRevenueCents: proRevenue,

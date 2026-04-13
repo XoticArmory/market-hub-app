@@ -30,10 +30,16 @@ const upload = multer({
   },
 });
 
-function tierToProfileType(tier: string): string {
-  if (tier === 'event_owner_pro') return 'event_owner';
-  if (tier === 'vendor_pro') return 'vendor';
-  return 'general';
+function tierToProfileType(_tier: string): string {
+  return 'pro';
+}
+
+// Both legacy event_owner_pro and vendor_pro grant full Pro access.
+function isPro(profile: any): boolean {
+  if (!profile) return false;
+  if (profile.isAdmin === true) return true;
+  return (profile.subscriptionTier === 'vendor_pro' || profile.subscriptionTier === 'event_owner_pro')
+    && profile.subscriptionStatus === 'active';
 }
 
 function getStripe(): Stripe | null {
@@ -219,9 +225,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.user) {
         userStatus = await storage.getUserStatusForEvent(e.id, req.user.claims?.sub);
       }
-      const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-      const isCreatorProOrAdmin = isFeatured || creatorProfile?.isAdmin === true;
-      const creatorWebsiteUrl = isCreatorProOrAdmin ? (creatorProfile?.websiteUrl || null) : null;
+      const isFeatured = isPro(creatorProfile);
+      const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
       const { registrationCode: _rc, ...eventPublic } = e;
       return { ...eventPublic, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
     }));
@@ -254,15 +259,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { ...p, vendorName: u.name, vendorAvatar: u.avatar };
     }));
     const registrations = await storage.getVendorRegistrations(eventId);
-    const isFeatured = creatorProfile?.subscriptionTier === 'event_owner_pro' && creatorProfile?.subscriptionStatus === 'active';
-    const isCreatorProOrAdmin = isFeatured || creatorProfile?.isAdmin === true;
-    const creatorWebsiteUrl = isCreatorProOrAdmin ? (creatorProfile?.websiteUrl || null) : null;
+    const isFeatured = isPro(creatorProfile);
+    const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
     const requesterId = req.user?.claims?.sub;
     const requesterProfile = await storage.getUserProfile(requesterId || '');
     const isRequesterAdmin = requesterProfile?.isAdmin === true;
-    const isRequesterEventOwnerPro = requesterProfile?.subscriptionTier === 'event_owner_pro' && requesterProfile?.subscriptionStatus === 'active';
-    // Only Event Owner Pro accounts (or admins) who own this event can see the registration code
-    const canSeeCode = isRequesterAdmin || (requesterId === event.createdBy && (isRequesterEventOwnerPro || isRequesterAdmin));
+    // Only Pro accounts (or admins) who own this event can see the registration code
+    const canSeeCode = isRequesterAdmin || (requesterId === event.createdBy && (isPro(requesterProfile) || isRequesterAdmin));
     const { registrationCode: rawCode, ...eventWithoutCode } = event;
     const responseEvent = canSeeCode ? { ...event } : { ...eventWithoutCode };
     res.json({ ...responseEvent, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
@@ -273,9 +276,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = req.user.claims.sub;
       const profile = await storage.getUserProfile(userId);
       const isAdmin = profile?.isAdmin === true;
-      const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
-      if (!isAdmin && !isEventOwnerPro) {
-        return res.status(403).json({ message: "Event Owner Pro subscription required to create events." });
+      if (!isAdmin && !isPro(profile)) {
+        return res.status(403).json({ message: "Pro subscription required to create events." });
       }
       const input = api.events.create.input.parse(req.body);
       const { extraDates, ...eventData } = input;
@@ -310,9 +312,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!event) return res.status(404).json({ message: "Event not found" });
     const profile = await storage.getUserProfile(userId);
     const isAdmin = profile?.isAdmin === true;
-    const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
-    if (!isEventOwnerPro && !isAdmin) return res.status(403).json({ message: "Event Owner Pro required to edit events." });
+    if (!isPro(profile) && !isAdmin) return res.status(403).json({ message: "Pro subscription required to edit events." });
     const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'vendorSpaces', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail'];
     const data: Record<string, any> = {};
     for (const key of allowed) {
@@ -347,9 +348,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!event) return res.status(404).json({ message: "Event not found" });
     const profile = await storage.getUserProfile(userId);
     const isAdmin = profile?.isAdmin === true;
-    const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
-    if (!isEventOwnerPro && !isAdmin) return res.status(403).json({ message: "Event Owner Pro subscription required to change event banners." });
+    if (!isPro(profile) && !isAdmin) return res.status(403).json({ message: "Pro subscription required to change event banners." });
     const { bannerUrl } = req.body;
     await storage.updateEventBanner(eventId, bannerUrl || null);
     res.json({ success: true });
@@ -362,9 +362,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!event) return res.status(404).json({ message: "Event not found" });
     const profile = await storage.getUserProfile(userId);
     const isAdmin = profile?.isAdmin === true;
-    const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
-    if (!isEventOwnerPro && !isAdmin) return res.status(403).json({ message: "Event Owner Pro subscription required to cancel events." });
+    if (!isPro(profile) && !isAdmin) return res.status(403).json({ message: "Pro subscription required to cancel events." });
     if (event.canceledAt) return res.status(400).json({ message: "Event is already canceled" });
 
     await storage.cancelEvent(eventId);
@@ -578,13 +577,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
     const isAdmin = profile?.isAdmin === true;
-    const isEventOwnerPro = profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active';
-    if (!isAdmin && !isEventOwnerPro) {
-      return res.status(403).json({ message: "Event Owner Pro subscription required to send push notifications." });
+    if (!isAdmin && !isPro(profile)) {
+      return res.status(403).json({ message: "Pro subscription required to send push notifications." });
     }
     const { title, message, eventId, targetAudience = 'vendor_pro' } = req.body;
     if (!title || !message) return res.status(400).json({ message: "Title and message required." });
-    const validAudiences = ['vendor_pro', 'event_owner_pro', 'general', 'all'];
+    const validAudiences = ['vendor_pro', 'general', 'all'];
     if (!validAudiences.includes(targetAudience)) return res.status(400).json({ message: "Invalid target audience." });
 
     const ownerEvents = await storage.getEventsByOwner(userId);
@@ -629,8 +627,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (event.createdBy !== userId && !profile?.isAdmin) {
       return res.status(403).json({ message: "Only the event owner can edit the map." });
     }
-    if (profile?.subscriptionTier !== 'event_owner_pro' && !profile?.isAdmin) {
-      return res.status(403).json({ message: "Event Owner Pro required to create event maps." });
+    if (!isPro(profile) && !profile?.isAdmin) {
+      return res.status(403).json({ message: "Pro subscription required to create event maps." });
     }
     const { mapData } = req.body;
     const saved = await storage.upsertEventMap(eventId, mapData);
@@ -1083,10 +1081,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { userId } = req.params;
     const requesterProfile = await storage.getUserProfile(requesterId);
     const isAdmin = requesterProfile?.isAdmin === true;
-    const isEventOwnerPro = requesterProfile?.subscriptionTier === 'event_owner_pro' && requesterProfile?.subscriptionStatus === 'active';
-    // Admins can view anyone's analytics; Event Owner Pro users can only view their own
-    if (!isAdmin && !(isEventOwnerPro && requesterId === userId)) {
-      return res.status(403).json({ message: "Event Owner Pro subscription required to view analytics." });
+    // Admins can view anyone's analytics; Pro users can only view their own
+    if (!isAdmin && !(isPro(requesterProfile) && requesterId === userId)) {
+      return res.status(403).json({ message: "Pro subscription required to view analytics." });
     }
     const ownerEvents = await storage.getEventsByOwner(userId);
     if (ownerEvents.length === 0) return res.json({ vendors: [], repeatVendors: [], avgAttending: 0, avgInterested: 0 });
@@ -1135,8 +1132,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
-    const isEventOwnerPro = profile.isAdmin || (profile.subscriptionTier === 'event_owner_pro' && profile.subscriptionStatus === 'active');
-    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
     res.json({
       stripe: profile.stripeConnectAccountId ? {
         accountId: profile.stripeConnectAccountId,
@@ -1153,8 +1149,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/connect/stripe/start', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
-    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
     const stripe = getStripe();
     if (!stripe) return res.status(503).json({ message: "Stripe not configured." });
     try {
@@ -1225,8 +1220,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete('/api/connect/stripe', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
-    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
     await storage.upsertUserProfile(userId, { stripeConnectAccountId: undefined as any, stripeConnectOnboarded: false });
     res.json({ ok: true });
   });
@@ -1235,8 +1229,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/connect/square', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
-    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
     const { accessToken, locationId } = req.body;
     if (!accessToken || !locationId) return res.status(400).json({ message: "Access token and location ID are required" });
     // Verify credentials by calling Square API
@@ -1256,8 +1249,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete('/api/connect/square', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isEventOwnerPro = profile?.isAdmin || (profile?.subscriptionTier === 'event_owner_pro' && profile?.subscriptionStatus === 'active');
-    if (!isEventOwnerPro) return res.status(403).json({ message: "Event Owner Pro required" });
+    if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
     await storage.upsertUserProfile(userId, { squareAccessToken: undefined as any, squareLocationId: undefined as any });
     res.json({ ok: true });
   });
@@ -1388,7 +1380,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           } else {
             const userId = session.metadata?.userId;
             const tier = session.metadata?.tier;
-            if (userId && tier && ['event_owner_pro', 'vendor_pro'].includes(tier)) {
+            if (userId && tier && ['vendor_pro', 'event_owner_pro'].includes(tier)) {
               const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
               const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
               await storage.upsertUserProfile(userId, {
@@ -1443,7 +1435,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
     const { userId, tier, status } = req.body;
     if (!userId || !tier) return res.status(400).json({ message: "userId and tier required." });
-    const validTier = ['event_owner_pro', 'vendor_pro', 'free'].includes(tier) ? tier : 'free';
+    const validTier = ['vendor_pro', 'event_owner_pro', 'free'].includes(tier) ? tier : 'free';
     const validStatus = status === 'active' ? 'active' : 'inactive';
     await storage.upsertUserProfile(userId, {
       subscriptionTier: validTier as any,

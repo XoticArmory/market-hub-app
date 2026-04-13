@@ -239,46 +239,25 @@ export default function TourPage() {
                 <p className="text-muted-foreground max-w-md mx-auto">{current.subtitle}</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-                {/* Event Owner Pro */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 max-w-xl mx-auto">
+                {/* VendorGrid Pro */}
                 <div className="relative rounded-2xl border-2 border-primary bg-primary/5 p-5 flex flex-col">
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">Most Popular</span>
+                    <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">Everything Included</span>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-amber-500 flex items-center justify-center text-white mb-3 mt-2">
-                    <Store className="w-5 h-5" />
+                    <Crown className="w-5 h-5" />
                   </div>
-                  <h3 className="font-bold text-foreground mb-1">Event Owner Pro</h3>
-                  <div className="text-2xl font-display font-bold text-primary mb-1">$24.95<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
+                  <h3 className="font-bold text-foreground mb-1">VendorGrid Pro</h3>
+                  <div className="text-2xl font-display font-bold text-primary mb-1">$14.95<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
                   <ul className="space-y-1.5 text-xs text-muted-foreground my-3 flex-1">
-                    {["Create unlimited events", "Accept vendor payments", "Vendor management tools", "Analytics dashboard"].map(f => (
+                    {["Post unlimited events", "Vendor spaces & payments", "Analytics dashboard", "Register as a vendor", "No platform fees", "Send area notifications"].map(f => (
                       <li key={f} className="flex items-center gap-1.5"><Check className="w-3 h-3 text-primary shrink-0" />{f}</li>
                     ))}
                   </ul>
                   <Button
-                    data-testid="button-subscribe-owner"
+                    data-testid="button-subscribe-pro"
                     className="w-full h-10 rounded-xl bg-gradient-to-r from-primary to-amber-500 text-sm mt-2"
-                    onClick={() => setLocation("/upgrade?plan=event_owner_pro&next=/setup")}
-                  >
-                    Subscribe
-                  </Button>
-                </div>
-
-                {/* Vendor Pro */}
-                <div className="rounded-2xl border-2 border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/20 p-5 flex flex-col">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white mb-3">
-                    <Package className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-bold text-foreground mb-1">Vendor Pro</h3>
-                  <div className="text-2xl font-display font-bold text-blue-600 dark:text-blue-400 mb-1">$14.95<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
-                  <ul className="space-y-1.5 text-xs text-muted-foreground my-3 flex-1">
-                    {["Register for vendor spaces", "Vendor profile & portfolio", "Event discovery tools", "Direct owner messaging"].map(f => (
-                      <li key={f} className="flex items-center gap-1.5"><Check className="w-3 h-3 text-blue-500 shrink-0" />{f}</li>
-                    ))}
-                  </ul>
-                  <Button
-                    data-testid="button-subscribe-vendor"
-                    className="w-full h-10 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-sm mt-2"
                     onClick={() => setLocation("/upgrade?plan=vendor_pro&next=/setup")}
                   >
                     Subscribe

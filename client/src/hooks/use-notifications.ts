@@ -60,8 +60,7 @@ export function useMarkAllRead() {
 }
 
 const AUDIENCE_LABELS: Record<string, string> = {
-  vendor_pro: "Vendor Pro accounts",
-  event_owner_pro: "Event Owner Pro accounts",
+  vendor_pro: "Pro accounts",
   general: "General accounts",
   all: "all accounts",
 };

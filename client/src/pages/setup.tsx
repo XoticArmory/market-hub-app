@@ -53,8 +53,8 @@ export default function SetupPage() {
     const subscribed = params.get("subscribed");
     if (subscribed) {
       const tierToType: Record<string, string> = {
-        event_owner_pro: "event_owner",
-        vendor_pro: "vendor",
+        event_owner_pro: "pro",
+        vendor_pro: "pro",
       };
       const type = tierToType[subscribed];
       if (type) {

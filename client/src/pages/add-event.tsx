@@ -51,7 +51,7 @@ export default function AddEvent() {
   const [extraDates, setExtraDates] = useState<string[]>([]);
   const [newDate, setNewDate] = useState("");
 
-  const isEventOwnerPro = profile?.subscriptionTier === "event_owner_pro" && profile?.subscriptionStatus === "active";
+  const isEventOwnerPro = (profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
