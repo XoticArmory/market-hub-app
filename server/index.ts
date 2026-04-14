@@ -102,6 +102,34 @@ app.use((req, res, next) => {
     log(`Schema migration warning: ${e.message}`);
   }
 
+  // Add event_website_url column to events table
+  try {
+    await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS event_website_url text;`);
+    log("Schema migration: events.event_website_url column ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
+  // Add event_vendor_entries table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS event_vendor_entries (
+        id SERIAL PRIMARY KEY,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        added_by VARCHAR NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        email TEXT,
+        verification_code TEXT,
+        matched_user_id VARCHAR,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    log("Schema migration: event_vendor_entries table ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
   // Reset all serial sequences to prevent duplicate key errors after data imports
   try {
     const serialTables = [
