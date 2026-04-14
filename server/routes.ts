@@ -1567,6 +1567,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // Image proxy for OG images — ensures Facebook/social bots get the image
+  // served from vendorgrid.net with clean Content-Type headers rather than
+  // hitting Supabase storage directly (which can cause "corrupted image" errors).
+  app.get('/api/og-image', async (req: any, res) => {
+    const rawUrl = req.query.url as string;
+    if (!rawUrl) return res.status(400).end();
+    try {
+      const decodedUrl = decodeURIComponent(rawUrl);
+      // Only proxy images from trusted origins
+      const trusted = ['supabase.co', 'images.unsplash.com', 'vendorgrid.net'];
+      const urlObj = new URL(decodedUrl);
+      if (!trusted.some(h => urlObj.hostname.endsWith(h))) return res.status(403).end();
+
+      const fetch = (await import('node-fetch')).default;
+      const upstream = await (fetch as any)(decodedUrl, {
+        headers: { 'User-Agent': 'VendorGrid/1.0' },
+        timeout: 10000,
+      });
+      if (!upstream.ok) return res.status(upstream.status).end();
+
+      const contentType = upstream.headers.get('content-type') || 'image/jpeg';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      (upstream.body as any).pipe(res);
+    } catch {
+      res.status(502).end();
+    }
+  });
+
   // Open Graph meta tag injection for social link previews on event pages.
   // X, Facebook, and WhatsApp scrape the page URL server-side (no JS) and
   // read OG tags to build the link preview card shown in the compose window.
@@ -1585,8 +1615,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const ev = result.rows[0];
       const siteUrl = 'https://www.vendorgrid.net';
       const eventUrl = `${siteUrl}/events/${eventId}`;
-      const imageUrl = ev.banner_url ||
+      const rawImageUrl = ev.banner_url ||
         `https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=1200&auto=format&fit=crop&sig=${eventId}`;
+      // Proxy through our server so Facebook/social bots get correct headers
+      const imageUrl = `https://www.vendorgrid.net/api/og-image?url=${encodeURIComponent(rawImageUrl)}`;
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const evDate = ev.date ? new Date(ev.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
       const ogTitle = esc(`${ev.title} | VendorGrid`);
