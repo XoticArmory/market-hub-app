@@ -42,6 +42,7 @@ export const events = pgTable("events", {
   vendorRegistrationUrl: text("vendor_registration_url"),
   bannerUrl: text("banner_url"),
   contactEmail: text("contact_email"),
+  eventWebsiteUrl: text("event_website_url"),
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   canceledAt: timestamp("canceled_at"),

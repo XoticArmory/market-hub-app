@@ -22,6 +22,7 @@ const formSchema = z.object({
   vendorSpaces: z.coerce.number().min(0).default(0),
   spotPrice: z.coerce.number().min(0).default(0),
   contactEmail: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
+  eventWebsiteUrl: z.string().optional(),
   registrationCode: z.string().optional(),
   vendorRegistrationType: z.enum(["vendorgrid", "external", "form", "email"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
@@ -64,6 +65,7 @@ export default function AddEvent() {
       vendorSpaces: 0,
       spotPrice: 0,
       contactEmail: "",
+      eventWebsiteUrl: "",
       registrationCode: "",
       vendorRegistrationType: undefined,
       vendorRegistrationUrl: "",
@@ -185,6 +187,26 @@ export default function AddEvent() {
                   />
                 </FormControl>
                 <p className="text-xs text-muted-foreground">Shown on your event card so anyone can email you directly with questions.</p>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            {/* Event Website — available to all event owners */}
+            <FormField control={form.control} name="eventWebsiteUrl" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base font-semibold flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-primary" />Event Website <span className="text-muted-foreground font-normal">(Optional)</span>
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    data-testid="input-event-website-url"
+                    type="url"
+                    placeholder="https://yourevent.com"
+                    className="h-14 rounded-xl text-base"
+                    {...field}
+                  />
+                </FormControl>
+                <p className="text-xs text-muted-foreground">The main link shown on your event card for visitors to learn more about your event.</p>
                 <FormMessage />
               </FormItem>
             )} />

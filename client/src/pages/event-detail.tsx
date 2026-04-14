@@ -50,6 +50,7 @@ const editEventSchema = z.object({
   vendorRegistrationUrl: z.string().optional(),
   registrationCode: z.string().optional(),
   contactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  eventWebsiteUrl: z.string().optional(),
 });
 type EditEventValues = z.infer<typeof editEventSchema>;
 
@@ -74,6 +75,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
       vendorRegistrationUrl: event?.vendorRegistrationUrl || "",
       registrationCode: event?.registrationCode || "",
       contactEmail: event?.contactEmail || "",
+      eventWebsiteUrl: event?.eventWebsiteUrl || "",
     },
   });
 
@@ -90,6 +92,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
       vendorRegistrationUrl: vals.vendorRegistrationUrl || null,
       registrationCode: vals.registrationCode || null,
       contactEmail: vals.contactEmail || null,
+      eventWebsiteUrl: vals.eventWebsiteUrl || null,
     });
   }
 
@@ -198,6 +201,14 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
                   <FormLabel className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-primary" />Contact Email</FormLabel>
                   <FormControl><Input {...field} type="email" placeholder="yourname@email.com" data-testid="input-edit-contact-email" /></FormControl>
                   <p className="text-xs text-muted-foreground">Shown on the event card so anyone can email you.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="eventWebsiteUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5"><ExternalLink className="w-3.5 h-3.5 text-primary" />Event Website</FormLabel>
+                  <FormControl><Input {...field} type="url" placeholder="https://yourevent.com" data-testid="input-edit-event-website" /></FormControl>
+                  <p className="text-xs text-muted-foreground">The main link on your event card — shown first when visitors click the website icon.</p>
                   <FormMessage />
                 </FormItem>
               )} />

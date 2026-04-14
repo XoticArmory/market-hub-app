@@ -388,13 +388,17 @@ export default function Home() {
                               <Mail className="w-3.5 h-3.5" />
                             </a>
                           )}
-                          {((event as any).vendorRegistrationUrl || (event as any).creatorWebsiteUrl) && (
+                          {((event as any).eventWebsiteUrl || (event as any).vendorRegistrationUrl || (event as any).creatorWebsiteUrl) && (
                             <a
-                              href={normalizeUrl((event as any).vendorRegistrationUrl || (event as any).creatorWebsiteUrl)}
+                              href={normalizeUrl((event as any).eventWebsiteUrl || (event as any).vendorRegistrationUrl || (event as any).creatorWebsiteUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                              title={(event as any).vendorRegistrationUrl ? "Visit market website / registration" : "Visit organizer's website"}
+                              title={
+                                (event as any).eventWebsiteUrl ? "Visit event website" :
+                                (event as any).vendorRegistrationUrl ? "Visit market website / registration" :
+                                "Visit organizer's website"
+                              }
                               data-testid={`link-event-website-${event.id}`}
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
