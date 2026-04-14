@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail } from "lucide-react";
+import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -103,6 +103,88 @@ function ShareButton({ event }: { event: any }) {
   );
 }
 
+
+function formatIcsDate(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+}
+
+function CalendarButton({ event }: { event: any }) {
+  const title = event.title;
+  const location = event.location || "";
+  const eventDate = new Date(event.date);
+  const nextDay = new Date(eventDate);
+  nextDay.setDate(nextDay.getDate() + 1);
+
+  // Dates formatted as YYYYMMDD for all-day Google Calendar events
+  const gcalDate = `${format(eventDate, "yyyyMMdd")}/${format(nextDay, "yyyyMMdd")}`;
+  const eventUrl = `https://www.vendorgrid.net/events/${event.id}`;
+  const description = `View event details at ${eventUrl}`;
+
+  const handleGoogle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: title,
+      dates: gcalDate,
+      details: description,
+      location,
+    });
+    window.open(`https://calendar.google.com/calendar/render?${params}`, "_blank", "noopener,noreferrer,width=700,height=600");
+  };
+
+  const handleIcs = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const start = formatIcsDate(eventDate);
+    const end = formatIcsDate(nextDay);
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//VendorGrid//EN",
+      "BEGIN:VEVENT",
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${description}`,
+      `LOCATION:${location}`,
+      `URL:${eventUrl}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const blob = new Blob([ics], { type: "text/calendar" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/\s+/g, "-").toLowerCase()}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          title="Add to calendar"
+          data-testid={`button-calendar-${event.id}`}
+        >
+          <CalendarPlus className="w-3.5 h-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+        <DropdownMenuItem onClick={handleGoogle} data-testid={`menu-cal-google-${event.id}`} className="gap-2">
+          <Calendar className="w-4 h-4 text-blue-500" />Google Calendar
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleIcs} data-testid={`menu-cal-ics-${event.id}`} className="gap-2">
+          <Download className="w-4 h-4" />Apple / Outlook (.ics)
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export default function Home() {
   const [areaInput, setAreaInput] = useState("");
@@ -318,6 +400,7 @@ export default function Home() {
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
                           )}
+                          <CalendarButton event={event} />
                           <ShareButton event={event} />
                         </div>
                         {/* Details — link to event */}
