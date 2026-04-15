@@ -256,7 +256,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const posts = await storage.getVendorPosts(eventId);
     const vendorAttendees = await Promise.all(posts.map(async (p) => {
       const u = await enrichUser(p.vendorId);
-      return { ...p, vendorName: u.name, vendorAvatar: u.avatar };
+      const vp = await storage.getUserProfile(p.vendorId);
+      return { ...p, vendorName: vp?.businessName || u.name, vendorAvatar: u.avatar };
     }));
     const registrations = await storage.getVendorRegistrations(eventId);
     const isFeatured = isPro(creatorProfile);
@@ -561,7 +562,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const catalogAssignments = (isVendorProAccount || vendorProfile?.isAdmin)
         ? await storage.getCatalogAssignmentsForEvent(eventId, p.vendorId)
         : [];
-      return { ...p, vendorName: u.name, vendorAvatar: u.avatar, vendorWebsiteUrl, catalogAssignments };
+      return { ...p, vendorName: vendorProfile?.businessName || u.name, vendorAvatar: u.avatar, vendorWebsiteUrl, catalogAssignments };
     }));
     res.json(enriched);
   });
@@ -762,7 +763,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const regs = await storage.getVendorRegistrations(eventId);
     const enriched = await Promise.all(regs.map(async r => {
       const u = await enrichUser(r.vendorId);
-      return { ...r, vendorName: u.name, vendorAvatar: u.avatar };
+      const vp = await storage.getUserProfile(r.vendorId);
+      return { ...r, vendorName: vp?.businessName || u.name, vendorAvatar: u.avatar };
     }));
     res.json(enriched);
   });
