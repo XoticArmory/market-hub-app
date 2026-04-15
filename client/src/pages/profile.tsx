@@ -17,18 +17,13 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Store, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, BarChart3, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle } from "lucide-react";
+import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, BarChart3, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useEvents } from "@/hooks/use-events";
 import { format } from "date-fns";
 import { EventMapEditor } from "@/components/EventMapEditor";
 import { useToast } from "@/hooks/use-toast";
 
-const PROFILE_TYPES = [
-  { value: "event_owner", label: "Event Owner", icon: Store, description: "I organize and host local markets and events." },
-  { value: "vendor", label: "Vendor", icon: Package, description: "I sell products and crafts at local markets." },
-  { value: "general", label: "General", icon: Users, description: "I attend markets as a customer or community member." },
-];
 
 const TIER_LABELS: Record<string, string> = {
   event_owner_pro: "VendorGrid Pro",
@@ -1156,33 +1151,18 @@ export default function ProfilePage() {
         {/* PROFILE */}
         <TabsContent value="profile" className="space-y-6 mt-0">
           <Card>
-            <CardHeader><CardTitle>Profile Settings</CardTitle><CardDescription>Manage your area code, business name, and bio.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Profile Settings</CardTitle><CardDescription>Manage your area code, vendor name, and bio.</CardDescription></CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <label className="text-sm font-semibold mb-3 block">Account Type</label>
-                {(() => {
-                  const current = PROFILE_TYPES.find(t => t.value === tierToProfileType(profile?.subscriptionTier, profile?.subscriptionStatus));
-                  const Icon = current?.icon || Users;
-                  return (
-                    <div className="flex items-center gap-4 p-5 rounded-2xl border-2 border-primary bg-primary/5 w-fit" data-testid="display-account-type">
-                      <Icon className="w-7 h-7 text-primary shrink-0" />
-                      <div>
-                        <p className="font-semibold text-foreground">{current?.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{current?.description}</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-semibold mb-2 block">Area Code / ZIP</label>
                   <Input data-testid="input-area-code" placeholder="e.g. 90210" value={form.areaCode} onChange={e => setForm(f => ({ ...f, areaCode: e.target.value }))} className="rounded-xl" />
                 </div>
-                {(tierToProfileType(profile?.subscriptionTier, profile?.subscriptionStatus) === "event_owner" || tierToProfileType(profile?.subscriptionTier, profile?.subscriptionStatus) === "vendor") && (
+                {isVendorPro && (
                   <div>
-                    <label className="text-sm font-semibold mb-2 block">Business Name</label>
-                    <Input data-testid="input-business-name" placeholder="Your market or vendor name" value={form.businessName} onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))} className="rounded-xl" />
+                    <label className="text-sm font-semibold mb-2 block">Vendor Name</label>
+                    <Input data-testid="input-vendor-name" placeholder="Your vendor or business name" value={form.businessName} onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))} className="rounded-xl" />
+                    <p className="text-xs text-muted-foreground mt-1">Displayed when you're added as a vendor at an event.</p>
                   </div>
                 )}
               </div>
