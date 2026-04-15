@@ -271,6 +271,10 @@ export default function EventDetail() {
   const [emailLookup, setEmailLookup] = useState<{ found: boolean; userId?: string; userName?: string } | null>(null);
   const [emailLooking, setEmailLooking] = useState(false);
   const [sendVendorNotif, setSendVendorNotif] = useState(false);
+  const [proUserResults, setProUserResults] = useState<{ id: string; name: string; businessName: string | null; zip: string | null }[]>([]);
+  const [proUserSearching, setProUserSearching] = useState(false);
+  const [selectedProUser, setSelectedProUser] = useState<{ id: string; name: string; businessName: string | null; zip: string | null } | null>(null);
+  const [showProDropdown, setShowProDropdown] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -364,6 +368,25 @@ export default function EventDetail() {
     enabled: !!eventId,
   });
 
+  // Debounced pro user search when typing vendor name
+  useEffect(() => {
+    if (selectedProUser) return;
+    if (addVendorName.trim().length < 2) { setProUserResults([]); setShowProDropdown(false); return; }
+    setProUserSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/users/search-pro?q=${encodeURIComponent(addVendorName.trim())}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          setProUserResults(data);
+          setShowProDropdown(data.length > 0);
+        }
+      } catch {}
+      finally { setProUserSearching(false); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [addVendorName, selectedProUser]);
+
   const addVendorEntry = useMutation({
     mutationFn: async (data: { name: string; description?: string; email?: string; matchedUserId?: string; sendNotification?: boolean }) => {
       const res = await fetch(`/api/events/${eventId}/vendor-entries`, {
@@ -383,6 +406,28 @@ export default function EventDetail() {
       toast({ title: "Vendor added!" });
     },
     onError: (e: any) => toast({ title: e.message || "Failed to add vendor.", variant: "destructive" }),
+  });
+
+  const registerVendorByOwner = useMutation({
+    mutationFn: async (vendorId: string) => {
+      const res = await fetch(`/api/events/${eventId}/vendor-register-by-owner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ vendorId }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Failed"); }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
+      qc.invalidateQueries({ queryKey: ["/api/vendor/registrations"] });
+      setAddVendorOpen(false);
+      setAddVendorName(""); setAddVendorDesc(""); setAddVendorEmail("");
+      setSelectedProUser(null); setProUserResults([]); setShowProDropdown(false);
+      toast({ title: "Vendor registered!", description: "They've been fully registered and notified." });
+    },
+    onError: (e: any) => toast({ title: e.message || "Failed to register vendor.", variant: "destructive" }),
   });
 
   const removeVendorEntry = useMutation({
@@ -1111,86 +1156,165 @@ export default function EventDetail() {
           {/* Add Vendor Dialog */}
           <Dialog open={addVendorOpen} onOpenChange={(v) => {
             setAddVendorOpen(v);
-            if (!v) { setAddVendorName(""); setAddVendorDesc(""); setAddVendorEmail(""); setEmailLookup(null); setSendVendorNotif(false); }
+            if (!v) {
+              setAddVendorName(""); setAddVendorDesc(""); setAddVendorEmail("");
+              setEmailLookup(null); setSendVendorNotif(false);
+              setSelectedProUser(null); setProUserResults([]); setShowProDropdown(false);
+            }
           }}>
             <DialogContent className="sm:max-w-md rounded-2xl">
               <DialogHeader>
                 <DialogTitle className="text-xl font-display">Add a Vendor</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 mt-2">
+                {/* Vendor Name with pro-user autocomplete */}
                 <div>
                   <label className="text-sm font-semibold text-foreground mb-1.5 block">Vendor Name <span className="text-destructive">*</span></label>
-                  <Input
-                    value={addVendorName}
-                    onChange={e => setAddVendorName(e.target.value)}
-                    placeholder="e.g. Sunshine Candle Co."
-                    data-testid="input-vendor-name"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-foreground mb-1.5 block">Description <span className="text-xs text-muted-foreground font-normal">(optional)</span></label>
-                  <Textarea
-                    value={addVendorDesc}
-                    onChange={e => setAddVendorDesc(e.target.value)}
-                    placeholder="What will this vendor be selling?"
-                    rows={2}
-                    data-testid="input-vendor-desc"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-foreground mb-1.5 block">Email <span className="text-xs text-muted-foreground font-normal">(optional)</span></label>
-                  <Input
-                    type="email"
-                    value={addVendorEmail}
-                    onChange={e => { setAddVendorEmail(e.target.value); setEmailLookup(null); setSendVendorNotif(false); }}
-                    onBlur={e => lookupEmail(e.target.value)}
-                    placeholder="vendor@example.com"
-                    data-testid="input-vendor-email"
-                  />
-                  {emailLooking && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Looking up email…</p>}
-                  {emailLookup?.found && (
-                    <div className="mt-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                      <p className="text-sm font-medium text-green-800 dark:text-green-300 flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4 shrink-0" />Registered user: <span className="font-bold">{emailLookup.userName}</span>
-                      </p>
-                      <p className="text-xs text-green-700 dark:text-green-400 mt-2 mb-2">Send them a push notification with a verification code?</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setSendVendorNotif(true)}
-                          className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${sendVendorNotif ? 'bg-green-600 text-white border-green-600' : 'bg-white dark:bg-gray-800 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30'}`}
-                          data-testid="button-send-notif-yes"
-                        >
-                          Yes, send code
-                        </button>
-                        <button
-                          onClick={() => setSendVendorNotif(false)}
-                          className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${!sendVendorNotif ? 'bg-gray-200 dark:bg-gray-700 text-foreground border-gray-300 dark:border-gray-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-muted-foreground hover:bg-gray-50'}`}
-                          data-testid="button-send-notif-no"
-                        >
-                          No thanks
-                        </button>
+                  {selectedProUser ? (
+                    <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5">
+                      <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+                        <Crown className="w-4 h-4 text-primary" />
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-foreground">{selectedProUser.businessName || selectedProUser.name}</p>
+                        <p className="text-xs text-muted-foreground">{selectedProUser.name}{selectedProUser.zip ? ` · ${selectedProUser.zip}` : ""}</p>
+                      </div>
+                      <button
+                        onClick={() => { setSelectedProUser(null); setAddVendorName(""); setProUserResults([]); }}
+                        className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                        data-testid="button-clear-pro-user"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Input
+                        value={addVendorName}
+                        onChange={e => { setAddVendorName(e.target.value); setShowProDropdown(false); }}
+                        placeholder="e.g. Sunshine Candle Co."
+                        data-testid="input-vendor-name"
+                        autoComplete="off"
+                      />
+                      {proUserSearching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                      {showProDropdown && proUserResults.length > 0 && (
+                        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
+                          <p className="text-[10px] font-semibold text-muted-foreground px-3 pt-2 pb-1 uppercase tracking-wide">Pro Members</p>
+                          {proUserResults.map(u => (
+                            <button
+                              key={u.id}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors text-left"
+                              onClick={() => {
+                                setSelectedProUser(u);
+                                setAddVendorName(u.businessName || u.name);
+                                setShowProDropdown(false);
+                              }}
+                              data-testid={`pro-user-option-${u.id}`}
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                                <Crown className="w-3.5 h-3.5 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{u.businessName || u.name}</p>
+                                <p className="text-xs text-muted-foreground">{u.name}{u.zip ? ` · ${u.zip}` : ""}</p>
+                              </div>
+                              <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/40 text-primary shrink-0">Pro</Badge>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
-                  {emailLookup && !emailLookup.found && addVendorEmail.trim() && (
-                    <p className="text-xs text-muted-foreground mt-1">No registered user found for this email.</p>
-                  )}
                 </div>
+
+                {/* If a pro user is selected, show registration info instead of the manual fields */}
+                {selectedProUser ? (
+                  <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-300 flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 shrink-0" />Full vendor registration
+                    </p>
+                    <p className="text-xs text-green-700 dark:text-green-400 mt-1">
+                      This will register them as a vendor on this event — they'll be able to post items and photos immediately, and will receive a notification.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-sm font-semibold text-foreground mb-1.5 block">Description <span className="text-xs text-muted-foreground font-normal">(optional)</span></label>
+                      <Textarea
+                        value={addVendorDesc}
+                        onChange={e => setAddVendorDesc(e.target.value)}
+                        placeholder="What will this vendor be selling?"
+                        rows={2}
+                        data-testid="input-vendor-desc"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-foreground mb-1.5 block">Email <span className="text-xs text-muted-foreground font-normal">(optional)</span></label>
+                      <Input
+                        type="email"
+                        value={addVendorEmail}
+                        onChange={e => { setAddVendorEmail(e.target.value); setEmailLookup(null); setSendVendorNotif(false); }}
+                        onBlur={e => lookupEmail(e.target.value)}
+                        placeholder="vendor@example.com"
+                        data-testid="input-vendor-email"
+                      />
+                      {emailLooking && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Looking up email…</p>}
+                      {emailLookup?.found && (
+                        <div className="mt-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                          <p className="text-sm font-medium text-green-800 dark:text-green-300 flex items-center gap-1.5">
+                            <CheckCircle className="w-4 h-4 shrink-0" />Registered user: <span className="font-bold">{emailLookup.userName}</span>
+                          </p>
+                          <p className="text-xs text-green-700 dark:text-green-400 mt-2 mb-2">Send them a push notification with a verification code?</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setSendVendorNotif(true)}
+                              className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${sendVendorNotif ? 'bg-green-600 text-white border-green-600' : 'bg-white dark:bg-gray-800 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30'}`}
+                              data-testid="button-send-notif-yes"
+                            >Yes, send code</button>
+                            <button
+                              onClick={() => setSendVendorNotif(false)}
+                              className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${!sendVendorNotif ? 'bg-gray-200 dark:bg-gray-700 text-foreground border-gray-300 dark:border-gray-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-muted-foreground hover:bg-gray-50'}`}
+                              data-testid="button-send-notif-no"
+                            >No thanks</button>
+                          </div>
+                        </div>
+                      )}
+                      {emailLookup && !emailLookup.found && addVendorEmail.trim() && (
+                        <p className="text-xs text-muted-foreground mt-1">No registered user found for this email.</p>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 <div className="flex gap-3 pt-1">
                   <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setAddVendorOpen(false)}>Cancel</Button>
                   <Button
                     className="flex-1 rounded-xl bg-gradient-to-r from-primary to-amber-500"
-                    disabled={!addVendorName.trim() || addVendorEntry.isPending}
-                    onClick={() => addVendorEntry.mutate({
-                      name: addVendorName,
-                      description: addVendorDesc || undefined,
-                      email: addVendorEmail || undefined,
-                      matchedUserId: emailLookup?.found ? emailLookup.userId : undefined,
-                      sendNotification: sendVendorNotif,
-                    })}
+                    disabled={!addVendorName.trim() || addVendorEntry.isPending || registerVendorByOwner.isPending}
+                    onClick={() => {
+                      if (selectedProUser) {
+                        registerVendorByOwner.mutate(selectedProUser.id);
+                      } else {
+                        addVendorEntry.mutate({
+                          name: addVendorName,
+                          description: addVendorDesc || undefined,
+                          email: addVendorEmail || undefined,
+                          matchedUserId: emailLookup?.found ? emailLookup.userId : undefined,
+                          sendNotification: sendVendorNotif,
+                        });
+                      }
+                    }}
                     data-testid="button-confirm-add-vendor"
                   >
-                    {addVendorEntry.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Adding…</> : "Add Vendor"}
+                    {(addVendorEntry.isPending || registerVendorByOwner.isPending)
+                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Adding…</>
+                      : selectedProUser ? "Register Vendor" : "Add Vendor"
+                    }
                   </Button>
                 </div>
               </div>

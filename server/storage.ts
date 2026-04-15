@@ -137,6 +137,7 @@ export interface IStorage {
   createEventVendorEntry(data: { eventId: number; addedBy: string; name: string; description?: string; email?: string; verificationCode?: string; matchedUserId?: string }): Promise<EventVendorEntry>;
   deleteEventVendorEntry(id: number): Promise<void>;
   getUserByEmail(email: string): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string | null } | undefined>;
+  searchProUsers(query: string): Promise<{ id: string; name: string; businessName: string | null; zip: string | null }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -874,6 +875,29 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.email, email.toLowerCase().trim()));
     return u;
+  }
+
+  async searchProUsers(query: string): Promise<{ id: string; name: string; businessName: string | null; zip: string | null }[]> {
+    const q = `%${query.toLowerCase()}%`;
+    const result = await pool.query<{ id: string; name: string; business_name: string | null; zip: string | null }>(`
+      SELECT u.id,
+             TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS name,
+             p.business_name,
+             p.area_code AS zip
+      FROM users u
+      JOIN user_profiles p ON p.user_id = u.id
+      WHERE (
+        (p.subscription_status = 'active' AND p.subscription_tier IN ('vendor_pro', 'event_owner_pro'))
+        OR p.is_admin = true
+      )
+      AND (
+        LOWER(COALESCE(p.business_name, '')) LIKE $1
+        OR LOWER(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, ''))) LIKE $1
+      )
+      ORDER BY p.business_name NULLS LAST, u.first_name
+      LIMIT 10
+    `, [q]);
+    return result.rows.map(r => ({ id: r.id, name: r.name, businessName: r.business_name, zip: r.zip }));
   }
 }
 

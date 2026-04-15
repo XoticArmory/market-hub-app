@@ -456,6 +456,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(204).end();
   });
 
+  // Search pro users by name (for owner add-vendor autocomplete)
+  app.get('/api/users/search-pro', isAuthenticated, async (req: any, res) => {
+    const q = (req.query.q as string || '').trim();
+    if (q.length < 2) return res.json([]);
+    const results = await storage.searchProUsers(q);
+    res.json(results);
+  });
+
+  // Event owner registers a pro user as a vendor directly (full registration, status: paid)
+  app.post('/api/events/:id/vendor-register-by-owner', isAuthenticated, async (req: any, res) => {
+    const ownerId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    const { vendorId } = req.body;
+    if (!vendorId) return res.status(400).json({ message: "vendorId required" });
+
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    const ownerProfile = await storage.getUserProfile(ownerId);
+    if (event.createdBy !== ownerId && !ownerProfile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+    if (!isPro(ownerProfile)) return res.status(403).json({ message: "Pro subscription required." });
+
+    const vendorProfile = await storage.getUserProfile(vendorId);
+    const isVendorProUser = (vendorProfile?.subscriptionStatus === 'active' && (vendorProfile?.subscriptionTier === 'vendor_pro' || vendorProfile?.subscriptionTier === 'event_owner_pro')) || vendorProfile?.isAdmin === true;
+    if (!isVendorProUser) return res.status(400).json({ message: "Target user is not a Pro member." });
+
+    const existing = await storage.getVendorRegistrationForUser(eventId, vendorId);
+    if (existing) return res.status(409).json({ message: "Vendor is already registered for this event." });
+
+    const reg = await storage.createVendorRegistration({
+      eventId,
+      vendorId,
+      spotId: null,
+      spotName: null,
+      amountCents: 0,
+      feeCents: 0,
+      isPro: true,
+      status: 'paid',
+      stripePaymentIntentId: null,
+    });
+
+    // Notify the vendor
+    await storage.createNotification({
+      userId: vendorId,
+      fromUserId: ownerId,
+      type: "vendor_invite",
+      title: `You've been registered at ${event.title}`,
+      message: `${ownerProfile?.businessName || 'An event owner'} has registered you as a vendor at "${event.title}". You can now post your items and photos for this event.`,
+      eventId,
+    });
+
+    res.status(201).json(reg);
+  });
+
   // ---- ATTENDANCE ROUTES ----
   app.post(api.attendance.setStatus.path, isAuthenticated, async (req: any, res) => {
     try {
