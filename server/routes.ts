@@ -1402,17 +1402,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await authStorage.getUser(userId);
     await storage.acceptTerms(userId, tier);
 
-    let finalPrice: number = tierInfo.price;
-    let promoLabel = '';
     let redeemedPromo: any = null;
+    let stripeCouponId: string | null = null;
+
     if (promoCode) {
       const validation = await storage.validatePromoCode(promoCode, tier);
       if (!validation.valid) return res.status(400).json({ message: validation.error });
       if (validation.promoCode?.type === 'discount') {
         const discount = validation.promoCode.discountPercent || 0;
-        finalPrice = Math.round(tierInfo.price * (1 - discount / 100));
-        promoLabel = ` (${discount}% off)`;
         redeemedPromo = validation.promoCode;
+
+        // Build Stripe coupon duration based on promo code expiry
+        let couponParams: Stripe.CouponCreateParams;
+        if (validation.promoCode.expiresAt) {
+          const expiresAt = new Date(validation.promoCode.expiresAt);
+          const msRemaining = expiresAt.getTime() - Date.now();
+          const monthsRemaining = Math.max(1, Math.ceil(msRemaining / (30 * 24 * 60 * 60 * 1000)));
+          couponParams = {
+            percent_off: discount,
+            duration: 'repeating',
+            duration_months: monthsRemaining,
+            name: `${validation.promoCode.code} — ${discount}% off (${monthsRemaining}mo)`,
+          };
+        } else {
+          couponParams = {
+            percent_off: discount,
+            duration: 'forever',
+            name: `${validation.promoCode.code} — ${discount}% off`,
+          };
+        }
+
+        const coupon = await stripe.coupons.create(couponParams);
+        stripeCouponId = coupon.id;
       }
     }
 
@@ -1424,8 +1445,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         line_items: [{
           price_data: {
             currency: 'usd',
-            product_data: { name: `${tierInfo.label} — Monthly Subscription${promoLabel}` },
-            unit_amount: finalPrice,
+            product_data: { name: `${tierInfo.label} — Monthly Subscription` },
+            unit_amount: tierInfo.price,
             recurring: { interval: 'month' },
           },
           quantity: 1,
@@ -1434,6 +1455,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cancel_url: `${getHost(req)}/upgrade`,
         metadata: { userId, tier },
       };
+      if (stripeCouponId) {
+        sessionParams.discounts = [{ coupon: stripeCouponId }];
+      }
       if (user?.email) sessionParams.customer_email = user.email;
       if (profile?.stripeCustomerId) {
         delete sessionParams.customer_email;
