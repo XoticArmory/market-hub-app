@@ -834,7 +834,7 @@ const TIER_LABELS_PROMO: Record<string, string> = {
 
 function AdminPromoSection({ userId }: { userId: string }) {
   const { toast } = useToast();
-  const [promoForm, setPromoForm] = useState({ code: "", discountPercent: "", applicableTier: "all", expiresAt: "", maxUses: "" });
+  const [promoForm, setPromoForm] = useState({ code: "", discountPercent: "", discountDurationMonths: "", applicableTier: "all", expiresAt: "", maxUses: "" });
 
   const { data: codes = [], isLoading: loadingCodes } = useQuery<any[]>({
     queryKey: ["/api/admin/promo-codes"],
@@ -850,7 +850,7 @@ function AdminPromoSection({ userId }: { userId: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
-      setPromoForm({ code: "", discountPercent: "", applicableTier: "all", expiresAt: "", maxUses: "" });
+      setPromoForm({ code: "", discountPercent: "", discountDurationMonths: "", applicableTier: "all", expiresAt: "", maxUses: "" });
       toast({ title: "Promo code created" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -872,6 +872,7 @@ function AdminPromoSection({ userId }: { userId: string }) {
       code: promoForm.code,
       type: "discount",
       discountPercent: parseInt(promoForm.discountPercent),
+      discountDurationMonths: promoForm.discountDurationMonths ? parseInt(promoForm.discountDurationMonths) : undefined,
       applicableTier: promoForm.applicableTier === "all" ? undefined : promoForm.applicableTier,
       expiresAt: promoForm.expiresAt || undefined,
       maxUses: promoForm.maxUses ? parseInt(promoForm.maxUses) : undefined,
@@ -896,6 +897,16 @@ function AdminPromoSection({ userId }: { userId: string }) {
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Discount %</label>
               <Input type="number" min={1} max={100} placeholder="e.g. 50" value={promoForm.discountPercent} onChange={e => setPromoForm(f => ({ ...f, discountPercent: e.target.value }))} className="rounded-xl" data-testid="input-billing-discount" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Discount Duration</label>
+              <select className="w-full h-10 rounded-xl border border-border px-3 bg-background text-foreground text-sm" value={promoForm.discountDurationMonths || "forever"} onChange={e => setPromoForm(f => ({ ...f, discountDurationMonths: e.target.value === "forever" ? "" : e.target.value }))}>
+                <option value="forever">Forever (permanent)</option>
+                <option value="1">1 month</option>
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                <option value="12">12 months</option>
+              </select>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Applicable Tier</label>
@@ -933,6 +944,7 @@ function AdminPromoSection({ userId }: { userId: string }) {
                       <p className="font-mono font-bold text-sm text-foreground">{c.code}</p>
                       <div className="flex flex-wrap gap-1.5 mt-0.5">
                         <Badge variant="secondary" className="text-xs">{c.discountPercent}% off</Badge>
+                        <Badge variant="outline" className="text-xs">{c.discountDurationMonths ? `${c.discountDurationMonths}mo discount` : 'Forever'}</Badge>
                         {c.applicableTier && <Badge variant="outline" className="text-xs">{TIER_LABELS_PROMO[c.applicableTier] || c.applicableTier}</Badge>}
                         <Badge variant="outline" className="text-xs">{c.usesCount}{c.maxUses ? `/${c.maxUses}` : ''} uses</Badge>
                         {c.expiresAt && <Badge variant="outline" className="text-xs">Expires {format(new Date(c.expiresAt), "MMM d, yyyy")}</Badge>}
