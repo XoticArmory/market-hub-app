@@ -814,6 +814,7 @@ export class DatabaseStorage implements IStorage {
       code: data.code.toUpperCase().trim(),
       type: data.type,
       discountPercent: data.discountPercent || null,
+      discountDurationMonths: data.discountDurationMonths || null,
       applicableTier: data.applicableTier || null,
       expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       maxUses: data.maxUses || null,

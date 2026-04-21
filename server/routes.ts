@@ -1599,13 +1599,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post('/api/admin/promo-codes', isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
-    const { code, type, discountPercent, applicableTier, expiresAt, maxUses } = req.body;
+    const { code, type, discountPercent, discountDurationMonths, applicableTier, expiresAt, maxUses } = req.body;
     if (!code || !type) return res.status(400).json({ message: "Code and type are required." });
     if (type === 'discount' && (!discountPercent || discountPercent < 1 || discountPercent > 100)) {
       return res.status(400).json({ message: "Discount percent must be 1–100 for discount codes." });
     }
     try {
-      const promo = await storage.createPromoCode(req.user.claims.sub, { code, type, discountPercent, applicableTier: applicableTier || null, expiresAt: expiresAt || null, maxUses: maxUses || null });
+      const promo = await storage.createPromoCode(req.user.claims.sub, { code, type, discountPercent, discountDurationMonths: discountDurationMonths || null, applicableTier: applicableTier || null, expiresAt: expiresAt || null, maxUses: maxUses || null });
       res.json(promo);
     } catch (e: any) {
       if (e.message?.includes('unique')) return res.status(409).json({ message: "A promo code with that name already exists." });
