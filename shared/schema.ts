@@ -200,6 +200,7 @@ export const promoCodes = pgTable("promo_codes", {
   code: text("code").notNull().unique(),
   type: text("type").notNull(), // "discount" | "temp_admin"
   discountPercent: integer("discount_percent"), // 1-100, only for discount type
+  discountDurationMonths: integer("discount_duration_months"), // null = forever, else months Stripe coupon lasts per subscriber
   applicableTier: text("applicable_tier"), // "event_owner_pro" | "vendor_pro" | null = all tiers
   expiresAt: timestamp("expires_at"),
   maxUses: integer("max_uses"), // null = unlimited

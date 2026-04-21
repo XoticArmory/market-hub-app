@@ -1412,17 +1412,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const discount = validation.promoCode.discountPercent || 0;
         redeemedPromo = validation.promoCode;
 
-        // Build Stripe coupon duration based on promo code expiry
+        // Build Stripe coupon duration based on discountDurationMonths set on the promo code
         let couponParams: Stripe.CouponCreateParams;
-        if (validation.promoCode.expiresAt) {
-          const expiresAt = new Date(validation.promoCode.expiresAt);
-          const msRemaining = expiresAt.getTime() - Date.now();
-          const monthsRemaining = Math.max(1, Math.ceil(msRemaining / (30 * 24 * 60 * 60 * 1000)));
+        const durationMonths = validation.promoCode.discountDurationMonths;
+        if (durationMonths && durationMonths > 0) {
           couponParams = {
             percent_off: discount,
             duration: 'repeating',
-            duration_months: monthsRemaining,
-            name: `${validation.promoCode.code} — ${discount}% off (${monthsRemaining}mo)`,
+            duration_months: durationMonths,
+            name: `${validation.promoCode.code} — ${discount}% off (${durationMonths}mo)`,
           };
         } else {
           couponParams = {

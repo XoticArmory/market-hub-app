@@ -89,7 +89,7 @@ function StatCard({ label, value, sub }: { label: string; value: number | string
 function PromoCodesTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [form, setForm] = useState({ code: "", type: "discount", discountPercent: "", applicableTier: "", expiresAt: "", maxUses: "" });
+  const [form, setForm] = useState({ code: "", type: "discount", discountPercent: "", discountDurationMonths: "", applicableTier: "", expiresAt: "", maxUses: "" });
 
   const { data: codes = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/promo-codes"],
@@ -102,7 +102,7 @@ function PromoCodesTab() {
       if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
       return r.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] }); setForm({ code: "", type: "discount", discountPercent: "", applicableTier: "", expiresAt: "", maxUses: "" }); toast({ title: "Promo code created" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] }); setForm({ code: "", type: "discount", discountPercent: "", discountDurationMonths: "", applicableTier: "", expiresAt: "", maxUses: "" }); toast({ title: "Promo code created" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -122,6 +122,7 @@ function PromoCodesTab() {
       code: form.code,
       type: form.type,
       discountPercent: form.type === "discount" ? parseInt(form.discountPercent) || undefined : undefined,
+      discountDurationMonths: form.type === "discount" && form.discountDurationMonths ? parseInt(form.discountDurationMonths) : undefined,
       applicableTier: form.applicableTier || undefined,
       expiresAt: form.expiresAt || undefined,
       maxUses: form.maxUses ? parseInt(form.maxUses) : undefined,
@@ -154,6 +155,19 @@ function PromoCodesTab() {
                 <div>
                   <label className="text-sm font-semibold mb-2 block">Discount %</label>
                   <Input type="number" min={1} max={100} placeholder="e.g. 50" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className="rounded-xl" data-testid="input-discount-percent" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Discount Duration</label>
+                  <Select value={form.discountDurationMonths || "forever"} onValueChange={v => setForm(f => ({ ...f, discountDurationMonths: v === "forever" ? "" : v }))} data-testid="select-discount-duration">
+                    <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="forever">Forever (permanent)</SelectItem>
+                      <SelectItem value="1">1 month</SelectItem>
+                      <SelectItem value="3">3 months</SelectItem>
+                      <SelectItem value="6">6 months</SelectItem>
+                      <SelectItem value="12">12 months</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="text-sm font-semibold mb-2 block">Applicable Tier (optional)</label>
@@ -200,6 +214,7 @@ function PromoCodesTab() {
                       <p className="font-mono font-bold text-foreground">{c.code}</p>
                       <div className="flex flex-wrap gap-2 mt-1">
                         <Badge variant="secondary" className="text-xs">{c.type === 'temp_admin' ? 'Temp Admin' : `${c.discountPercent}% off`}</Badge>
+                        {c.type === 'discount' && <Badge variant="outline" className="text-xs">{c.discountDurationMonths ? `${c.discountDurationMonths}mo discount` : 'Forever'}</Badge>}
                         {c.applicableTier && <Badge variant="outline" className="text-xs">{TIER_LABELS[c.applicableTier] || c.applicableTier}</Badge>}
                         {c.expiresAt && <Badge variant="outline" className="text-xs">Expires {format(new Date(c.expiresAt), 'MMM d, yyyy')}</Badge>}
                         <Badge variant="outline" className="text-xs">{c.usesCount}{c.maxUses ? `/${c.maxUses}` : ''} uses</Badge>

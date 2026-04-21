@@ -105,6 +105,7 @@ app.use((req, res, next) => {
   // Add event_website_url column to events table
   try {
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS event_website_url text;`);
+    await pool.query(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS discount_duration_months integer;`);
     log("Schema migration: events.event_website_url column ensured");
   } catch (e: any) {
     log(`Schema migration warning: ${e.message}`);
