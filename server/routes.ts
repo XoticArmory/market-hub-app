@@ -1419,7 +1419,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           couponParams = {
             percent_off: discount,
             duration: 'repeating',
-            duration_months: durationMonths,
+            duration_in_months: durationMonths,
             name: `${validation.promoCode.code} — ${discount}% off (${durationMonths}mo)`,
           };
         } else {
