@@ -87,6 +87,7 @@ export interface IStorage {
   hasAcceptedTerms(userId: string, tier: string): Promise<boolean>;
 
   // Admin Settings
+  getAdminUserId(): Promise<string | null>;
   getAdminSettings(): Promise<AdminSetting[]>;
   getAdminSetting(key: string): Promise<string | undefined>;
   upsertAdminSetting(key: string, value: string): Promise<void>;
@@ -517,6 +518,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ---- Admin Settings ----
+  async getAdminUserId(): Promise<string | null> {
+    const [row] = await db.select({ userId: userProfiles.userId }).from(userProfiles).where(eq(userProfiles.isAdmin, true)).limit(1);
+    return row?.userId ?? null;
+  }
+
   async getAdminSettings(): Promise<AdminSetting[]> {
     return await db.select().from(adminSettings);
   }

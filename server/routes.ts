@@ -76,6 +76,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // ---- CONTACT US ----
+  app.post('/api/contact', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { subject, message } = req.body;
+      if (!subject?.trim() || !message?.trim()) {
+        return res.status(400).json({ message: "Subject and message are required." });
+      }
+      const adminUserId = await storage.getAdminUserId();
+      if (!adminUserId) return res.status(500).json({ message: "No admin found." });
+      const profile = await storage.getProfile(userId);
+      const senderName = profile?.displayName || profile?.businessName || "A user";
+      await storage.createNotification({
+        userId: adminUserId,
+        fromUserId: userId,
+        type: 'contact',
+        title: `Contact Us: ${subject.trim()}`,
+        message: `${senderName}: ${message.trim()}`,
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to send." });
+    }
+  });
+
   // ---- ANONYMOUS EVENT CLICK TRACKING (public, no auth required) ----
   app.post('/api/track/event-click', async (req, res) => {
     try {
