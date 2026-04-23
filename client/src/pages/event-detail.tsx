@@ -287,7 +287,10 @@ export default function EventDetail() {
         credentials: "include",
         body: JSON.stringify({ bannerUrl }),
       });
-      if (!res.ok) throw new Error("Failed to update banner");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update banner");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -295,7 +298,7 @@ export default function EventDetail() {
       qc.invalidateQueries({ queryKey: [api.events.list.path] });
       toast({ title: "Banner updated!" });
     },
-    onError: () => toast({ title: "Failed to update banner.", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Banner update failed", description: e.message, variant: "destructive" }),
   });
 
   const handleBannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -306,11 +309,14 @@ export default function EventDetail() {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Upload failed");
+      }
       const { url } = await res.json();
       updateBanner.mutate(url);
-    } catch {
-      toast({ title: "Upload failed.", variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: "Image upload failed", description: err.message, variant: "destructive" });
     } finally {
       setBannerUploading(false);
       if (bannerInputRef.current) bannerInputRef.current.value = "";
