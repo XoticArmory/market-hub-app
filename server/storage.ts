@@ -593,14 +593,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAnonymousClickStats(): Promise<any> {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(anonymousEventClicks);
-    const [{ todayTotal }] = await db.select({ todayTotal: sql<number>`count(*)::int` }).from(anonymousEventClicks).where(gte(anonymousEventClicks.createdAt, todayStart));
-    const [{ weekTotal }] = await db.select({ weekTotal: sql<number>`count(*)::int` }).from(anonymousEventClicks).where(gte(anonymousEventClicks.createdAt, weekStart));
-    const [{ uniqueSessions }] = await db.select({ uniqueSessions: sql<number>`count(distinct session_id)::int` }).from(anonymousEventClicks);
+    const result = await pool.query(`
+      SELECT
+        count(*)::int                                                                  AS total,
+        count(*) FILTER (WHERE created_at >= CURRENT_DATE)::int                       AS today_total,
+        count(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int          AS week_total,
+        count(distinct session_id)::int                                                AS unique_sessions
+      FROM anonymous_event_clicks
+    `);
 
     const topEventsRaw = await pool.query(`
       SELECT ac.event_id, e.title, count(*)::int as clicks, count(distinct ac.session_id)::int as unique_sessions
@@ -611,12 +611,13 @@ export class DatabaseStorage implements IStorage {
       LIMIT 10
     `);
 
+    const row = result.rows[0] ?? {};
     return {
-      total,
-      todayTotal,
-      weekTotal,
-      uniqueSessions,
-      topEvents: topEventsRaw.rows,
+      total:          row.total          ?? 0,
+      todayTotal:     row.today_total    ?? 0,
+      weekTotal:      row.week_total     ?? 0,
+      uniqueSessions: row.unique_sessions ?? 0,
+      topEvents:      topEventsRaw.rows,
     };
   }
 
