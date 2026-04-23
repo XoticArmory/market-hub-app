@@ -478,8 +478,8 @@ export default function EventDetail() {
   const isVendor = profile?.profileType === "vendor";
   const isEventOwner = profile?.profileType === "event_owner";
   const realIsOwner = event?.createdBy === user?.id;
-  // When admin previews as vendor_pro, treat them as a non-owner so vendor flows are visible
-  const isOwner = previewTier === "vendor_pro" ? false : realIsOwner;
+  // Ownership always reflects who actually created the event — preview tier only changes the tier/status display
+  const isOwner = realIsOwner;
   const isVendorPro = (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active") || profile?.isAdmin === true;
   const isAdmin = profile?.isAdmin === true;
   const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
