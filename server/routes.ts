@@ -704,15 +704,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!isAdmin && !isPro(profile)) {
       return res.status(403).json({ message: "Pro subscription required to send push notifications." });
     }
-    const { title, message, eventId, targetAudience = 'vendor_pro' } = req.body;
+    const { title, message, eventId, targetAudience = 'vendor_pro', targetAreaCodes = [] } = req.body;
     if (!title || !message) return res.status(400).json({ message: "Title and message required." });
     const validAudiences = ['vendor_pro', 'general', 'all'];
     if (!validAudiences.includes(targetAudience)) return res.status(400).json({ message: "Invalid target audience." });
+    const areaCodes: string[] = Array.isArray(targetAreaCodes) ? targetAreaCodes.map((c: string) => c.trim().toUpperCase()).filter(Boolean) : [];
 
     const ownerEvents = await storage.getEventsByOwner(userId);
     const ownerEventIds = ownerEvents.map(e => e.id);
-    const areaCode = profile?.areaCode || '';
-    const targetUserIds = await storage.getUsersForNotification(targetAudience, areaCode, ownerEventIds, userId);
+    const targetUserIds = await storage.getUsersForNotification(targetAudience, areaCodes, ownerEventIds, userId);
 
     const results = await Promise.all(
       targetUserIds.map(uid =>

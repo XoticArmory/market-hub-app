@@ -48,7 +48,7 @@ export interface IStorage {
   removeAttendance(eventId: number, userId: string): Promise<void>;
   getUserStatusForEvent(eventId: number, userId: string): Promise<string | null>;
   getVendorProUsersInAreaOrHistory(areaCode: string, ownerEventIds: number[]): Promise<string[]>;
-  getUsersForNotification(targetAudience: string, areaCode: string, ownerEventIds: number[], excludeUserId: string): Promise<string[]>;
+  getUsersForNotification(targetAudience: string, targetAreaCodes: string[], ownerEventIds: number[], excludeUserId: string): Promise<string[]>;
 
   // Vendor Posts
   getVendorPosts(eventId: number): Promise<VendorPost[]>;
@@ -325,20 +325,26 @@ export class DatabaseStorage implements IStorage {
     return Array.from(new Set([...areaUserIds, ...historicUserIds]));
   }
 
-  async getUsersForNotification(targetAudience: string, areaCode: string, ownerEventIds: number[], excludeUserId: string): Promise<string[]> {
+  async getUsersForNotification(targetAudience: string, targetAreaCodes: string[], ownerEventIds: number[], excludeUserId: string): Promise<string[]> {
     let profiles: { userId: string }[] = [];
 
+    // Build area code filter — if no codes provided, no area filtering (reach everyone)
+    const buildAreaFilter = () => {
+      if (targetAreaCodes.length === 0) return undefined;
+      return or(
+        inArray(userProfiles.areaCode, targetAreaCodes),
+        sql`${userProfiles.notificationAreaCodes} && ARRAY[${sql.join(targetAreaCodes.map(c => sql`${c}`), sql`, `)}]::text[]`
+      );
+    };
+
     if (targetAudience === 'vendor_pro') {
-      // Vendor Pro in area (primary or additional notification area codes) + historic attendees
+      const tierFilter = and(
+        eq(userProfiles.subscriptionTier, 'vendor_pro'),
+        eq(userProfiles.subscriptionStatus, 'active')
+      );
+      const areaFilter = buildAreaFilter();
       const inArea = await db.select({ userId: userProfiles.userId }).from(userProfiles)
-        .where(and(
-          eq(userProfiles.subscriptionTier, 'vendor_pro'),
-          eq(userProfiles.subscriptionStatus, 'active'),
-          or(
-            eq(userProfiles.areaCode, areaCode),
-            sql`${areaCode} = ANY(${userProfiles.notificationAreaCodes})`
-          )
-        ));
+        .where(areaFilter ? and(tierFilter, areaFilter) : tierFilter);
       profiles = [...inArea];
       if (ownerEventIds.length > 0) {
         const historic = await db.select({ userId: eventAttendance.userId }).from(eventAttendance)
@@ -347,13 +353,15 @@ export class DatabaseStorage implements IStorage {
         profiles = [...profiles, ...historic];
       }
     } else if (targetAudience === 'general') {
-      // Free/general users in area
+      const tierFilter = eq(userProfiles.subscriptionTier, 'free');
+      const areaFilter = buildAreaFilter();
       profiles = await db.select({ userId: userProfiles.userId }).from(userProfiles)
-        .where(and(eq(userProfiles.subscriptionTier, 'free'), eq(userProfiles.areaCode, areaCode)));
+        .where(areaFilter ? and(tierFilter, areaFilter) : tierFilter);
     } else {
-      // 'all' — everyone in area
+      // 'all' — everyone, optionally filtered by area
+      const areaFilter = buildAreaFilter();
       profiles = await db.select({ userId: userProfiles.userId }).from(userProfiles)
-        .where(eq(userProfiles.areaCode, areaCode));
+        .where(areaFilter ?? undefined);
     }
 
     const ids = Array.from(new Set(profiles.map(p => p.userId))).filter(id => id !== excludeUserId);

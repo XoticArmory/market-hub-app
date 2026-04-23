@@ -1000,6 +1000,8 @@ export default function ProfilePage() {
     websiteUrl: profile?.websiteUrl || "",
   });
   const [notifForm, setNotifForm] = useState({ title: "", message: "", targetAudience: "vendor_pro" });
+  const [broadcastAreaCodes, setBroadcastAreaCodes] = useState<string[]>([]);
+  const [broadcastAreaInput, setBroadcastAreaInput] = useState("");
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [notifAreaCodes, setNotifAreaCodes] = useState<string[]>(() => profile?.notificationAreaCodes ?? []);
   const [notifAreaInput, setNotifAreaInput] = useState("");
@@ -1318,6 +1320,42 @@ export default function ProfilePage() {
                   </select>
                 </div>
                 <div>
+                  <label className="text-sm font-semibold mb-2 block">Filter by Area Code <span className="font-normal text-muted-foreground">(optional — leave empty to reach all)</span></label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g. 90210"
+                      value={broadcastAreaInput}
+                      onChange={e => setBroadcastAreaInput(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && broadcastAreaInput.length === 5 && !broadcastAreaCodes.includes(broadcastAreaInput)) {
+                          setBroadcastAreaCodes(c => [...c, broadcastAreaInput]);
+                          setBroadcastAreaInput('');
+                        }
+                      }}
+                      className="rounded-xl font-mono"
+                      data-testid="input-broadcast-area-code"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl shrink-0"
+                      disabled={broadcastAreaInput.length !== 5 || broadcastAreaCodes.includes(broadcastAreaInput)}
+                      onClick={() => { setBroadcastAreaCodes(c => [...c, broadcastAreaInput]); setBroadcastAreaInput(''); }}
+                      data-testid="button-add-broadcast-area"
+                    >Add</Button>
+                  </div>
+                  {broadcastAreaCodes.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {broadcastAreaCodes.map(code => (
+                        <span key={code} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-mono font-medium text-primary">
+                          {code}
+                          <button onClick={() => setBroadcastAreaCodes(c => c.filter(x => x !== code))} className="hover:text-destructive transition-colors" data-testid={`button-remove-broadcast-area-${code}`}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
                   <label className="text-sm font-semibold mb-2 block">Notification Title</label>
                   <Input
                     data-testid="input-notif-title"
@@ -1356,8 +1394,10 @@ export default function ProfilePage() {
                   className="rounded-xl w-full bg-gradient-to-r from-primary to-amber-500"
                   disabled={!notifForm.title || !notifForm.message || isSendingNotif}
                   onClick={() => {
-                    sendNotification({ title: notifForm.title, message: notifForm.message, eventId: selectedEventId || undefined, targetAudience: notifForm.targetAudience });
+                    sendNotification({ title: notifForm.title, message: notifForm.message, eventId: selectedEventId || undefined, targetAudience: notifForm.targetAudience, targetAreaCodes: broadcastAreaCodes });
                     setNotifForm({ title: "", message: "", targetAudience: "vendor_pro" });
+                    setBroadcastAreaCodes([]);
+                    setBroadcastAreaInput('');
                     setSelectedEventId(null);
                   }}
                   data-testid="button-send-notification"
