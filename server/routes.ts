@@ -67,6 +67,8 @@ async function enrichUser(userId: string) {
 
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }));
+
   app.get("/api/login", (_req, res) => res.redirect("/auth"));
   app.get("/api/logout", (_req, res) => res.redirect("/"));
   app.get("/api/callback", (_req, res) => res.redirect("/auth"));
