@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download } from "lucide-react";
+import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -402,6 +402,19 @@ export default function Home() {
                               data-testid={`link-event-website-${event.id}`}
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          {event.location && (
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(event.location)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="Get directions on Google Maps"
+                              data-testid={`link-event-maps-${event.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Navigation className="w-3.5 h-3.5" />
                             </a>
                           )}
                           <CalendarButton event={event} />

@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store, Navigation } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -632,7 +632,22 @@ export default function EventDetail() {
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><MapPin className="w-5 h-5" /></div>
-              <div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Location</p><p className="font-medium text-foreground">{event.location}</p></div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Location</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-foreground">{event.location}</p>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(event.location)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                    title="Get directions on Google Maps"
+                    data-testid="link-event-detail-maps"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
             </div>
             {event.areaCode && (
               <div className="flex items-center gap-3">
