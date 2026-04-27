@@ -21,6 +21,7 @@ Key features:
 - Vendor Pro badge (gradient blue-cyan Crown badge) shown on vendor post cards for Vendor Pro accounts
 - Interactive event map editor (grid-based vendor spot placement)
 - In-app push notifications (polling, not browser push API)
+- New-event area notifications: users opt in (per profile) to receive in-app alerts when a new event is posted in their area code; event creators can write a short announcement (≤160 chars) on the add-event form to trigger those alerts; phone number stored for future SMS integration
 - Product Roadmap: Rocket icon button in header; all authenticated users can view roadmap cards (title, description, expected date, tier tags, status); admin can create/edit/delete items
 - Admin panel with stats by area code, user management, revenue tracking, Square configuration
 - Account onboarding flow (/setup) for new users to select their role
