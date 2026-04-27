@@ -1783,5 +1783,89 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ---- COGS Tracker ----
+  app.get("/api/vendor/cogs/events", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const eventsWithAssignments = await storage.getEventsWithCatalogAssignments(userId);
+      res.json(eventsWithAssignments);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/vendor/cogs/item/:catalogItemId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const catalogItemId = parseInt(req.params.catalogItemId);
+      const cogs = await storage.getItemCogs(userId, catalogItemId);
+      res.json(cogs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/vendor/cogs/item/:catalogItemId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const catalogItemId = parseInt(req.params.catalogItemId);
+      const { category, amountCents } = req.body;
+      if (!category || typeof amountCents !== "number") return res.status(400).json({ message: "category and amountCents required" });
+      const row = await storage.upsertItemCogs(userId, catalogItemId, category, amountCents);
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/vendor/cogs/item/:catalogItemId/:category", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const catalogItemId = parseInt(req.params.catalogItemId);
+      await storage.deleteItemCogs(userId, catalogItemId, req.params.category);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/vendor/cogs/overhead/:eventId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const eventId = parseInt(req.params.eventId);
+      const overhead = await storage.getEventOverhead(userId, eventId);
+      res.json(overhead ?? { boothRentalCents: 0, travelCents: 0, lodgingCents: 0 });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/vendor/cogs/overhead/:eventId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const eventId = parseInt(req.params.eventId);
+      const { boothRentalCents, travelCents, lodgingCents } = req.body;
+      const row = await storage.upsertEventOverhead(userId, eventId, {
+        boothRentalCents: boothRentalCents ?? 0,
+        travelCents: travelCents ?? 0,
+        lodgingCents: lodgingCents ?? 0,
+      });
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/vendor/cogs/summary/:eventId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const eventId = parseInt(req.params.eventId);
+      const summary = await storage.getCogsSummaryForEvent(userId, eventId);
+      res.json(summary);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   return httpServer;
 }

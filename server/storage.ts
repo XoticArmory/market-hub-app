@@ -5,6 +5,7 @@ import {
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, roadmapItems,
   promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
+  vendorItemCogs, vendorEventOverhead,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -13,6 +14,7 @@ import {
   type RoadmapItem, type InsertRoadmapItem,
   type VendorCatalogItem, type InsertVendorCatalog, type VendorCatalogAssignment,
   type EventVendorEntry,
+  type VendorItemCogs, type VendorEventOverhead,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 
@@ -140,6 +142,15 @@ export interface IStorage {
   deleteEventVendorEntry(id: number): Promise<void>;
   getUserByEmail(email: string): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string | null } | undefined>;
   searchProUsers(query: string): Promise<{ id: string; name: string; businessName: string | null; zip: string | null }[]>;
+
+  // COGS
+  getEventsWithCatalogAssignments(vendorId: string): Promise<{ id: number; title: string; date: Date | null }[]>;
+  getItemCogs(vendorId: string, catalogItemId: number): Promise<VendorItemCogs[]>;
+  upsertItemCogs(vendorId: string, catalogItemId: number, category: string, amountCents: number): Promise<VendorItemCogs>;
+  deleteItemCogs(vendorId: string, catalogItemId: number, category: string): Promise<void>;
+  getEventOverhead(vendorId: string, eventId: number): Promise<VendorEventOverhead | undefined>;
+  upsertEventOverhead(vendorId: string, eventId: number, data: { boothRentalCents: number; travelCents: number; lodgingCents: number }): Promise<VendorEventOverhead>;
+  getCogsSummaryForEvent(vendorId: string, eventId: number): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -933,6 +944,133 @@ export class DatabaseStorage implements IStorage {
       LIMIT 10
     `, [q]);
     return result.rows.map(r => ({ id: r.id, name: r.name, businessName: r.business_name, zip: r.zip }));
+  }
+
+  // ---- COGS ----
+  async getEventsWithCatalogAssignments(vendorId: string): Promise<{ id: number; title: string; date: Date | null }[]> {
+    const result = await pool.query<{ id: number; title: string; date: Date | null }>(`
+      SELECT DISTINCT e.id, e.title, e.date
+      FROM vendor_catalog_assignments vca
+      JOIN events e ON e.id = vca.event_id
+      WHERE vca.vendor_id = $1
+      ORDER BY e.date DESC
+    `, [vendorId]);
+    return result.rows;
+  }
+
+  async getItemCogs(vendorId: string, catalogItemId: number): Promise<VendorItemCogs[]> {
+    return await db.select().from(vendorItemCogs)
+      .where(and(eq(vendorItemCogs.vendorId, vendorId), eq(vendorItemCogs.catalogItemId, catalogItemId)));
+  }
+
+  async upsertItemCogs(vendorId: string, catalogItemId: number, category: string, amountCents: number): Promise<VendorItemCogs> {
+    const [row] = await db.insert(vendorItemCogs)
+      .values({ vendorId, catalogItemId, category, amountCents })
+      .onConflictDoUpdate({
+        target: [vendorItemCogs.vendorId, vendorItemCogs.catalogItemId, vendorItemCogs.category],
+        set: { amountCents, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteItemCogs(vendorId: string, catalogItemId: number, category: string): Promise<void> {
+    await pool.query(
+      "DELETE FROM vendor_item_cogs WHERE vendor_id = $1 AND catalog_item_id = $2 AND category = $3",
+      [vendorId, catalogItemId, category]
+    );
+  }
+
+  async getEventOverhead(vendorId: string, eventId: number): Promise<VendorEventOverhead | undefined> {
+    const [row] = await db.select().from(vendorEventOverhead)
+      .where(and(eq(vendorEventOverhead.vendorId, vendorId), eq(vendorEventOverhead.eventId, eventId)));
+    return row;
+  }
+
+  async upsertEventOverhead(vendorId: string, eventId: number, data: { boothRentalCents: number; travelCents: number; lodgingCents: number }): Promise<VendorEventOverhead> {
+    const [row] = await db.insert(vendorEventOverhead)
+      .values({ vendorId, eventId, ...data })
+      .onConflictDoUpdate({
+        target: [vendorEventOverhead.vendorId, vendorEventOverhead.eventId],
+        set: { ...data, updatedAt: new Date() },
+      })
+      .returning();
+    return row;
+  }
+
+  async getCogsSummaryForEvent(vendorId: string, eventId: number): Promise<any> {
+    // Get all catalog assignments for this vendor at this event
+    const assignments = await db.select({
+      catalogItemId: vendorCatalogAssignments.catalogItemId,
+      quantityAssigned: vendorCatalogAssignments.quantityAssigned,
+    }).from(vendorCatalogAssignments)
+      .where(and(eq(vendorCatalogAssignments.eventId, eventId), eq(vendorCatalogAssignments.vendorId, vendorId)));
+
+    const catalogItemIds = assignments.map(a => a.catalogItemId);
+
+    // Get catalog items
+    const catalogItems = catalogItemIds.length > 0
+      ? await db.select().from(vendorCatalog).where(inArray(vendorCatalog.id, catalogItemIds))
+      : [];
+
+    // Get all COGS for these catalog items
+    const allCogs = catalogItemIds.length > 0
+      ? await db.select().from(vendorItemCogs)
+          .where(and(eq(vendorItemCogs.vendorId, vendorId), inArray(vendorItemCogs.catalogItemId, catalogItemIds)))
+      : [];
+
+    // Get event overhead
+    const overhead = await this.getEventOverhead(vendorId, eventId);
+
+    // Get inventory (quantity sold) for this event
+    const inventory = catalogItemIds.length > 0
+      ? await db.select().from(vendorInventory)
+          .where(and(eq(vendorInventory.vendorId, vendorId), eq(vendorInventory.eventId as any, eventId)))
+      : [];
+
+    const totalItemsAtEvent = assignments.reduce((sum, a) => sum + (a.quantityAssigned || 0), 0);
+    const boothRentalTotal = overhead?.boothRentalCents ?? 0;
+    const travelTotal = overhead?.travelCents ?? 0;
+    const lodgingTotal = overhead?.lodgingCents ?? 0;
+    const totalOverheadCents = boothRentalTotal + travelTotal + lodgingTotal;
+    const overheadPerItemCents = totalItemsAtEvent > 0 ? totalOverheadCents / totalItemsAtEvent : 0;
+
+    const items = catalogItems.map(item => {
+      const assignment = assignments.find(a => a.catalogItemId === item.id);
+      const itemCogs = allCogs.filter(c => c.catalogItemId === item.id);
+      const inv = inventory.find((i: any) => i.itemName === item.itemName);
+      const quantityAssigned = assignment?.quantityAssigned ?? 0;
+      const quantitySold = inv?.quantitySold ?? 0;
+      const sellPriceCents = item.priceCents ?? 0;
+      const directCogsCents = itemCogs.reduce((sum, c) => sum + (c.amountCents ?? 0), 0);
+      const totalCogsPerItemCents = directCogsCents + overheadPerItemCents;
+      const revenueCents = sellPriceCents * quantitySold;
+      const grossProfitCents = revenueCents - directCogsCents * quantitySold;
+      const netProfitCents = revenueCents - totalCogsPerItemCents * quantitySold;
+
+      return {
+        catalogItemId: item.id,
+        itemName: item.itemName,
+        quantityAssigned,
+        quantitySold,
+        sellPriceCents,
+        cogs: itemCogs,
+        directCogsCents,
+        overheadPerItemCents: Math.round(overheadPerItemCents),
+        totalCogsPerItemCents: Math.round(totalCogsPerItemCents),
+        revenueCents,
+        grossProfitCents: Math.round(grossProfitCents),
+        netProfitCents: Math.round(netProfitCents),
+      };
+    });
+
+    return {
+      eventId,
+      overhead: overhead ?? { boothRentalCents: 0, travelCents: 0, lodgingCents: 0 },
+      totalItemsAtEvent,
+      overheadPerItemCents: Math.round(overheadPerItemCents),
+      items,
+    };
   }
 }
 

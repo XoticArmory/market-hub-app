@@ -197,6 +197,27 @@ export const eventVendorEntries = pgTable("event_vendor_entries", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const vendorItemCogs = pgTable("vendor_item_cogs", {
+  id: serial("id").primaryKey(),
+  vendorId: varchar("vendor_id").notNull().references(() => users.id),
+  catalogItemId: integer("catalog_item_id").notNull().references(() => vendorCatalog.id, { onDelete: "cascade" }),
+  category: text("category").notNull(), // Material | Packaging | Marketing | Production
+  amountCents: integer("amount_cents").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => [unique("vendor_item_cogs_unique").on(t.vendorId, t.catalogItemId, t.category)]);
+
+export const vendorEventOverhead = pgTable("vendor_event_overhead", {
+  id: serial("id").primaryKey(),
+  vendorId: varchar("vendor_id").notNull().references(() => users.id),
+  eventId: integer("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  boothRentalCents: integer("booth_rental_cents").notNull().default(0),
+  travelCents: integer("travel_cents").notNull().default(0),
+  lodgingCents: integer("lodging_cents").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => [unique("vendor_event_overhead_unique").on(t.vendorId, t.eventId)]);
+
 export const promoCodes = pgTable("promo_codes", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -236,6 +257,13 @@ export const insertVendorCatalogAssignmentSchema = createInsertSchema(vendorCata
 export const insertEventVendorEntrySchema = createInsertSchema(eventVendorEntries).omit({ id: true, addedBy: true, createdAt: true });
 export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({ id: true, createdBy: true, usesCount: true, createdAt: true });
 export type PromoCode = typeof promoCodes.$inferSelect;
+
+export const insertVendorItemCogsSchema = createInsertSchema(vendorItemCogs).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
+export const insertVendorEventOverheadSchema = createInsertSchema(vendorEventOverhead).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
+export type VendorItemCogs = typeof vendorItemCogs.$inferSelect;
+export type InsertVendorItemCogs = z.infer<typeof insertVendorItemCogsSchema>;
+export type VendorEventOverhead = typeof vendorEventOverhead.$inferSelect;
+export type InsertVendorEventOverhead = z.infer<typeof insertVendorEventOverheadSchema>;
 export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
 export type PromoCodeUse = typeof promoCodeUses.$inferSelect;
 

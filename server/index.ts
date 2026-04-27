@@ -123,6 +123,45 @@ app.use((req, res, next) => {
     log(`Schema migration warning: ${e.message}`);
   }
 
+  // Create vendor_item_cogs table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS vendor_item_cogs (
+        id SERIAL PRIMARY KEY,
+        vendor_id VARCHAR NOT NULL,
+        catalog_item_id INTEGER NOT NULL REFERENCES vendor_catalog(id) ON DELETE CASCADE,
+        category TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(vendor_id, catalog_item_id, category)
+      );
+    `);
+    log("Schema migration: vendor_item_cogs table ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
+  // Create vendor_event_overhead table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS vendor_event_overhead (
+        id SERIAL PRIMARY KEY,
+        vendor_id VARCHAR NOT NULL,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        booth_rental_cents INTEGER NOT NULL DEFAULT 0,
+        travel_cents INTEGER NOT NULL DEFAULT 0,
+        lodging_cents INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(vendor_id, event_id)
+      );
+    `);
+    log("Schema migration: vendor_event_overhead table ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
   // Add event_vendor_entries table
   try {
     await pool.query(`
