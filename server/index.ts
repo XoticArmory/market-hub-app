@@ -111,6 +111,18 @@ app.use((req, res, next) => {
     log(`Schema migration warning: ${e.message}`);
   }
 
+  // Add phone_number and new_event_notify_method to user_profiles
+  try {
+    await pool.query(`
+      ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS phone_number text,
+        ADD COLUMN IF NOT EXISTS new_event_notify_method text DEFAULT 'none';
+    `);
+    log("Schema migration: user_profiles phone/notify columns ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
   // Add event_vendor_entries table
   try {
     await pool.query(`

@@ -49,6 +49,7 @@ export interface IStorage {
   getUserStatusForEvent(eventId: number, userId: string): Promise<string | null>;
   getVendorProUsersInAreaOrHistory(areaCode: string, ownerEventIds: number[]): Promise<string[]>;
   getUsersForNotification(targetAudience: string, targetAreaCodes: string[], ownerEventIds: number[], excludeUserId: string): Promise<string[]>;
+  getUsersForNewEventNotification(areaCode: string, excludeUserId: string): Promise<{ userId: string; phoneNumber: string | null; newEventNotifyMethod: string | null }[]>;
 
   // Vendor Posts
   getVendorPosts(eventId: number): Promise<VendorPost[]>;
@@ -367,6 +368,24 @@ export class DatabaseStorage implements IStorage {
 
     const ids = Array.from(new Set(profiles.map(p => p.userId))).filter(id => id !== excludeUserId);
     return ids;
+  }
+
+  async getUsersForNewEventNotification(areaCode: string, excludeUserId: string): Promise<{ userId: string; phoneNumber: string | null; newEventNotifyMethod: string | null }[]> {
+    const rows = await db.select({
+      userId: userProfiles.userId,
+      phoneNumber: userProfiles.phoneNumber,
+      newEventNotifyMethod: userProfiles.newEventNotifyMethod,
+    }).from(userProfiles).where(
+      and(
+        sql`${userProfiles.newEventNotifyMethod} IS NOT NULL`,
+        sql`${userProfiles.newEventNotifyMethod} != 'none'`,
+        or(
+          eq(userProfiles.areaCode, areaCode),
+          sql`${userProfiles.notificationAreaCodes} @> ARRAY[${areaCode}]::text[]`
+        )
+      )
+    );
+    return rows.filter(r => r.userId !== excludeUserId);
   }
 
   // ---- Vendor Posts ----

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, BarChart3, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useEvents } from "@/hooks/use-events";
@@ -998,6 +999,8 @@ export default function ProfilePage() {
     bio: profile?.bio || "",
     businessName: profile?.businessName || "",
     websiteUrl: profile?.websiteUrl || "",
+    phoneNumber: profile?.phoneNumber || "",
+    newEventNotifyMethod: profile?.newEventNotifyMethod || "none",
   });
   const [notifForm, setNotifForm] = useState({ title: "", message: "", targetAudience: "vendor_pro" });
   const [broadcastAreaCodes, setBroadcastAreaCodes] = useState<string[]>([]);
@@ -1079,6 +1082,8 @@ export default function ProfilePage() {
       bio: profile.bio || "",
       businessName: profile.businessName || "",
       websiteUrl: profile.websiteUrl || "",
+      phoneNumber: profile.phoneNumber || "",
+      newEventNotifyMethod: profile.newEventNotifyMethod || "none",
     });
   }
 
@@ -1223,6 +1228,45 @@ export default function ProfilePage() {
                   )}
                 </div>
               )}
+              {/* New Event Notification Preferences */}
+              <div className="border-t pt-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Bell className="w-4 h-4 text-primary" />
+                  <label className="text-sm font-semibold">New Event Alerts</label>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">Get notified when a new event is posted in your area code. Currently delivered as in-app notifications.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1.5 block font-medium">Notification Method</label>
+                    <Select value={form.newEventNotifyMethod} onValueChange={v => setForm(f => ({ ...f, newEventNotifyMethod: v }))}>
+                      <SelectTrigger className="rounded-xl" data-testid="select-notify-method">
+                        <SelectValue placeholder="Choose..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No notifications</SelectItem>
+                        <SelectItem value="in_app">In-app notification</SelectItem>
+                        <SelectItem value="email">Email (coming soon)</SelectItem>
+                        <SelectItem value="sms">Text message / SMS (coming soon)</SelectItem>
+                        <SelectItem value="both">Email + SMS (coming soon)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(form.newEventNotifyMethod === "sms" || form.newEventNotifyMethod === "both") && (
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1.5 block font-medium">Phone Number</label>
+                      <Input
+                        data-testid="input-phone-number"
+                        type="tel"
+                        placeholder="+1 (555) 000-0000"
+                        value={form.phoneNumber}
+                        onChange={e => setForm(f => ({ ...f, phoneNumber: e.target.value }))}
+                        className="rounded-xl"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="text-sm font-semibold mb-2 block">Bio</label>
                 <Textarea data-testid="input-bio" placeholder="Tell the community about yourself..." value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} className="rounded-xl resize-none" rows={3} />

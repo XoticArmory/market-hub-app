@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -51,6 +51,7 @@ export default function AddEvent() {
   const [, setLocation] = useLocation();
   const [extraDates, setExtraDates] = useState<string[]>([]);
   const [newDate, setNewDate] = useState("");
+  const [notifyMessage, setNotifyMessage] = useState("");
 
   const isEventOwnerPro = profile?.isAdmin === true || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
 
@@ -80,6 +81,7 @@ export default function AddEvent() {
       date: new Date(data.date),
       spotPrice: Math.round((data.spotPrice || 0) * 100),
       extraDates,
+      notifyMessage: notifyMessage.trim() || undefined,
     }, {
       onSuccess: (event: any) => setLocation(`/events/${event.id}`)
     });
@@ -415,6 +417,29 @@ export default function AddEvent() {
                 <FormMessage />
               </FormItem>
             )} />
+
+            {/* Area notification announcement */}
+            <div className="rounded-2xl border border-border bg-muted/40 p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-primary" />
+                <span className="text-base font-semibold">Notify Area Subscribers</span>
+                <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Users in your event's area code who opted in for new event alerts will receive an in-app notification with this message. Leave blank to skip.
+              </p>
+              <div>
+                <Textarea
+                  data-testid="input-notify-message"
+                  placeholder={`e.g. Exciting new market launching in ${form.watch("areaCode") || "your area"} — come discover amazing local vendors!`}
+                  value={notifyMessage}
+                  onChange={e => setNotifyMessage(e.target.value.slice(0, 160))}
+                  className="rounded-xl text-sm resize-none"
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground text-right mt-1">{notifyMessage.length}/160</p>
+              </div>
+            </div>
 
             <Button type="submit" className="w-full h-14 text-lg font-semibold rounded-xl bg-gradient-to-r from-primary to-amber-500 shadow-lg" disabled={isPending} data-testid="button-publish-event">
               {isPending ? "Creating Event..." : "Publish Event"}

@@ -23,6 +23,8 @@ export const userProfiles = pgTable("user_profiles", {
   stripeConnectOnboarded: boolean("stripe_connect_onboarded").default(false),
   squareAccessToken: text("square_access_token_connect"),
   squareLocationId: text("square_location_id_connect"),
+  phoneNumber: text("phone_number"),
+  newEventNotifyMethod: text("new_event_notify_method").default("none"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
