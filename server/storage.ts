@@ -151,6 +151,7 @@ export interface IStorage {
   getEventOverhead(vendorId: string, eventId: number): Promise<VendorEventOverhead | undefined>;
   upsertEventOverhead(vendorId: string, eventId: number, data: { boothRentalCents: number; travelCents: number; lodgingCents: number }): Promise<VendorEventOverhead>;
   getCogsSummaryForEvent(vendorId: string, eventId: number): Promise<any>;
+  getCatalogInventorySummary(vendorId: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1071,6 +1072,56 @@ export class DatabaseStorage implements IStorage {
       overheadPerItemCents: Math.round(overheadPerItemCents),
       items,
     };
+  }
+
+  async getCatalogInventorySummary(vendorId: string): Promise<any> {
+    const catalogItems = await db.select().from(vendorCatalog)
+      .where(eq(vendorCatalog.vendorId, vendorId))
+      .orderBy(vendorCatalog.itemName);
+
+    if (catalogItems.length === 0) return { items: [] };
+
+    const catalogItemIds = catalogItems.map(i => i.id);
+
+    const allCogs = await db.select().from(vendorItemCogs)
+      .where(and(eq(vendorItemCogs.vendorId, vendorId), inArray(vendorItemCogs.catalogItemId, catalogItemIds)));
+
+    const assignmentRows = await pool.query<{
+      catalog_item_id: number;
+      event_id: number;
+      quantity_assigned: number;
+      event_title: string;
+    }>(`
+      SELECT vca.catalog_item_id, vca.event_id, vca.quantity_assigned, e.title AS event_title
+      FROM vendor_catalog_assignments vca
+      JOIN events e ON e.id = vca.event_id
+      WHERE vca.vendor_id = $1
+    `, [vendorId]);
+
+    const items = catalogItems.map(item => {
+      const itemCogs = allCogs.filter(c => c.catalogItemId === item.id);
+      const assignments = assignmentRows.rows
+        .filter(a => a.catalog_item_id === item.id)
+        .map(a => ({ eventId: a.event_id, eventTitle: a.event_title, quantityAssigned: a.quantity_assigned }));
+
+      const totalAssigned = assignments.reduce((s, a) => s + (a.quantityAssigned || 0), 0);
+      const sellPriceCents = item.priceCents ?? 0;
+      const directCogsCents = itemCogs.reduce((s, c) => s + (c.amountCents ?? 0), 0);
+      const marginCents = sellPriceCents - directCogsCents;
+
+      return {
+        catalogItemId: item.id,
+        itemName: item.itemName,
+        sellPriceCents,
+        totalAssigned,
+        assignments,
+        cogs: itemCogs,
+        directCogsCents,
+        marginCents,
+      };
+    });
+
+    return { items };
   }
 }
 

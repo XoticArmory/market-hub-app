@@ -1784,6 +1784,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ---- COGS Tracker ----
+  app.get("/api/vendor/cogs/inventory", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+      const summary = await storage.getCatalogInventorySummary(userId);
+      res.json(summary);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.get("/api/vendor/cogs/events", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
