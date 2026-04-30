@@ -1009,6 +1009,32 @@ export default function ProfilePage() {
   const [notifAreaCodes, setNotifAreaCodes] = useState<string[]>(() => profile?.notificationAreaCodes ?? []);
   const [notifAreaInput, setNotifAreaInput] = useState("");
 
+  const { data: welcomeLetters, refetch: refetchWelcomeLetters } = useQuery<{
+    free: { title: string; message: string; enabled: boolean };
+    pro: { title: string; message: string; enabled: boolean };
+  }>({
+    queryKey: ["/api/admin/welcome-letters"],
+    enabled: isAdmin,
+  });
+
+  const [wlFree, setWlFree] = useState({ title: "", message: "", enabled: false });
+  const [wlPro, setWlPro] = useState({ title: "", message: "", enabled: false });
+
+  useEffect(() => {
+    if (welcomeLetters) {
+      setWlFree(welcomeLetters.free);
+      setWlPro(welcomeLetters.pro);
+    }
+  }, [welcomeLetters]);
+
+  const { toast } = useToast();
+  const { mutate: saveWelcomeLetter, isPending: isSavingWl } = useMutation({
+    mutationFn: ({ tier, data }: { tier: "free" | "pro"; data: { title: string; message: string; enabled: boolean } }) =>
+      apiRequest("PUT", `/api/admin/welcome-letters/${tier}`, data),
+    onSuccess: () => { toast({ title: "Welcome letter saved" }); refetchWelcomeLetters(); },
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
   useEffect(() => {
     if (profile?.notificationAreaCodes) setNotifAreaCodes(profile.notificationAreaCodes);
   }, [profile?.notificationAreaCodes?.join(",")]);
@@ -1343,6 +1369,82 @@ export default function ProfilePage() {
 
         {/* NOTIFICATIONS (Event Owner Pro sees Admin tools + Personal alerts, Others just alerts) */}
         <TabsContent value="notifications" className="mt-0 space-y-6">
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-primary" />Welcome Letters
+                </CardTitle>
+                <CardDescription>Automatically sent to new subscribers when they join. Edit and toggle each one independently.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {(["free", "pro"] as const).map((tier) => {
+                  const state = tier === "free" ? wlFree : wlPro;
+                  const setState = tier === "free" ? setWlFree : setWlPro;
+                  const label = tier === "free" ? "Free Subscriber Welcome" : "Pro Subscriber Welcome";
+                  const hint = tier === "free"
+                    ? "Sent when a new user completes their profile for the first time."
+                    : "Sent when a user activates a Pro subscription via Stripe or admin.";
+                  return (
+                    <div key={tier} className="rounded-xl border border-border p-5 space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-semibold text-foreground">{label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                          <span className="text-xs font-medium text-muted-foreground">{state.enabled ? "Active" : "Disabled"}</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={state.enabled}
+                            onClick={() => setState(s => ({ ...s, enabled: !s.enabled }))}
+                            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${state.enabled ? "bg-primary" : "bg-muted"}`}
+                            data-testid={`toggle-welcome-letter-${tier}`}
+                          >
+                            <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${state.enabled ? "translate-x-5" : "translate-x-0"}`} />
+                          </button>
+                        </label>
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold mb-2 block">Notification Title</label>
+                        <Input
+                          placeholder={`e.g. Welcome to VendorGrid${tier === "pro" ? " Pro" : ""}!`}
+                          value={state.title}
+                          onChange={e => setState(s => ({ ...s, title: e.target.value }))}
+                          className="rounded-xl"
+                          data-testid={`input-wl-title-${tier}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold mb-2 block">Message</label>
+                        <Textarea
+                          placeholder="Write the welcome message here…"
+                          value={state.message}
+                          onChange={e => setState(s => ({ ...s, message: e.target.value }))}
+                          className="rounded-xl resize-none"
+                          rows={4}
+                          data-testid={`input-wl-message-${tier}`}
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          className="rounded-xl"
+                          disabled={!state.title || !state.message || isSavingWl}
+                          onClick={() => saveWelcomeLetter({ tier, data: state })}
+                          data-testid={`button-save-welcome-letter-${tier}`}
+                        >
+                          {isSavingWl ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : "Save Letter"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
           {isEventOwnerPro && (
             <Card>
               <CardHeader>

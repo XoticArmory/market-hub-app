@@ -201,16 +201,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = req.user.claims.sub;
       const input = api.profile.upsert.input.parse(req.body);
+      const existing = await storage.getUserProfile(userId);
+      const isAdmin = existing?.isAdmin === true;
       // Vendor profile type requires an active Vendor Pro subscription
       if (input.profileType === 'vendor') {
-        const existing = await storage.getUserProfile(userId);
-        const isAdmin = existing?.isAdmin === true;
         const isVendorPro = existing?.subscriptionTier === 'vendor_pro' && existing?.subscriptionStatus === 'active';
         if (!isAdmin && !isVendorPro) {
           return res.status(403).json({ message: "Vendor Pro subscription required to use a vendor account." });
         }
       }
+      const isNewProfile = !existing;
       const profile = await storage.upsertUserProfile(userId, input);
+      if (isNewProfile && !isAdmin) sendWelcomeLetterIfEnabled(userId, 'free');
       res.json(profile);
     } catch (e) {
       if (e instanceof z.ZodError) return res.status(400).json({ message: e.errors[0].message });
@@ -1193,6 +1195,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ key, value });
   });
 
+  // ---- Welcome Letter Templates ----
+  async function sendWelcomeLetterIfEnabled(userId: string, tier: 'free' | 'pro') {
+    try {
+      const key = tier === 'pro' ? 'welcome_letter_pro' : 'welcome_letter_free';
+      const raw = await storage.getAdminSetting(key);
+      if (!raw) return;
+      const tmpl = JSON.parse(raw) as { title: string; message: string; enabled: boolean };
+      if (!tmpl.enabled || !tmpl.title || !tmpl.message) return;
+      await storage.createNotification({
+        userId,
+        type: 'welcome',
+        title: tmpl.title,
+        message: tmpl.message,
+      });
+    } catch (e) {
+      console.error('sendWelcomeLetterIfEnabled error:', e);
+    }
+  }
+
+  app.get('/api/admin/welcome-letters', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const freeRaw = await storage.getAdminSetting('welcome_letter_free');
+    const proRaw = await storage.getAdminSetting('welcome_letter_pro');
+    const defaults = { title: '', message: '', enabled: false };
+    res.json({
+      free: freeRaw ? JSON.parse(freeRaw) : defaults,
+      pro: proRaw ? JSON.parse(proRaw) : defaults,
+    });
+  });
+
+  app.put('/api/admin/welcome-letters/:tier', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { tier } = req.params;
+    if (!['free', 'pro'].includes(tier)) return res.status(400).json({ message: "tier must be free or pro" });
+    const { title, message, enabled } = req.body;
+    if (!title || !message) return res.status(400).json({ message: "title and message required" });
+    const key = tier === 'pro' ? 'welcome_letter_pro' : 'welcome_letter_free';
+    const value = JSON.stringify({ title, message, enabled: !!enabled });
+    await storage.upsertAdminSetting(key, value);
+    res.json({ tier, title, message, enabled: !!enabled });
+  });
+
   app.get(api.admin.getUsers.path, isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
     const profiles = await storage.getAllUserProfiles();
@@ -1582,6 +1626,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 stripeSubscriptionId: subscriptionId || undefined,
                 profileType: tierToProfileType(tier) as any,
               });
+              sendWelcomeLetterIfEnabled(userId, 'pro');
             }
           }
           break;
@@ -1634,6 +1679,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       subscriptionStatus: validStatus,
       profileType: (validStatus === 'active' ? tierToProfileType(validTier) : 'general') as any,
     });
+    if (validStatus === 'active' && ['vendor_pro', 'event_owner_pro'].includes(validTier)) {
+      sendWelcomeLetterIfEnabled(userId, 'pro');
+    }
     res.json({ success: true });
   });
 
