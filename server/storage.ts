@@ -5,7 +5,7 @@ import {
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, roadmapItems,
   promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
-  vendorItemCogs, vendorEventOverhead, documents,
+  vendorItemCogs, vendorEventOverhead, documents, userFiles,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -16,6 +16,7 @@ import {
   type EventVendorEntry,
   type VendorItemCogs, type VendorEventOverhead,
   type Document, type InsertDocument,
+  type UserFile, type InsertUserFile,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 
@@ -158,6 +159,12 @@ export interface IStorage {
   getDocuments(): Promise<Document[]>;
   createDocument(data: InsertDocument): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
+
+  // User Files
+  getUserFiles(userId: string): Promise<UserFile[]>;
+  createUserFile(data: InsertUserFile): Promise<UserFile>;
+  getUserFile(id: number, userId: string): Promise<UserFile | undefined>;
+  deleteUserFile(id: number, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1142,6 +1149,25 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<void> {
     await pool.query("DELETE FROM documents WHERE id = $1", [id]);
+  }
+
+  // ---- User Files ----
+  async getUserFiles(userId: string): Promise<UserFile[]> {
+    return await db.select().from(userFiles).where(eq(userFiles.userId, userId)).orderBy(desc(userFiles.createdAt));
+  }
+
+  async createUserFile(data: InsertUserFile): Promise<UserFile> {
+    const [file] = await db.insert(userFiles).values(data).returning();
+    return file;
+  }
+
+  async getUserFile(id: number, userId: string): Promise<UserFile | undefined> {
+    const [file] = await db.select().from(userFiles).where(and(eq(userFiles.id, id), eq(userFiles.userId, userId)));
+    return file;
+  }
+
+  async deleteUserFile(id: number, userId: string): Promise<void> {
+    await pool.query("DELETE FROM user_files WHERE id = $1 AND user_id = $2", [id, userId]);
   }
 }
 

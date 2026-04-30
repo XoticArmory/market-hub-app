@@ -204,6 +204,70 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ---- USER FILE FOLDER ROUTES (Pro only) ----
+  async function requirePro(req: any, res: any): Promise<boolean> {
+    const profile = await storage.getUserProfile(req.user.claims.sub);
+    if (!profile) { res.status(403).json({ message: "Profile not found." }); return false; }
+    const isAdmin = profile.isAdmin;
+    const isPro = isAdmin || (profile.subscriptionStatus === "active" && profile.subscriptionTier !== "free");
+    if (!isPro) { res.status(403).json({ message: "VendorGrid Pro required." }); return false; }
+    return true;
+  }
+
+  app.get("/api/my-files", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!(await requirePro(req, res))) return;
+      const files = await storage.getUserFiles(req.user.claims.sub);
+      res.json(files);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/my-files", isAuthenticated, docUpload.single("file"), async (req: any, res) => {
+    try {
+      if (!(await requirePro(req, res))) return;
+      if (!req.file) return res.status(400).json({ message: "No file uploaded." });
+      const supabase = getStorageClient();
+      if (!supabase) return res.status(500).json({ message: "Storage not configured." });
+
+      const userId = req.user.claims.sub;
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const filename = `user-files/${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+      const { error } = await supabase.storage
+        .from(DOC_BUCKET)
+        .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+      if (error) return res.status(500).json({ message: error.message });
+
+      const { data } = supabase.storage.from(DOC_BUCKET).getPublicUrl(filename);
+      const file = await storage.createUserFile({
+        userId,
+        title: (req.body.title || req.file.originalname).trim(),
+        fileUrl: data.publicUrl,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        fileType: req.file.mimetype,
+        storagePath: filename,
+      });
+      res.json(file);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/my-files/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!(await requirePro(req, res))) return;
+      const userId = req.user.claims.sub;
+      const id = parseInt(req.params.id);
+      const file = await storage.getUserFile(id, userId);
+      if (!file) return res.status(404).json({ message: "File not found." });
+
+      const supabase = getStorageClient();
+      if (supabase && file.storagePath) {
+        await supabase.storage.from(DOC_BUCKET).remove([file.storagePath]);
+      }
+      await storage.deleteUserFile(id, userId);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ---- FILE UPLOAD ----
   app.post("/api/upload", isAuthenticated, upload.single("file"), async (req: any, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });

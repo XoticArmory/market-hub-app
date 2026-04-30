@@ -338,6 +338,22 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({ id: tru
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type Document = typeof documents.$inferSelect;
 
+export const userFiles = pgTable("user_files", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull().default(0),
+  fileType: text("file_type").notNull(),
+  storagePath: text("storage_path").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertUserFileSchema = createInsertSchema(userFiles).omit({ id: true, createdAt: true });
+export type InsertUserFile = z.infer<typeof insertUserFileSchema>;
+export type UserFile = typeof userFiles.$inferSelect;
+
 export type VendorPostResponse = VendorPost & { vendorName?: string | null; vendorAvatar?: string | null };
 export type MessageResponse = Message & { senderName?: string | null; senderAvatar?: string | null };
 export type UserProfileResponse = UserProfile & { user?: any };

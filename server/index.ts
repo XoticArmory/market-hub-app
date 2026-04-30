@@ -162,6 +162,26 @@ app.use((req, res, next) => {
     log(`Schema migration warning: ${e.message}`);
   }
 
+  // Create user_files table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_files (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR NOT NULL,
+        title TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        file_size INTEGER NOT NULL DEFAULT 0,
+        file_type TEXT NOT NULL,
+        storage_path TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    log("Schema migration: user_files table ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
   // Create documents table
   try {
     await pool.query(`

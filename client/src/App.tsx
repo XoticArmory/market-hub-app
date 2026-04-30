@@ -31,6 +31,7 @@ import AuthPage from "@/pages/auth";
 import UpgradePage from "@/pages/upgrade";
 import CogsTrackerPage from "@/pages/cogs-tracker";
 import DocumentsPage from "@/pages/documents";
+import MyFilesPage from "@/pages/my-files";
 import NotFound from "@/pages/not-found";
 
 function OnboardingGuard() {
@@ -419,6 +420,7 @@ function Router() {
       <Route path="/upgrade" component={UpgradePage} />
       <Route path="/cogs" component={CogsTrackerPage} />
       <Route path="/documents" component={DocumentsPage} />
+      <Route path="/my-files" component={MyFilesPage} />
       <Route component={NotFound} />
     </Switch>
   );
