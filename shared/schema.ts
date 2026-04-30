@@ -321,6 +321,23 @@ export const anonymousEventClicks = pgTable("anonymous_event_clicks", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull().default(0),
+  fileType: text("file_type").notNull(),
+  category: text("category"),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
+
 export type VendorPostResponse = VendorPost & { vendorName?: string | null; vendorAvatar?: string | null };
 export type MessageResponse = Message & { senderName?: string | null; senderAvatar?: string | null };
 export type UserProfileResponse = UserProfile & { user?: any };

@@ -5,7 +5,7 @@ import {
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, roadmapItems,
   promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
-  vendorItemCogs, vendorEventOverhead,
+  vendorItemCogs, vendorEventOverhead, documents,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -15,6 +15,7 @@ import {
   type VendorCatalogItem, type InsertVendorCatalog, type VendorCatalogAssignment,
   type EventVendorEntry,
   type VendorItemCogs, type VendorEventOverhead,
+  type Document, type InsertDocument,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 
@@ -152,6 +153,11 @@ export interface IStorage {
   upsertEventOverhead(vendorId: string, eventId: number, data: { boothRentalCents: number; travelCents: number; lodgingCents: number }): Promise<VendorEventOverhead>;
   getCogsSummaryForEvent(vendorId: string, eventId: number): Promise<any>;
   getCatalogInventorySummary(vendorId: string): Promise<any>;
+
+  // Documents
+  getDocuments(): Promise<Document[]>;
+  createDocument(data: InsertDocument): Promise<Document>;
+  deleteDocument(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1122,6 +1128,20 @@ export class DatabaseStorage implements IStorage {
     });
 
     return { items };
+  }
+
+  // ---- Documents ----
+  async getDocuments(): Promise<Document[]> {
+    return await db.select().from(documents).orderBy(desc(documents.createdAt));
+  }
+
+  async createDocument(data: InsertDocument): Promise<Document> {
+    const [doc] = await db.insert(documents).values(data).returning();
+    return doc;
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    await pool.query("DELETE FROM documents WHERE id = $1", [id]);
   }
 }
 

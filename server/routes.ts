@@ -13,6 +13,20 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pool } from "./db";
 
 const UPLOAD_BUCKET = "vendor-photos";
+const DOC_BUCKET = "vendorgrid-documents";
+
+const ALLOWED_DOC_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+  "application/rtf",
+];
 
 function getStorageClient() {
   const url = process.env.SUPABASE_URL;
@@ -27,6 +41,15 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) cb(null, true);
     else cb(new Error("Only image files are allowed."));
+  },
+});
+
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_DOC_TYPES.includes(file.mimetype) || file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Unsupported file type. Please upload a PDF, Word, Excel, PowerPoint, or text file."));
   },
 });
 
@@ -121,18 +144,65 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(stats);
   });
 
-  // ---- ENSURE SUPABASE STORAGE BUCKET EXISTS ----
+  // ---- ENSURE SUPABASE STORAGE BUCKETS EXIST ----
   (async () => {
     const supabase = getStorageClient();
     if (!supabase) return;
     const { data: buckets } = await supabase.storage.listBuckets();
-    const exists = buckets?.some((b: any) => b.name === UPLOAD_BUCKET);
-    if (!exists) {
-      const { error } = await supabase.storage.createBucket(UPLOAD_BUCKET, { public: true });
-      if (error) console.error("Failed to create storage bucket:", error.message);
-      else console.log(`Created Supabase Storage bucket: ${UPLOAD_BUCKET}`);
+    for (const bucket of [UPLOAD_BUCKET, DOC_BUCKET]) {
+      const exists = buckets?.some((b: any) => b.name === bucket);
+      if (!exists) {
+        const { error } = await supabase.storage.createBucket(bucket, { public: true });
+        if (error) console.error(`Failed to create storage bucket ${bucket}:`, error.message);
+        else console.log(`Created Supabase Storage bucket: ${bucket}`);
+      }
     }
   })();
+
+  // ---- DOCUMENT ROUTES ----
+  app.get("/api/documents", isAuthenticated, async (_req, res) => {
+    try {
+      const docs = await storage.getDocuments();
+      res.json(docs);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/documents", isAuthenticated, docUpload.single("file"), async (req: any, res) => {
+    try {
+      if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+      if (!req.file) return res.status(400).json({ message: "No file uploaded." });
+      const supabase = getStorageClient();
+      if (!supabase) return res.status(500).json({ message: "Storage not configured." });
+
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+      const { error } = await supabase.storage
+        .from(DOC_BUCKET)
+        .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+      if (error) return res.status(500).json({ message: error.message });
+
+      const { data } = supabase.storage.from(DOC_BUCKET).getPublicUrl(filename);
+      const doc = await storage.createDocument({
+        title: (req.body.title || req.file.originalname).trim(),
+        description: req.body.description?.trim() || null,
+        category: req.body.category?.trim() || null,
+        fileUrl: data.publicUrl,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        fileType: req.file.mimetype,
+        uploadedBy: req.user.claims.sub,
+      });
+      res.json(doc);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/documents/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+      await storage.deleteDocument(parseInt(req.params.id));
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
 
   // ---- FILE UPLOAD ----
   app.post("/api/upload", isAuthenticated, upload.single("file"), async (req: any, res) => {

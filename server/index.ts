@@ -162,6 +162,27 @@ app.use((req, res, next) => {
     log(`Schema migration warning: ${e.message}`);
   }
 
+  // Create documents table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        file_url TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        file_size INTEGER NOT NULL DEFAULT 0,
+        file_type TEXT NOT NULL,
+        category TEXT,
+        uploaded_by VARCHAR NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    log("Schema migration: documents table ensured");
+  } catch (e: any) {
+    log(`Schema migration warning: ${e.message}`);
+  }
+
   // Add event_vendor_entries table
   try {
     await pool.query(`
