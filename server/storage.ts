@@ -577,10 +577,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertAdminSetting(key: string, value: string): Promise<void> {
-    await db
-      .insert(adminSettings)
-      .values({ key, value })
-      .onConflictDoUpdate({ target: adminSettings.key, set: { value, updatedAt: new Date() } });
+    await pool.query(
+      `INSERT INTO admin_settings (key, value, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [key, value]
+    );
   }
 
   // ---- Admin Stats ----
