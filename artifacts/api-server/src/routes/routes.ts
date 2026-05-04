@@ -467,9 +467,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               read: false,
             });
           }
-          log(`New-event notifications sent to ${recipients.length} subscribers in area ${created.areaCode}`);
+          req.log.info(`New-event notifications sent to ${recipients.length} subscribers in area ${created.areaCode}`);
         } catch (notifErr: any) {
-          log(`New-event notification error: ${notifErr.message}`);
+          req.log.warn(`New-event notification error: ${notifErr.message}`);
         }
       }
       res.status(201).json(created);
