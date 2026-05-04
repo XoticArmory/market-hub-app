@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "VendorGrid",
+    "slug": "vendorgrid-android",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "vendorgrid",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "backgroundColor": "#F97016",
+    "primaryColor": "#F97016",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF9F6"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vendorgrid.app"
+    },
+    "android": {
+      "package": "com.vendorgrid.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#F97016"
+      },
+      "statusBar": {
+        "backgroundColor": "#F97016",
+        "barStyle": "light-content"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

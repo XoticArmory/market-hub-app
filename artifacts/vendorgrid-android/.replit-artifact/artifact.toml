@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "VendorGrid"
+version = "1.0.0"
+id = "artifacts/vendorgrid-android"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 25473
+
+[services.development]
+run = "pnpm --filter @workspace/vendorgrid-android run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vendorgrid-android", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/vendorgrid-android", "run", "serve" ]
+
+[services.env]
+PORT = "25473"
+BASE_PATH = "/mobile/"

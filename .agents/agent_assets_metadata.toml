@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "VTZ2KpqcANtNlh1DR5JxA"
+uri = "file://artifacts/vendorgrid-android/assets/images/icon.png"
+type = "image"
+title = "vendorgrid app icon"
+
+[[generated]]
+id = "3xiZjpfsNR0q5_zmbfq34"
+uri = "file://artifacts/vendorgrid-android/assets/images/splash.png"
+type = "image"
+title = "vendorgrid splash screen"
