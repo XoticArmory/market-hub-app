@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+cmds = ["npm install -g pnpm@10"]
+
+[phases.install]
+cmds = ["pnpm install --no-frozen-lockfile"]
+
+[phases.build]
+cmds = [
+  "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/vendorgrid run build",
+  "pnpm --filter @workspace/api-server run build",
+  "cp -r artifacts/vendorgrid/dist/public artifacts/api-server/dist/public"
+]
+
+[start]
+cmd = "node --enable-source-maps artifacts/api-server/dist/index.mjs"
