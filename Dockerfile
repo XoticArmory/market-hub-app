@@ -15,6 +15,12 @@ COPY artifacts/vendorgrid ./artifacts/vendorgrid
 COPY artifacts/api-server ./artifacts/api-server
 COPY attached_assets ./attached_assets
 
+# Declare Railway Variables as build args so Vite can read them at build time
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 RUN PORT=3000 BASE_PATH=/ pnpm --filter @workspace/vendorgrid run build
 RUN pnpm --filter @workspace/api-server run build
 RUN cp -r artifacts/vendorgrid/dist/public artifacts/api-server/dist/public
