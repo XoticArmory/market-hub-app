@@ -80,7 +80,7 @@ export default function WebViewScreen() {
         style={styles.webview}
         javaScriptEnabled
         domStorageEnabled
-        startInLoadingState={false}
+        startInLoadingState={true}
         allowsBackForwardNavigationGestures
         onNavigationStateChange={handleNavigationStateChange}
         onLoadStart={() => {
