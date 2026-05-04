@@ -11,6 +11,7 @@ import path from "path";
 import fs from "fs";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pool } from "../db";
+import { serveStatic } from "../static";
 
 const UPLOAD_BUCKET = "vendor-photos";
 const DOC_BUCKET = "vendorgrid-documents";
@@ -2059,6 +2060,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(summary);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
+
+  // Serve the React frontend for all non-API routes in production
+  if (process.env.NODE_ENV === "production") {
+    serveStatic(app);
+  }
 
   return httpServer;
 }
