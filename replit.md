@@ -1,126 +1,70 @@
-# VendorGrid — replit.md
+# VendorGrid Workspace
 
 ## Overview
 
-VendorGrid is a comprehensive subscription marketplace for local artisan markets and vendors. It allows event owners to create and manage market events with interactive vendor maps, vendors to register for event spaces and post what they're bringing, and community members to browse events, track attendance, and chat. The platform features a single unified Pro tier and a full super-admin control panel.
+pnpm monorepo hosting VendorGrid — a vendor/market-event community platform for artisans and small businesses. Ported from a single-project Railway app into this multi-artifact Replit workspace.
 
-Key features:
-- Browse and create artisan market events (all authenticated users, no fee required)
-- 1 Pro subscription tier: VendorGrid Pro ($14.95/mo) — includes all features for both event owners and vendors
-- VendorGrid Pro: push notifications to local Pro users, event analytics, interactive map builder, boosted listings, 0% platform fee on space registrations, notification receipt, full Vendor Analytics dashboard
-- Legacy tier: event_owner_pro recognized server-side for backward compat (existing subscribers keep full Pro access)
-- Vendor Analytics (Vendor Pro + Admin): events attended, profile view count, per-event inventory tracking (items brought/sold/price), sales summary, revenue calculation
-- Profile view tracking: automatically logged when authenticated users view another user's profile
-- Vendor inventory management: add/edit/delete items per event with quantities and prices
-- Vendor Catalog: reusable catalog items (name, qty, price, image) that can be assigned to events; shown in "Products Available" section on vendor cards
-- Admin all-access: admin users get all Pro tier features enabled (event owner + vendor), with all fees waived on vendor space registrations
-- Payment Processor Connection (Event Owner Pro): market owners connect Stripe (via Stripe Connect Express) or Square (manual API credentials) on their Payments profile tab; vendor space registration payments route to the owner's connected account; Square takes priority over Stripe Connect when both are set; falls back to platform Stripe if neither configured
-- Vendor space registration with Stripe/Square payment (0.5% platform fee for non-Vendor Pro/non-Admin accounts)
-- Vendor space cancel/unregister with confirmation dialog; vendor post delete ("Unregister") with confirmation dialog
-- Multi-photo support on vendor posts: up to 3 photos for free accounts, 10 for Vendor Pro (URL-based, PATCH /api/events/:eventId/posts/:postId/images)
-- Vendor Pro badge (gradient blue-cyan Crown badge) shown on vendor post cards for Vendor Pro accounts
-- Interactive event map editor (grid-based vendor spot placement)
-- In-app push notifications (polling, not browser push API)
-- New-event area notifications: users opt in (per profile) to receive in-app alerts when a new event is posted in their area code; event creators can write a short announcement (≤160 chars) on the add-event form to trigger those alerts; phone number stored for future SMS integration
-- Product Roadmap: Rocket icon button in header; all authenticated users can view roadmap cards (title, description, expected date, tier tags, status); admin can create/edit/delete items
-- Admin panel with stats by area code, user management, revenue tracking, Square configuration
-- Account onboarding flow (/setup) for new users to select their role
-- Area-code-based filtering and community chat
+## Architecture
 
-## User Preferences
+| Artifact | Path | Description |
+|---|---|---|
+| `artifacts/vendorgrid` | `/` | React + Vite frontend (Tailwind v3, wouter, TanStack Query) |
+| `artifacts/api-server` | `/api` | Express 5 backend (Drizzle ORM, Supabase auth, session-based) |
+| `lib/db` | — | Shared Drizzle schema (`@workspace/db`) |
 
-Preferred communication style: Simple, everyday language.
+## Stack
 
-## System Architecture
+- **Monorepo**: pnpm workspaces
+- **Frontend**: React 18, Vite 7, Tailwind CSS v3, wouter, TanStack Query, shadcn/ui
+- **Backend**: Express 5, Drizzle ORM, PostgreSQL (Supabase), express-session + connect-pg-simple
+- **Auth**: Supabase (email/password), session-based (not JWT)
+- **Payments**: Stripe + Square checkout support
+- **File uploads**: Multer → Supabase Storage
+- **Build**: esbuild (backend bundle), Vite (frontend)
 
-### Full-Stack Monorepo Layout
+## Required Secrets
 
-- `client/` — React frontend (Vite)
-- `server/` — Express backend (Node.js/TypeScript)
-- `shared/` — Shared TypeScript types, Zod schemas, and route definitions
+| Secret | Purpose |
+|---|---|
+| `SUPABASE_DATABASE_URL` | Supabase PostgreSQL connection string |
+| `VITE_SUPABASE_URL` | Supabase project URL (for frontend client) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon/public key (for frontend client) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (for backend admin operations) |
+| `SESSION_SECRET` | Express session secret |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 
-### Frontend Architecture
+## Key Import Aliases
 
-- **Framework:** React 18 with TypeScript, bundled by Vite
-- **Routing:** `wouter` (lightweight client-side routing)
-- **State/Data Fetching:** TanStack React Query v5
-- **UI Components:** shadcn/ui (New York style) on Radix UI + Tailwind CSS
-- **Forms:** `react-hook-form` + Zod validation
-- **Fonts:** DM Sans (body), Playfair Display (headings)
+### Frontend (`artifacts/vendorgrid`)
+- `@/` → `src/`
+- `@assets/` → `attached_assets/`
+- `@shared/routes` → `src/lib/shared-routes.ts` (browser-safe API route map)
+- `@shared/schema` → `src/lib/shared-schema.ts` (browser-safe type stubs)
+- `@shared/models/auth` → `src/lib/shared-models-auth.ts` (User type)
 
-Pages (`client/src/pages/`):
-| Page | Route |
-|------|-------|
-| Home (event list) | `/` |
-| Event Detail | `/events/:id` |
-| Add Event | `/events/new` |
-| Community Chat | `/chat` |
-| Profile (with Pro tabs) | `/profile` |
-| Admin Panel | `/admin` |
-| Account Setup / Onboarding | `/setup` |
-| Upgrade to Pro | `/upgrade` |
+### Backend (`artifacts/api-server`)
+- `@workspace/db` → shared Drizzle schema (types only; backend uses its own `src/db.ts` for the pool)
 
-### Onboarding Flow
+## Key Files
 
-New users are redirected to `/setup` if their profile has `onboardingComplete: false`. They choose a role (Event Owner / Vendor / General), enter area code, business name, and bio. After completion, they land on the home page.
+- `artifacts/api-server/src/index.ts` — server entry: creates http.Server, calls `registerRoutes()`
+- `artifacts/api-server/src/app.ts` — Express app setup (CORS, JSON body, pino logger)
+- `artifacts/api-server/src/routes/routes.ts` — all API routes (mounts directly at root, paths like `/api/events`)
+- `artifacts/api-server/src/storage.ts` — DatabaseStorage class (all DB queries)
+- `artifacts/api-server/src/replit_integrations/auth/` — Supabase session auth middleware
+- `artifacts/vendorgrid/src/App.tsx` — root React component with WouterRouter + providers
+- `artifacts/vendorgrid/src/lib/shared-routes.ts` — browser-safe API route definitions
+- `lib/db/src/schema/` — Drizzle table definitions (schema.ts + auth.ts)
 
-### Backend Architecture
+## Common Commands
 
-- **Framework:** Express.js / TypeScript
-- **Storage layer:** `server/storage.ts` → `DatabaseStorage` implementation via Drizzle ORM
-- **Dev server:** Vite middleware embedded inside Express
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm --filter @workspace/db run push` — push DB schema to Supabase (dev only)
 
-### Database
+## Notes
 
-- **Database:** PostgreSQL via Drizzle ORM
-- **Schema:** `shared/schema.ts`
-
-**Core tables:**
-| Table | Purpose |
-|-------|---------|
-| `users` | Auth user records (Replit Auth) |
-| `sessions` | Session storage |
-| `user_profiles` | Role, area code, bio, Stripe IDs, subscriptionTier, subscriptionStatus, isAdmin, onboardingComplete |
-| `events` | Market events with vendor space capacity and spot price |
-| `event_dates` | Extra/recurring dates |
-| `event_attendance` | Attendance status (attending / interested) |
-| `vendor_posts` | Vendor announcements per event |
-| `messages` | Community chat |
-| `admin_settings` | Key/value store (Stripe price IDs stored here) |
-| `notifications` | In-app push notifications (polled every 30s) |
-| `event_maps` | JSONB vendor spot layouts per event |
-| `vendor_registrations` | Vendor space bookings with payment tracking |
-| `terms_acceptances` | Subscription terms acceptance log |
-
-### Authentication & Authorization
-
-- **Provider:** Replit Auth (OIDC)
-- **Admin access:** `user_profiles.isAdmin` boolean; claimed via `/api/admin/claim` using `ADMIN_EMAILS` env var
-- **Subscription tiers:** `free`, `event_owner_pro`, `vendor_pro` stored in `user_profiles.subscriptionTier`
-
-### Subscription Tiers
-
-| Tier | Price | Key Features |
-|------|-------|-------------|
-| `event_owner_pro` | $19.95/mo | Push notifications, featured listings, analytics, event maps |
-| `vendor_pro` | $9.95/mo | No platform fees, receive notifications |
-
-### Stripe Integration
-
-- Tier price IDs stored in `admin_settings` table with keys:
-  - `stripe_price_event_owner_pro`
-  - `stripe_price_vendor_pro`
-- Checkout: POST `/api/stripe/upgrade` with `{ tier }` body
-- Terms accepted in DB before Stripe checkout redirect
-- Webhook updates `subscriptionTier` and `subscriptionStatus` from `checkout.session.completed`
-
-### Required Environment Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `SESSION_SECRET` | Express session signing secret |
-| `REPL_ID` | Replit app ID for OIDC |
-| `STRIPE_SECRET_KEY` | Stripe API secret key |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook endpoint secret |
-| `ADMIN_EMAILS` | Comma-separated admin emails (e.g. `tbetts84@gmail.com`) |
+- The backend routes use full paths like `/api/events` — `registerRoutes()` is called directly on the Express app, not mounted under a sub-router.
+- `lib/db/src/index.ts` uses `SUPABASE_DATABASE_URL || DATABASE_URL` for the connection pool.
+- The Supabase URL env var is set as both `SUPABASE_URL` (backend) and `VITE_SUPABASE_URL` (frontend).
+- Storage bucket creation warnings ("row-level security policy") at startup are non-fatal — buckets already exist in Supabase.
