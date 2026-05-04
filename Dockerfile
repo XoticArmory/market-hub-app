@@ -4,7 +4,7 @@ RUN npm install -g pnpm@10
 
 WORKDIR /app
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json tsconfig.json ./
 COPY lib ./lib
 COPY artifacts/vendorgrid/package.json ./artifacts/vendorgrid/
 COPY artifacts/api-server/package.json ./artifacts/api-server/
