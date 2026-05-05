@@ -1408,7 +1408,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get(api.admin.getStats.path, isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
     const stats = await storage.getAdminStats();
-    res.json(stats);
+
+    // Pull actual subscription revenue from Stripe paid invoices
+    let stripeSubscriptionRevenueCents = 0;
+    try {
+      const stripe = getStripe();
+      if (stripe) {
+        // Page through all paid invoices and sum amount_paid (already excludes refunds via Stripe's net)
+        let hasMore = true;
+        let startingAfter: string | undefined = undefined;
+        while (hasMore) {
+          const page = await stripe.invoices.list({
+            status: 'paid',
+            limit: 100,
+            ...(startingAfter ? { starting_after: startingAfter } : {}),
+          });
+          for (const inv of page.data) {
+            stripeSubscriptionRevenueCents += inv.amount_paid;
+          }
+          hasMore = page.has_more;
+          if (page.data.length > 0) {
+            startingAfter = page.data[page.data.length - 1].id;
+          }
+        }
+      }
+    } catch (e) {
+      req.log.warn({ err: e }, 'Failed to fetch Stripe invoice revenue for admin stats');
+    }
+
+    res.json({
+      ...stats,
+      stripeSubscriptionRevenueCents,
+      // Combined total: booth registration fees + Stripe subscription payments
+      totalRevenueCents: (stats.totalRevenueCents || 0) + stripeSubscriptionRevenueCents,
+    });
   });
 
   app.get(api.admin.getEvents.path, isAuthenticated, async (req: any, res) => {

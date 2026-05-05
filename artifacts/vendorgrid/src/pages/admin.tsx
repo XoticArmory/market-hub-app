@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck, Settings, Users, Loader2, User, BarChart3, CalendarDays, Package, Trash2, CreditCard, CheckCircle, XCircle, Tag } from "lucide-react";
+import { ShieldCheck, Settings, Users, Loader2, User, BarChart3, CalendarDays, Package, Trash2, CreditCard, CheckCircle, XCircle, Tag, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -357,7 +357,7 @@ export default function AdminPage() {
                 <StatCard label="Total Events" value={stats.totalEvents} />
                 <StatCard label="Total Users" value={stats.totalUsers} />
                 <StatCard label="Pro Accounts" value={stats.totalProAccounts} sub="active subscriptions" />
-                <StatCard label="Total Revenue" value={`$${((stats.totalRevenueCents || 0) / 100).toFixed(2)}`} />
+                <StatCard label="Total Revenue" value={`$${((stats.totalRevenueCents || 0) / 100).toFixed(2)}`} sub="subscriptions + booth fees" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard label="General Users" value={stats.totalGeneralUsers} />
@@ -365,9 +365,39 @@ export default function AdminPage() {
                 <StatCard label="Event Owners" value={stats.totalEventOwners} />
               </div>
 
+              {/* Revenue breakdown */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-primary" />
+                    Revenue Breakdown
+                  </CardTitle>
+                  <CardDescription>Actual collected payments from all sources</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-muted/50 rounded-xl p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Subscription Revenue</p>
+                      <p className="text-2xl font-bold text-foreground">${((stats.stripeSubscriptionRevenueCents || 0) / 100).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">from Stripe paid invoices</p>
+                    </div>
+                    <div className="bg-muted/50 rounded-xl p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Booth Fee Revenue</p>
+                      <p className="text-2xl font-bold text-foreground">${(((stats.totalRevenueCents || 0) - (stats.stripeSubscriptionRevenueCents || 0)) / 100).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">from paid registrations</p>
+                    </div>
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Total Collected</p>
+                      <p className="text-2xl font-bold text-primary">${((stats.totalRevenueCents || 0) / 100).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">all time</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {Object.entries(stats.tierCounts || {}).filter(([k]) => k !== 'free').map(([tier, count]) => (
-                  <StatCard key={tier} label={TIER_LABELS[tier] || tier} value={count as number} sub={`~$${((count as number) * 14.95).toFixed(2)}/mo`} />
+                  <StatCard key={tier} label={TIER_LABELS[tier] || tier} value={count as number} sub={`~$${((count as number) * 14.95).toFixed(2)}/mo estimated`} />
                 ))}
               </div>
 
