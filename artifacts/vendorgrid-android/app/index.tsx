@@ -23,6 +23,7 @@ export default function WebViewScreen() {
   const [canGoBack, setCanGoBack] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   const handleNavigationStateChange = useCallback(
     (navState: WebViewNavigation) => {
@@ -52,12 +53,14 @@ export default function WebViewScreen() {
     const timer = setTimeout(() => {
       setIsLoading(false);
       setHasError(true);
+      setErrorDetail("Connection timed out");
     }, LOAD_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [isLoading]);
 
   const handleReload = useCallback(() => {
     setHasError(false);
+    setErrorDetail(null);
     setIsLoading(true);
     webViewRef.current?.reload();
   }, []);
@@ -100,9 +103,10 @@ export default function WebViewScreen() {
           setHasError(false);
         }}
         onLoadEnd={() => setIsLoading(false)}
-        onError={() => {
+        onError={(e) => {
           setIsLoading(false);
           setHasError(true);
+          setErrorDetail(`${e.nativeEvent.description} (${e.nativeEvent.code})`);
         }}
         onHttpError={() => {
           setIsLoading(false);
@@ -148,6 +152,11 @@ export default function WebViewScreen() {
           <Text style={[styles.errorMessage, { color: colors.mutedForeground }]}>
             Check your internet connection and try again.
           </Text>
+          {errorDetail && (
+            <Text style={[styles.errorDetail, { color: colors.mutedForeground }]}>
+              {errorDetail}
+            </Text>
+          )}
           <TouchableOpacity
             style={[styles.button, { backgroundColor: colors.primary }]}
             onPress={handleReload}
@@ -218,7 +227,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: "center",
     lineHeight: 22,
-    marginBottom: 28,
+    marginBottom: 12,
+  },
+  errorDetail: {
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 16,
+    opacity: 0.7,
+    fontFamily: Platform.OS === "android" ? "monospace" : "Courier",
   },
   button: {
     paddingHorizontal: 28,
