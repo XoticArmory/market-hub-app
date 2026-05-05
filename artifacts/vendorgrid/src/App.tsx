@@ -34,6 +34,7 @@ import DocumentsPage from "@/pages/documents";
 import MyFilesPage from "@/pages/my-files";
 import NotFound from "@/pages/not-found";
 import PrivacyPolicyPage from "@/pages/privacy-policy";
+import TermsOfServicePage from "@/pages/terms-of-service";
 
 function OnboardingGuard() {
   const { isAuthenticated } = useAuth();
@@ -423,6 +424,7 @@ function Router() {
       <Route path="/documents" component={DocumentsPage} />
       <Route path="/my-files" component={MyFilesPage} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
+      <Route path="/terms" component={TermsOfServicePage} />
       <Route component={NotFound} />
     </Switch>
   );

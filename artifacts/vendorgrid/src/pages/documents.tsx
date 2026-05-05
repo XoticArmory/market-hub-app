@@ -318,6 +318,34 @@ export default function DocumentsPage() {
         </CardContent>
       </Card>
 
+      {/* Pinned: Terms of Service — always visible to all users */}
+      <Card className="rounded-2xl hover:shadow-sm transition-shadow border-primary/20 bg-primary/5">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+              <FileText className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-2 flex-wrap">
+                <p className="font-semibold text-foreground leading-snug">Terms of Service</p>
+                <Badge variant="secondary" className="text-xs shrink-0">Policies</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                The rules and agreements that govern your use of VendorGrid.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">vendorgrid.net/terms · Always up to date</p>
+            </div>
+            <div className="shrink-0">
+              <Link href="/terms">
+                <Button size="sm" variant="outline" className="rounded-xl gap-1.5 h-8 text-xs border-primary/30 text-primary hover:bg-primary/10">
+                  <ExternalLink className="w-3.5 h-3.5" />View
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Document list */}
       {isLoading ? (
         <div className="space-y-3">
