@@ -11,8 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   FileText, File, FileSpreadsheet, Presentation, Upload, Trash2, Download,
-  FolderOpen, Plus, X, Loader2, ShieldCheck, Search, Image,
+  FolderOpen, Plus, X, Loader2, ShieldCheck, Search, Image, ExternalLink,
 } from "lucide-react";
+import { Link } from "wouter";
 import { format } from "date-fns";
 
 const CATEGORIES = ["General", "Contracts", "Guidelines", "Forms", "Policies", "Training", "Other"];
@@ -288,6 +289,34 @@ export default function DocumentsPage() {
           )}
         </div>
       )}
+
+      {/* Pinned: Privacy Policy — always visible to all users */}
+      <Card className="rounded-2xl hover:shadow-sm transition-shadow border-primary/20 bg-primary/5">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+              <FileText className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-2 flex-wrap">
+                <p className="font-semibold text-foreground leading-snug">Privacy Policy</p>
+                <Badge variant="secondary" className="text-xs shrink-0">Policies</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                How VendorGrid collects, uses, and protects your personal information.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">vendorgrid.net/privacy · Always up to date</p>
+            </div>
+            <div className="shrink-0">
+              <Link href="/privacy">
+                <Button size="sm" variant="outline" className="rounded-xl gap-1.5 h-8 text-xs border-primary/30 text-primary hover:bg-primary/10">
+                  <ExternalLink className="w-3.5 h-3.5" />View
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Document list */}
       {isLoading ? (
