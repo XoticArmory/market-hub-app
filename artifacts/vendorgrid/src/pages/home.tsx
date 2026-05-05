@@ -22,6 +22,16 @@ function normalizeUrl(url: string): string {
   return url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
 }
 
+function getNextDate(event: any): Date {
+  const now = new Date();
+  const allDates: Date[] = [
+    new Date(event.date),
+    ...((event.extraDates || []) as { date: string }[]).map(d => new Date(d.date)),
+  ];
+  const upcoming = allDates.filter(d => d >= now).sort((a, b) => a.getTime() - b.getTime());
+  return upcoming.length > 0 ? upcoming[0] : new Date(event.date);
+}
+
 function getAnonSessionId(): string {
   const key = "vg_session_id";
   let id = sessionStorage.getItem(key);
@@ -224,7 +234,7 @@ export default function Home() {
   );
 
   const sortedEvents = [...(events || [])].sort((a, b) => {
-    const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
+    const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
     return sortOrder === "nearest" ? diff : -diff;
   });
 
@@ -348,8 +358,8 @@ export default function Home() {
                             </div>
                           ) : (
                             <div className="absolute top-4 right-4 bg-background/90 backdrop-blur text-foreground px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center">
-                              <span className="text-primary">{format(new Date(event.date), 'MMM')}</span>
-                              <span className="text-xl leading-none">{format(new Date(event.date), 'dd')}</span>
+                              <span className="text-primary">{format(getNextDate(event), 'MMM')}</span>
+                              <span className="text-xl leading-none">{format(getNextDate(event), 'dd')}</span>
                             </div>
                           )}
                           {event.areaCode && (
