@@ -1,6 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import {
-  ActivityIndicator,
   BackHandler,
   Platform,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import WebView, { WebViewNavigation } from "react-native-webview";
+import SplashScreen from "@/components/SplashScreen";
 
 const LOAD_TIMEOUT_MS = 30000;
 
@@ -42,8 +42,8 @@ export default function WebViewScreen() {
 
   React.useEffect(() => {
     if (Platform.OS === "android") {
-      BackHandler.addEventListener("hardwareBackPress", handleBackPress);
-      return () => BackHandler.removeEventListener("hardwareBackPress", handleBackPress);
+      const subscription = BackHandler.addEventListener("hardwareBackPress", handleBackPress);
+      return () => subscription.remove();
     }
   }, [handleBackPress]);
 
@@ -115,26 +115,7 @@ export default function WebViewScreen() {
         testID="vendorgrid-webview"
       />
 
-      {isLoading && !hasError && (
-        <View
-          style={[
-            styles.loadingOverlay,
-            { backgroundColor: colors.background },
-          ]}
-        >
-          <View style={[styles.logoBox, { backgroundColor: colors.primary }]}>
-            <Text style={styles.logoText}>VG</Text>
-          </View>
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-            style={{ marginTop: 24 }}
-          />
-          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
-            Loading VendorGrid…
-          </Text>
-        </View>
-      )}
+      {isLoading && !hasError && <SplashScreen />}
 
       {hasError && (
         <View
@@ -185,12 +166,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 32,
   },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 10,
-  },
   errorOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -211,11 +186,6 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "800",
     letterSpacing: -1,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 15,
-    fontWeight: "500",
   },
   errorTitle: {
     fontSize: 22,
