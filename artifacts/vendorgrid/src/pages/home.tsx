@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
 import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation } from "lucide-react";
@@ -233,6 +233,25 @@ export default function Home() {
     (events || []).map((event, i) => [event.id, postQueries[i]?.data || []])
   );
 
+  const [cityMap, setCityMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const uniqueZips = [...new Set((events || []).map(e => e.areaCode).filter(Boolean))] as string[];
+    const missing = uniqueZips.filter(z => !(z in cityMap));
+    if (missing.length === 0) return;
+    missing.forEach(zip => {
+      fetch(`https://api.zippopotam.us/us/${zip}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.places?.[0]) {
+            const city = data.places[0]['place name'];
+            setCityMap(prev => ({ ...prev, [zip]: city }));
+          }
+        })
+        .catch(() => {});
+    });
+  }, [events]);
+
   const sortedEvents = [...(events || [])].sort((a, b) => {
     const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
     return sortOrder === "nearest" ? diff : -diff;
@@ -363,8 +382,11 @@ export default function Home() {
                             </div>
                           )}
                           {event.areaCode && (
-                            <div className="absolute top-4 left-4 bg-background/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-semibold text-foreground flex items-center gap-1">
-                              <Hash className="w-3 h-3" />{event.areaCode}
+                            <div className="absolute top-4 left-4 bg-background/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-semibold text-foreground flex flex-col gap-0.5">
+                              <span className="flex items-center gap-1"><Hash className="w-3 h-3" />{event.areaCode}</span>
+                              {cityMap[event.areaCode] && (
+                                <span className="text-[10px] font-normal text-muted-foreground leading-none">{cityMap[event.areaCode]}</span>
+                              )}
                             </div>
                           )}
                           {uniqueVendors.length > 0 && (
