@@ -204,11 +204,25 @@ export class DatabaseStorage implements IStorage {
   // ---- Events ----
   async getEvents(areaCode?: string): Promise<Event[]> {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const notExpired = or(isNull(events.canceledAt), gte(events.canceledAt, threeDaysAgo));
+    const notCanceled = or(isNull(events.canceledAt), gte(events.canceledAt, threeDaysAgo));
+
+    // Only show events where at least one date (primary OR any extra date) is today or in the future
+    const now = new Date();
+    const hasActiveDates = sql`(
+      ${events.date} >= ${now}
+      OR EXISTS (
+        SELECT 1 FROM event_dates ed
+        WHERE ed.event_id = ${events.id}
+          AND ed.date >= ${now}
+      )
+    )`;
+
+    const filters = and(notCanceled!, hasActiveDates);
+
     if (areaCode) {
-      return await db.select().from(events).where(and(eq(events.areaCode, areaCode), notExpired!)).orderBy(desc(events.createdAt));
+      return await db.select().from(events).where(and(eq(events.areaCode, areaCode), filters!)).orderBy(desc(events.createdAt));
     }
-    return await db.select().from(events).where(notExpired!).orderBy(desc(events.createdAt));
+    return await db.select().from(events).where(filters!).orderBy(desc(events.createdAt));
   }
 
   async getEvent(id: number): Promise<Event | undefined> {
