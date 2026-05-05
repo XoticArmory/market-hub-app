@@ -1,5 +1,34 @@
 import { z } from 'zod';
-import { insertEventSchema, insertVendorPostSchema, insertMessageSchema, insertUserProfileSchema, insertEventAttendanceSchema } from '@workspace/db';
+import { insertMessageSchema, insertUserProfileSchema, insertEventAttendanceSchema } from '@workspace/db';
+
+// Defined as plain z.object() to avoid drizzle-zod/zod version mismatch
+// (drizzle-zod 0.8.3 pairs with a different zod peer than the workspace uses,
+//  causing "expected a Zod schema" errors when mixing drizzle schemas with our z.* calls)
+const createEventInput = z.object({
+  title: z.string(),
+  description: z.string(),
+  location: z.string(),
+  areaCode: z.string().optional().nullable(),
+  date: z.coerce.date(),
+  vendorSpaces: z.number().optional().nullable(),
+  spotPrice: z.number().optional().nullable(),
+  registrationCode: z.string().optional().nullable(),
+  vendorRegistrationType: z.string().optional().nullable(),
+  vendorRegistrationUrl: z.string().optional().nullable(),
+  bannerUrl: z.string().optional().nullable(),
+  contactEmail: z.string().optional().nullable(),
+  eventWebsiteUrl: z.string().optional().nullable(),
+  canceledAt: z.coerce.date().optional().nullable(),
+  extraDates: z.array(z.string()).optional(),
+  notifyMessage: z.string().max(160).optional(),
+});
+
+const createVendorPostInput = z.object({
+  itemsDescription: z.string(),
+  imageUrl: z.string().optional().nullable(),
+  imageUrls: z.array(z.string()).optional().nullable(),
+  isVendorPro: z.boolean().optional().nullable(),
+});
 
 export const errorSchemas = {
   validation: z.object({ message: z.string(), field: z.string().optional() }),
@@ -21,7 +50,7 @@ export const api = {
   events: {
     list: { method: 'GET' as const, path: '/api/events' as const, responses: { 200: z.array(z.any()) } },
     get: { method: 'GET' as const, path: '/api/events/:id' as const, responses: { 200: z.any(), 404: errorSchemas.notFound } },
-    create: { method: 'POST' as const, path: '/api/events' as const, input: insertEventSchema.omit({ date: true }).extend({ date: z.coerce.date(), extraDates: z.array(z.string()).optional(), notifyMessage: z.string().max(160).optional() }), responses: { 201: z.any() } },
+    create: { method: 'POST' as const, path: '/api/events' as const, input: createEventInput, responses: { 201: z.any() } },
     delete: { method: 'DELETE' as const, path: '/api/events/:id' as const, responses: { 204: z.void() } },
   },
   attendance: {
@@ -30,7 +59,7 @@ export const api = {
   },
   vendorPosts: {
     listByEvent: { method: 'GET' as const, path: '/api/events/:eventId/posts' as const, responses: { 200: z.array(z.any()) } },
-    create: { method: 'POST' as const, path: '/api/events/:eventId/posts' as const, input: insertVendorPostSchema.omit({ eventId: true }).extend({ imageUrl: z.string().optional() }), responses: { 201: z.any() } },
+    create: { method: 'POST' as const, path: '/api/events/:eventId/posts' as const, input: createVendorPostInput, responses: { 201: z.any() } },
   },
   messages: {
     list: { method: 'GET' as const, path: '/api/messages' as const, responses: { 200: z.array(z.any()) } },
