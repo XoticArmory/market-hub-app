@@ -14,7 +14,7 @@ import WebView, { WebViewNavigation } from "react-native-webview";
 
 const LOAD_TIMEOUT_MS = 30000;
 
-const VENDORGRID_URL = "https://vendorgrid.net";
+const VENDORGRID_URL = "https://www.vendorgrid.net";
 
 export default function WebViewScreen() {
   const colors = useColors();
