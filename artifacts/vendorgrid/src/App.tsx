@@ -33,6 +33,7 @@ import CogsTrackerPage from "@/pages/cogs-tracker";
 import DocumentsPage from "@/pages/documents";
 import MyFilesPage from "@/pages/my-files";
 import NotFound from "@/pages/not-found";
+import PrivacyPolicyPage from "@/pages/privacy-policy";
 
 function OnboardingGuard() {
   const { isAuthenticated } = useAuth();
@@ -421,6 +422,7 @@ function Router() {
       <Route path="/cogs" component={CogsTrackerPage} />
       <Route path="/documents" component={DocumentsPage} />
       <Route path="/my-files" component={MyFilesPage} />
+      <Route path="/privacy" component={PrivacyPolicyPage} />
       <Route component={NotFound} />
     </Switch>
   );
