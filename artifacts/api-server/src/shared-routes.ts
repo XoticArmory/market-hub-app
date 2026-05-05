@@ -49,6 +49,7 @@ export const api = {
   },
   vendorRegistrations: {
     listByEvent: { method: 'GET' as const, path: '/api/events/:eventId/registrations' as const, responses: { 200: z.array(z.any()) } },
+    listByUser: { method: 'GET' as const, path: '/api/vendor/registrations' as const, responses: { 200: z.array(z.any()) } },
     create: { method: 'POST' as const, path: '/api/events/:eventId/register' as const, input: z.object({ spotId: z.string().optional(), spotName: z.string().optional() }), responses: { 200: z.any() } },
   },
   admin: {

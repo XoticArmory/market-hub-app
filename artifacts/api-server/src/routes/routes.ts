@@ -943,6 +943,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ---- VENDOR REGISTRATIONS ----
+  app.get('/api/vendor/registrations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const regs = await storage.getUserRegistrations(userId);
+      const enriched = await Promise.all(regs.map(async r => {
+        const event = await storage.getEvent(r.eventId);
+        return { ...r, eventTitle: event?.title || null, eventDate: event?.date || null, eventLocation: event?.location || null };
+      }));
+      res.json(enriched);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.get(api.vendorRegistrations.listByEvent.path, async (req, res) => {
     const eventId = Number(req.params.eventId);
     const regs = await storage.getVendorRegistrations(eventId);
