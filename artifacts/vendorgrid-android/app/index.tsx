@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import WebView, { WebViewNavigation } from "react-native-webview";
+
+const LOAD_TIMEOUT_MS = 30000;
 
 const VENDORGRID_URL = "https://vendorgrid.net";
 
@@ -43,6 +45,16 @@ export default function WebViewScreen() {
       return () => BackHandler.removeEventListener("hardwareBackPress", handleBackPress);
     }
   }, [handleBackPress]);
+
+  // If the page never fires onLoadEnd (e.g. server timeout), show the error screen
+  useEffect(() => {
+    if (!isLoading) return;
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+      setHasError(true);
+    }, LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
   const handleReload = useCallback(() => {
     setHasError(false);
