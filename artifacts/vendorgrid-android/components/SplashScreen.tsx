@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   FadeOut,
@@ -11,45 +11,9 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Rect } from "react-native-svg";
 import colors from "@/constants/colors";
 
-const { primary: ORANGE, accent: AMBER, background: BACKGROUND, foreground: FOREGROUND, mutedForeground: MUTED } = colors.light;
-
-function GridIcon({ size = 44 }: { size?: number }) {
-  const cell = size / 3;
-  const gap = cell * 0.18;
-  const r = cell * 0.22;
-
-  const cells = [
-    { col: 0, row: 0, fill: ORANGE },
-    { col: 1, row: 0, fill: ORANGE },
-    { col: 2, row: 0, fill: "#FFFFFF" },
-    { col: 0, row: 1, fill: ORANGE },
-    { col: 1, row: 1, fill: AMBER },
-    { col: 2, row: 1, fill: ORANGE },
-    { col: 0, row: 2, fill: "#FFFFFF" },
-    { col: 1, row: 2, fill: ORANGE },
-    { col: 2, row: 2, fill: ORANGE },
-  ];
-
-  return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {cells.map(({ col, row, fill }, i) => (
-        <Rect
-          key={i}
-          x={col * cell + gap / 2}
-          y={row * cell + gap / 2}
-          width={cell - gap}
-          height={cell - gap}
-          rx={r}
-          fill={fill}
-          opacity={fill === "#FFFFFF" ? 0.35 : 1}
-        />
-      ))}
-    </Svg>
-  );
-}
+const { foreground: FOREGROUND, mutedForeground: MUTED, background: BACKGROUND } = colors.light;
 
 export default function SplashScreen() {
   const logoScale = useSharedValue(0.55);
@@ -101,14 +65,11 @@ export default function SplashScreen() {
       exiting={FadeOut.duration(400).easing(Easing.out(Easing.cubic))}
     >
       <Animated.View style={[styles.logoWrapper, logoAnimStyle]}>
-        <View style={styles.logoBox}>
-          <View style={styles.logoTopRow}>
-            <Text style={styles.vgText}>VG</Text>
-          </View>
-          <View style={styles.gridRow}>
-            <GridIcon size={42} />
-          </View>
-        </View>
+        <Image
+          source={require("../assets/images/icon.png")}
+          style={styles.icon}
+          resizeMode="contain"
+        />
       </Animated.View>
 
       <Animated.View style={[styles.textBlock, textAnimStyle]}>
@@ -131,32 +92,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  logoBox: {
-    width: 112,
-    height: 112,
-    borderRadius: 28,
-    backgroundColor: ORANGE,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: ORANGE,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.38,
-    shadowRadius: 20,
-    elevation: 14,
-    paddingTop: 6,
-  },
-  logoTopRow: {
-    alignItems: "center",
-  },
-  vgText: {
-    color: "#FFFFFF",
-    fontSize: 32,
-    fontWeight: "900",
-    letterSpacing: -1.5,
-    lineHeight: 36,
-  },
-  gridRow: {
-    marginTop: 2,
+  icon: {
+    width: 120,
+    height: 120,
+    borderRadius: 26,
   },
   textBlock: {
     marginTop: 32,

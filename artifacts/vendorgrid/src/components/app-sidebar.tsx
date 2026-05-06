@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, MessageCircle, PlusCircle, Store, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, BarChart3, FolderOpen, Lock } from "lucide-react";
+import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, BarChart3, FolderOpen, Lock } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -72,9 +72,7 @@ export function AppSidebar() {
       <Sidebar className="border-r border-border/50 bg-sidebar/50 backdrop-blur-xl">
         <SidebarContent>
           <div className="flex items-center gap-3 p-6 mb-2">
-            <div className="bg-primary/20 p-2 rounded-xl text-primary">
-              <Store className="w-6 h-6" />
-            </div>
+            <img src="/icon-512.png" alt="VendorGrid" className="w-10 h-10 rounded-xl shadow-sm" />
             <div>
               <h2 className="font-display font-bold text-lg leading-tight text-foreground">Vendor</h2>
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Grid</p>
