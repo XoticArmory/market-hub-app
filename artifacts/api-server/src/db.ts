@@ -32,22 +32,19 @@ if (!rawConnectionString) {
 // can no longer block us.
 // ---------------------------------------------------------------------------
 function upgradeToSessionMode(cs: string): string {
-  try {
-    const url = new URL(cs);
-    if (url.port === "6543" && url.hostname.includes("pooler.supabase.com")) {
-      // aws-1-<region>.pooler.supabase.com:6543  →  aws-0-<region>.pooler.supabase.com:5432
-      url.hostname = url.hostname.replace(/^aws-\d+-/, "aws-0-");
-      url.port = "5432";
-      // Session mode supports prepared statements — remove the pgbouncer param
-      url.searchParams.delete("pgbouncer");
-      url.searchParams.delete("connect_timeout");
-      console.log(
-        `[db] Upgraded PgBouncer Transaction → Session mode (${url.hostname}:5432)`,
-      );
-      return url.toString();
-    }
-  } catch {
-    // Not a URL we can parse — use as-is
+  // Only handle Supabase Transaction-mode pooler URLs.
+  // Use plain string replacement so the password is NEVER decoded/re-encoded
+  // (URL parsing can corrupt passwords that contain % or + characters).
+  if (
+    cs.includes(":6543") &&
+    cs.includes("pooler.supabase.com")
+  ) {
+    // aws-1-<region>.pooler.supabase.com:6543  →  aws-0-<region>.pooler.supabase.com:5432
+    const result = cs
+      .replace(/:6543(\/|$|\?)/, ":5432$1")
+      .replace(/aws-\d+-([^.]+\.pooler\.supabase\.com)/, "aws-0-$1");
+    console.log("[db] Upgraded PgBouncer Transaction → Session mode (:6543 → :5432)");
+    return result;
   }
   return cs;
 }
