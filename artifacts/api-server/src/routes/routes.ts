@@ -431,7 +431,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       circuitSuccess();
     } catch (err: any) {
       circuitFailure();
-      if (err.code === "ETIMEOUT") {
+      // Log the real DB error (not just our timeout wrapper) so we can diagnose
+      req.log.warn({ errCode: err.code, errMsg: err.message }, "events DB error — circuit recorded");
+      if (err.code === "ETIMEOUT" || err.code === "ECHECKOUTTIMEOUT" || err.code === "XX000") {
         return res.status(503).json({ message: "Database temporarily unavailable — please refresh in a moment" });
       }
       throw err;

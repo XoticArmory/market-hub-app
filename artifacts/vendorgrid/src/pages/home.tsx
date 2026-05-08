@@ -200,7 +200,7 @@ export default function Home() {
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<"nearest" | "furthest">("nearest");
-  const { data: events, isLoading: isLoadingEvents } = useEvents(areaFilter);
+  const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(areaFilter);
   const [, navigate] = useLocation();
   const { user, isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
@@ -351,6 +351,13 @@ export default function Home() {
           {isLoadingEvents ? (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
               <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" /><p>Loading markets...</p>
+            </div>
+          ) : eventsError ? (
+            <div className="text-center py-20 bg-card rounded-2xl border border-dashed border-border">
+              <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">Having trouble connecting</h3>
+              <p className="text-muted-foreground mb-6">We're having a moment — please try again in a few seconds.</p>
+              <button onClick={() => refetchEvents()} className="text-primary font-medium hover:underline">Refresh</button>
             </div>
           ) : events?.length === 0 ? (
             <div className="text-center py-20 bg-card rounded-2xl border border-dashed border-border">
