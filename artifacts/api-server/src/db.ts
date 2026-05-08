@@ -17,39 +17,34 @@ if (!rawConnectionString) {
 }
 
 // ---------------------------------------------------------------------------
-// Supabase offers two connection endpoints:
+// Supabase offers two PgBouncer modes on different ports:
 //
-//   PgBouncer pooler  — port 6543, Transaction mode, limited server slots
-//   Direct PostgreSQL — port 5432, no pooler, up to 60 connections (free tier)
+//   Transaction mode — aws-1-*.pooler.supabase.com:6543
+//     Server connections are shared per-transaction.  Only a few server slots
+//     exist.  If they fill up (e.g., from a query storm) every new client waits
+//     up to 15 s (query_wait_timeout) before getting ECHECKOUTTIMEOUT.
 //
-// The N+1 query storm from the old code has left PgBouncer's server pool
-// saturated (ECHECKOUTTIMEOUT).  Switching to the direct connection bypasses
-// PgBouncer entirely, giving us a clean slate.
+//   Session mode — aws-0-*.pooler.supabase.com:5432
+//     One server connection per client session.  No query_wait_timeout.
+//     Prepared statements work.  Fine for small pools (max: 3).
 //
-// Supabase pooler URL format:
-//   postgres://postgres.{ref}:{pass}@aws-X-us-east-X.pooler.supabase.com:6543/postgres
-// Direct URL format:
-//   postgres://postgres:{pass}@db.{ref}.supabase.co:5432/postgres
+// We upgrade from Transaction → Session so the saturated server-connection pool
+// can no longer block us.
 // ---------------------------------------------------------------------------
-function resolveConnectionString(cs: string): string {
+function upgradeToSessionMode(cs: string): string {
   try {
     const url = new URL(cs);
     if (url.port === "6543" && url.hostname.includes("pooler.supabase.com")) {
-      // Extract project ref from username: "postgres.{ref}" → "{ref}"
-      const userParts = url.username.split(".");
-      if (userParts.length >= 2) {
-        const projectRef = userParts.slice(1).join(".");
-        url.hostname = `db.${projectRef}.supabase.co`;
-        url.port = "5432";
-        url.username = "postgres";
-        // Remove PgBouncer-specific params (prepared statements are OK on direct)
-        url.searchParams.delete("pgbouncer");
-        url.searchParams.delete("connect_timeout");
-        console.log(
-          `[db] Switched from PgBouncer pooler → direct PostgreSQL (db.${projectRef}.supabase.co:5432)`,
-        );
-        return url.toString();
-      }
+      // aws-1-<region>.pooler.supabase.com:6543  →  aws-0-<region>.pooler.supabase.com:5432
+      url.hostname = url.hostname.replace(/^aws-\d+-/, "aws-0-");
+      url.port = "5432";
+      // Session mode supports prepared statements — remove the pgbouncer param
+      url.searchParams.delete("pgbouncer");
+      url.searchParams.delete("connect_timeout");
+      console.log(
+        `[db] Upgraded PgBouncer Transaction → Session mode (${url.hostname}:5432)`,
+      );
+      return url.toString();
     }
   } catch {
     // Not a URL we can parse — use as-is
@@ -57,12 +52,11 @@ function resolveConnectionString(cs: string): string {
   return cs;
 }
 
-const connectionString = resolveConnectionString(rawConnectionString);
+const connectionString = upgradeToSessionMode(rawConnectionString);
 
 export const pool = new Pool({
   connectionString,
-  // 3 connections is plenty for direct PostgreSQL and keeps us well under
-  // Supabase's 60-connection free-tier limit.
+  // 3 connections is plenty and keeps us well under Supabase's free-tier limit.
   max: 3,
   // Release idle connections quickly so they don't accumulate between restarts.
   idleTimeoutMillis: 10_000,
