@@ -8,57 +8,25 @@ dns.setDefaultResultOrder("ipv4first");
 
 const { Pool } = pg;
 
-const rawConnectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+const connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 
-if (!rawConnectionString) {
+if (!connectionString) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
 
-// ---------------------------------------------------------------------------
-// Supabase offers two PgBouncer modes on different ports:
-//
-//   Transaction mode — aws-1-*.pooler.supabase.com:6543
-//     Server connections are shared per-transaction.  Only a few server slots
-//     exist.  If they fill up (e.g., from a query storm) every new client waits
-//     up to 15 s (query_wait_timeout) before getting ECHECKOUTTIMEOUT.
-//
-//   Session mode — aws-0-*.pooler.supabase.com:5432
-//     One server connection per client session.  No query_wait_timeout.
-//     Prepared statements work.  Fine for small pools (max: 3).
-//
-// We upgrade from Transaction → Session so the saturated server-connection pool
-// can no longer block us.
-// ---------------------------------------------------------------------------
-function upgradeToSessionMode(cs: string): string {
-  // Only handle Supabase Transaction-mode pooler URLs.
-  // Use plain string replacement so the password is NEVER decoded/re-encoded
-  // (URL parsing can corrupt passwords that contain % or + characters).
-  if (
-    cs.includes(":6543") &&
-    cs.includes("pooler.supabase.com")
-  ) {
-    // Supabase Session mode uses port 5432 on the SAME pooler host.
-    // (aws-0-* hosts are for newer projects; older/single-region projects use aws-1-*:5432)
-    const result = cs.replace(/:6543(\/|$|\?)/, ":5432$1");
-    console.log("[db] Upgraded PgBouncer Transaction (6543) → Session mode (5432, same host)");
-    return result;
-  }
-  return cs;
-}
-
-const connectionString = upgradeToSessionMode(rawConnectionString);
-
 export const pool = new Pool({
   connectionString,
-  // 3 connections is plenty and keeps us well under Supabase's free-tier limit.
+  // Keep pool small so we don't pile up connections on Supabase.
+  // With the circuit breaker in routes.ts, at most 1 connection attempt
+  // is in flight at any given time during recovery.
   max: 3,
-  // Release idle connections quickly so they don't accumulate between restarts.
+  // Release idle connections quickly so they don't linger between restarts.
   idleTimeoutMillis: 10_000,
-  // Fail fast (5 s) if no pool slot is available locally.
+  // Fail fast locally if no pool slot is available.
   connectionTimeoutMillis: 5_000,
-  // Allow the process to exit even if a connection is still held.
+  // Allow the process to exit even if a connection is still open.
   allowExitOnIdle: true,
 });
 
