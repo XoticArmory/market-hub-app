@@ -52,11 +52,12 @@ async function shutdown(signal: string) {
     process.exit(0);
   });
 
-  // Force-exit after 10 s if something hangs
+  // Force-exit after 3 s — don't let hanging Supabase connections block
+  // the Railway rolling deploy (new instance starts while old one lingers).
   setTimeout(() => {
     logger.error("Shutdown timeout — forcing exit");
     process.exit(1);
-  }, 10_000).unref();
+  }, 3_000).unref();
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

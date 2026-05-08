@@ -13,6 +13,38 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pool } from "../db";
 import { serveStatic } from "../static";
 
+// ---------------------------------------------------------------------------
+// DB circuit breaker — prevents Supabase connection-pool exhaustion from
+// cascading into a permanent 15-second hang on every request.
+//
+// Behaviour:
+//   CLOSED (normal)  → requests go through
+//   OPEN   (tripped) → immediately return 503 for CIRCUIT_COOLDOWN_MS so
+//                      existing pool connections finish and PgBouncer drains
+//   HALF-OPEN        → one probe request goes through after the cooldown;
+//                      if it succeeds the circuit closes, otherwise re-opens
+// ---------------------------------------------------------------------------
+const CIRCUIT_FAIL_THRESHOLD = 2;   // consecutive failures before opening
+const CIRCUIT_COOLDOWN_MS    = 20_000; // 20 s open before half-open probe
+
+let _circuitFailures  = 0;
+let _circuitOpenAt    = 0;
+
+function circuitIsOpen(): boolean {
+  if (_circuitFailures < CIRCUIT_FAIL_THRESHOLD) return false;
+  if (Date.now() - _circuitOpenAt > CIRCUIT_COOLDOWN_MS) {
+    // Enter half-open: allow one probe (reset counter so first call goes through)
+    _circuitFailures = CIRCUIT_FAIL_THRESHOLD - 1;
+    return false;
+  }
+  return true;
+}
+function circuitSuccess() { _circuitFailures = 0; }
+function circuitFailure() {
+  _circuitFailures++;
+  _circuitOpenAt = Date.now();
+}
+
 const UPLOAD_BUCKET = "vendor-photos";
 const DOC_BUCKET = "vendorgrid-documents";
 
@@ -377,8 +409,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ---- EVENT ROUTES ----
   app.get(api.events.list.path, async (req: any, res) => {
+    // Circuit breaker: if Supabase was recently unreachable, return 503
+    // immediately so pool slots can drain rather than piling up 15-s hangs.
+    if (circuitIsOpen()) {
+      return res.status(503).json({ message: "Database temporarily unavailable — retrying shortly" });
+    }
+
     const areaCode = req.query.areaCode as string | undefined;
-    const allEvents = await storage.getEvents(areaCode);
+    let allEvents: Awaited<ReturnType<typeof storage.getEvents>>;
+    try {
+      allEvents = await storage.getEvents(areaCode);
+      circuitSuccess();
+    } catch (err: any) {
+      circuitFailure();
+      throw err;
+    }
     if (allEvents.length === 0) return res.json([]);
 
     const eventIds = allEvents.map(e => e.id);
