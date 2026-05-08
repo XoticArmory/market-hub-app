@@ -418,10 +418,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const areaCode = req.query.areaCode as string | undefined;
     let allEvents: Awaited<ReturnType<typeof storage.getEvents>>;
     try {
-      allEvents = await storage.getEvents(areaCode);
+      // Hard 5-second timeout so failures register quickly (not after 15s)
+      // allowing the circuit to trip before pool slots are all exhausted.
+      const dbTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => {
+          const err = new Error("DB connection timeout") as any;
+          err.code = "ETIMEOUT";
+          reject(err);
+        }, 5_000)
+      );
+      allEvents = await Promise.race([storage.getEvents(areaCode), dbTimeout]);
       circuitSuccess();
     } catch (err: any) {
       circuitFailure();
+      if (err.code === "ETIMEOUT") {
+        return res.status(503).json({ message: "Database temporarily unavailable — please refresh in a moment" });
+      }
       throw err;
     }
     if (allEvents.length === 0) return res.json([]);
