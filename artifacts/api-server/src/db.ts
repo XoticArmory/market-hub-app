@@ -39,11 +39,10 @@ function upgradeToSessionMode(cs: string): string {
     cs.includes(":6543") &&
     cs.includes("pooler.supabase.com")
   ) {
-    // aws-1-<region>.pooler.supabase.com:6543  →  aws-0-<region>.pooler.supabase.com:5432
-    const result = cs
-      .replace(/:6543(\/|$|\?)/, ":5432$1")
-      .replace(/aws-\d+-([^.]+\.pooler\.supabase\.com)/, "aws-0-$1");
-    console.log("[db] Upgraded PgBouncer Transaction → Session mode (:6543 → :5432)");
+    // Supabase Session mode uses port 5432 on the SAME pooler host.
+    // (aws-0-* hosts are for newer projects; older/single-region projects use aws-1-*:5432)
+    const result = cs.replace(/:6543(\/|$|\?)/, ":5432$1");
+    console.log("[db] Upgraded PgBouncer Transaction (6543) → Session mode (5432, same host)");
     return result;
   }
   return cs;
