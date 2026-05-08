@@ -42,11 +42,15 @@ export interface IStorage {
 
   // Event Dates
   getEventDates(eventId: number): Promise<EventDate[]>;
+  getBulkEventDates(eventIds: number[]): Promise<EventDate[]>;
   createEventDate(data: { eventId: number; date: Date }): Promise<EventDate>;
   deleteEventDates(eventId: number): Promise<void>;
 
   // Attendance
   getEventAttendance(eventId: number): Promise<EventAttendance[]>;
+  getBulkEventAttendance(eventIds: number[]): Promise<EventAttendance[]>;
+  getBulkUserProfiles(userIds: string[]): Promise<UserProfile[]>;
+  getUserStatusForAllEvents(userId: string, eventIds: number[]): Promise<EventAttendance[]>;
   getUserAttendance(userId: string): Promise<EventAttendance[]>;
   setAttendance(eventId: number, userId: string, status: string): Promise<EventAttendance>;
   removeAttendance(eventId: number, userId: string): Promise<void>;
@@ -204,20 +208,22 @@ export class DatabaseStorage implements IStorage {
   // ---- Events ----
   async getEvents(areaCode?: string): Promise<Event[]> {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const notCanceled = or(isNull(events.canceledAt), gte(events.canceledAt, threeDaysAgo));
-
-    // Only show events where at least one date (primary OR any extra date) is today or in the future
     const now = new Date();
-    const hasActiveDates = sql`(
-      ${events.date} >= ${now}
-      OR EXISTS (
-        SELECT 1 FROM event_dates ed
-        WHERE ed.event_id = ${events.id}
-          AND ed.date >= ${now}
-      )
-    )`;
 
-    const filters = and(notCanceled!, hasActiveDates);
+    // UNION gets all event IDs with at least one active date in a single efficient pass
+    // (avoids the correlated EXISTS subquery that scanned event_dates once per event row)
+    const activeIdsResult = await pool.query<{ id: number }>(
+      `SELECT id FROM events WHERE date >= $1
+       UNION
+       SELECT event_id AS id FROM event_dates WHERE date >= $1`,
+      [now]
+    );
+    const activeIds = activeIdsResult.rows.map(r => r.id);
+    if (activeIds.length === 0) return [];
+
+    const notCanceled = or(isNull(events.canceledAt), gte(events.canceledAt, threeDaysAgo));
+    const hasActiveDate = inArray(events.id, activeIds);
+    const filters = and(notCanceled!, hasActiveDate);
 
     if (areaCode) {
       return await db.select().from(events).where(and(eq(events.areaCode, areaCode), filters!)).orderBy(desc(events.createdAt));
@@ -291,6 +297,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(eventDates).where(eq(eventDates.eventId, eventId)).orderBy(eventDates.date);
   }
 
+  async getBulkEventDates(eventIds: number[]): Promise<EventDate[]> {
+    if (eventIds.length === 0) return [];
+    return await db.select().from(eventDates).where(inArray(eventDates.eventId, eventIds)).orderBy(eventDates.date);
+  }
+
   async createEventDate(data: { eventId: number; date: Date }): Promise<EventDate> {
     const [d] = await db.insert(eventDates).values(data).returning();
     return d;
@@ -303,6 +314,22 @@ export class DatabaseStorage implements IStorage {
   // ---- Attendance ----
   async getEventAttendance(eventId: number): Promise<EventAttendance[]> {
     return await db.select().from(eventAttendance).where(eq(eventAttendance.eventId, eventId));
+  }
+
+  async getBulkEventAttendance(eventIds: number[]): Promise<EventAttendance[]> {
+    if (eventIds.length === 0) return [];
+    return await db.select().from(eventAttendance).where(inArray(eventAttendance.eventId, eventIds));
+  }
+
+  async getBulkUserProfiles(userIds: string[]): Promise<UserProfile[]> {
+    if (userIds.length === 0) return [];
+    return await db.select().from(userProfiles).where(inArray(userProfiles.userId, userIds));
+  }
+
+  async getUserStatusForAllEvents(userId: string, eventIds: number[]): Promise<EventAttendance[]> {
+    if (eventIds.length === 0) return [];
+    return await db.select().from(eventAttendance)
+      .where(and(eq(eventAttendance.userId, userId), inArray(eventAttendance.eventId, eventIds)));
   }
 
   async getUserAttendance(userId: string): Promise<EventAttendance[]> {

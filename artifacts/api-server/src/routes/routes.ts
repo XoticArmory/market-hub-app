@@ -379,23 +379,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get(api.events.list.path, async (req: any, res) => {
     const areaCode = req.query.areaCode as string | undefined;
     const allEvents = await storage.getEvents(areaCode);
-    const enriched = await Promise.all(allEvents.map(async (e) => {
-      const creator = await enrichUser(e.createdBy);
-      const creatorProfile = await storage.getUserProfile(e.createdBy);
-      const attendance = await storage.getEventAttendance(e.id);
-      const extraDates = await storage.getEventDates(e.id);
-      const attendingCount = attendance.filter(a => a.status === 'attending').length;
-      const interestedCount = attendance.filter(a => a.status === 'interested').length;
-      let userStatus: string | null = null;
-      if (req.user) {
-        userStatus = await storage.getUserStatusForEvent(e.id, req.user.claims?.sub);
-      }
+    if (allEvents.length === 0) return res.json([]);
+
+    const eventIds = allEvents.map(e => e.id);
+    const creatorIds = [...new Set(allEvents.map(e => e.createdBy))];
+
+    // 5 bulk queries total regardless of event count (was N*4 queries)
+    const [allExtraDates, allAttendance, allProfiles, allCreators] = await Promise.all([
+      storage.getBulkEventDates(eventIds),
+      storage.getBulkEventAttendance(eventIds),
+      storage.getBulkUserProfiles(creatorIds),
+      authStorage.getUsers(creatorIds),
+    ]);
+
+    let userAttendance: import('@workspace/db').EventAttendance[] = [];
+    if (req.user?.claims?.sub) {
+      userAttendance = await storage.getUserStatusForAllEvents(req.user.claims.sub, eventIds);
+    }
+
+    // Build lookup maps for O(1) access
+    const extraDatesMap = new Map<number, typeof allExtraDates>();
+    for (const d of allExtraDates) {
+      if (!extraDatesMap.has(d.eventId)) extraDatesMap.set(d.eventId, []);
+      extraDatesMap.get(d.eventId)!.push(d);
+    }
+    const attendingCountMap = new Map<number, number>();
+    const interestedCountMap = new Map<number, number>();
+    for (const a of allAttendance) {
+      if (a.status === 'attending') attendingCountMap.set(a.eventId, (attendingCountMap.get(a.eventId) ?? 0) + 1);
+      if (a.status === 'interested') interestedCountMap.set(a.eventId, (interestedCountMap.get(a.eventId) ?? 0) + 1);
+    }
+    const profileMap = new Map(allProfiles.map(p => [p.userId, p]));
+    const creatorMap = new Map(allCreators.map(u => [u.id, u]));
+    const userAttendanceMap = new Map(userAttendance.map(a => [a.eventId, a.status]));
+
+    const enriched = allEvents.map(e => {
+      const creator = creatorMap.get(e.createdBy);
+      const creatorProfile = profileMap.get(e.createdBy);
       const isFeatured = isPro(creatorProfile);
-      const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
       const { registrationCode: _rc, ...eventPublic } = e;
-      return { ...eventPublic, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, isFeatured };
-    }));
-    // Sort: featured (pro) events in the area at top, then by date
+      return {
+        ...eventPublic,
+        creatorName: creator?.firstName ? `${creator.firstName} ${creator.lastName ?? ''}`.trim() : creator?.email,
+        creatorTier: creatorProfile?.subscriptionTier,
+        creatorWebsiteUrl: isFeatured ? (creatorProfile?.websiteUrl ?? null) : null,
+        extraDates: extraDatesMap.get(e.id) ?? [],
+        attendingCount: attendingCountMap.get(e.id) ?? 0,
+        interestedCount: interestedCountMap.get(e.id) ?? 0,
+        userStatus: userAttendanceMap.get(e.id) ?? null,
+        isFeatured,
+      };
+    });
+
+    // Sort: featured (pro) events first, then by date
     enriched.sort((a, b) => {
       if (a.isFeatured && !b.isFeatured) return -1;
       if (!a.isFeatured && b.isFeatured) return 1;
