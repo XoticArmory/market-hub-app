@@ -25,7 +25,7 @@ import { serveStatic } from "../static";
 //                      if it succeeds the circuit closes, otherwise re-opens
 // ---------------------------------------------------------------------------
 const CIRCUIT_FAIL_THRESHOLD = 2;   // consecutive failures before opening
-const CIRCUIT_COOLDOWN_MS    = 20_000; // 20 s open before half-open probe
+const CIRCUIT_COOLDOWN_MS    = 60_000; // 60 s open before half-open probe — gives PgBouncer room to drain
 
 let _circuitFailures  = 0;
 let _circuitOpenAt    = 0;
