@@ -143,7 +143,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const adminUserId = await storage.getAdminUserId();
       if (!adminUserId) return res.status(500).json({ message: "No admin found." });
-      const profile = await storage.getProfile(userId);
+      const profile = await storage.getUserProfile(userId);
       const senderName = profile?.displayName || profile?.businessName || "A user";
       await storage.createNotification({
         userId: adminUserId,
