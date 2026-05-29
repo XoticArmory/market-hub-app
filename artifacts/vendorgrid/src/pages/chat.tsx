@@ -6,13 +6,21 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import { format } from "date-fns";
-import { Send, Store, User, Loader2, MapPin, Filter, Trash2 } from "lucide-react";
+import { Send, Store, User, Loader2, MapPin, Filter, Trash2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { zipToState, US_STATES } from "@/lib/zip-to-state";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function Chat() {
   const { user, isAuthenticated } = useAuth();
@@ -20,6 +28,7 @@ export default function Chat() {
   const isAdmin = profileData?.profile?.isAdmin === true;
   const [areaFilter, setAreaFilter] = useState<string>(() => profileData?.profile?.areaCode || "");
   const [areaInput, setAreaInput] = useState(profileData?.profile?.areaCode || "");
+  const [stateFilter, setStateFilter] = useState<string>("");
   const { data: messages, isLoading } = useMessages(areaFilter || undefined);
   const { mutate: sendMessage, isPending } = useCreateMessage();
   const [content, setContent] = useState("");
@@ -57,6 +66,26 @@ export default function Chat() {
     });
   };
 
+  const visibleMessages = stateFilter
+    ? (messages ?? []).filter((m: any) => {
+        if (!m.areaCode) return false;
+        return zipToState(m.areaCode) === stateFilter;
+      })
+    : (messages ?? []);
+
+  const activeFilterLabel = (() => {
+    if (areaFilter && stateFilter) return `${stateFilter} · ${areaFilter}`;
+    if (stateFilter) return stateFilter;
+    if (areaFilter) return areaFilter;
+    return null;
+  })();
+
+  const clearAll = () => {
+    setAreaFilter("");
+    setAreaInput("");
+    setStateFilter("");
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
@@ -71,7 +100,7 @@ export default function Chat() {
   return (
     <div className="max-w-4xl mx-auto h-[calc(100vh-10rem)] flex flex-col bg-card rounded-3xl shadow-xl border border-border/50 overflow-hidden">
       <div className="px-6 py-4 bg-background/50 border-b border-border/50 backdrop-blur z-10">
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
           <div className="flex items-center gap-4 flex-1">
             <div className="w-12 h-12 bg-gradient-to-br from-primary to-amber-500 rounded-2xl flex items-center justify-center text-white shadow-md shrink-0">
               <Store className="w-6 h-6" />
@@ -79,27 +108,50 @@ export default function Chat() {
             <div>
               <h2 className="font-display font-bold text-xl text-foreground leading-tight">Vendor Community</h2>
               <p className="text-sm text-muted-foreground">
-                {areaFilter ? <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />Area: {areaFilter}</span> : "All areas"}
+                {activeFilterLabel
+                  ? <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{activeFilterLabel}</span>
+                  : "All areas"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={stateFilter}
+              onValueChange={val => setStateFilter(val === "__all__" ? "" : val)}
+            >
+              <SelectTrigger
+                className="rounded-xl h-9 w-36 text-sm"
+                data-testid="select-state-filter"
+              >
+                <SelectValue placeholder="All states" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                <SelectItem value="__all__">All states</SelectItem>
+                {US_STATES.map(s => (
+                  <SelectItem key={s.abbr} value={s.abbr}>
+                    {s.abbr} — {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="relative flex items-center">
               <Filter className="absolute left-3 w-4 h-4 text-muted-foreground pointer-events-none" />
               <Input
                 data-testid="input-area-filter-chat"
-                placeholder="Filter by area code..."
+                placeholder="Zip code..."
                 value={areaInput}
                 onChange={e => setAreaInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') setAreaFilter(areaInput); }}
-                className="pl-9 rounded-xl h-9 w-44 text-sm"
+                className="pl-9 rounded-xl h-9 w-36 text-sm"
               />
             </div>
             <Button size="sm" variant="outline" onClick={() => setAreaFilter(areaInput)} className="rounded-xl h-9" data-testid="button-apply-area-filter">
               Apply
             </Button>
-            {areaFilter && (
-              <Button size="sm" variant="ghost" onClick={() => { setAreaFilter(""); setAreaInput(""); }} className="rounded-xl h-9 text-muted-foreground">
+            {(areaFilter || stateFilter) && (
+              <Button size="sm" variant="ghost" onClick={clearAll} className="rounded-xl h-9 text-muted-foreground" data-testid="button-clear-filters">
                 Clear
               </Button>
             )}
@@ -110,16 +162,21 @@ export default function Chat() {
       <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/10">
         {isLoading ? (
           <div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary/50" /></div>
-        ) : messages?.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-70">
             <Store className="w-12 h-12 mb-4" />
-            <p>{areaFilter ? `No messages in area ${areaFilter} yet.` : "No messages yet. Start the conversation!"}</p>
+            <p>
+              {activeFilterLabel
+                ? `No messages in ${activeFilterLabel} yet.`
+                : "No messages yet. Start the conversation!"}
+            </p>
           </div>
         ) : (
-          messages?.map((msg: any, i: number) => {
+          visibleMessages.map((msg: any, i: number) => {
             const isMe = msg.senderId === user?.id;
-            const showAvatar = i === 0 || messages[i - 1].senderId !== msg.senderId;
+            const showAvatar = i === 0 || visibleMessages[i - 1].senderId !== msg.senderId;
             const isHovered = hoveredId === msg.id;
+            const msgState = msg.areaCode ? zipToState(msg.areaCode) : null;
             return (
               <div
                 key={msg.id}
@@ -138,7 +195,11 @@ export default function Chat() {
                   {showAvatar && (
                     <div className="flex items-center gap-2 mb-1 px-1">
                       <span className="text-xs font-semibold text-muted-foreground">{isMe ? 'You' : msg.senderName || 'Vendor'}</span>
-                      {msg.areaCode && <Badge variant="outline" className="text-[9px] h-4 px-1">{msg.areaCode}</Badge>}
+                      {msg.areaCode && (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1">
+                          {msgState ? `${msgState} · ${msg.areaCode}` : msg.areaCode}
+                        </Badge>
+                      )}
                     </div>
                   )}
                   <div className="flex items-center gap-2">
@@ -186,7 +247,7 @@ export default function Chat() {
             data-testid="input-message"
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder={areaFilter ? `Message the ${areaFilter} community...` : "Type a message to the community..."}
+            placeholder={activeFilterLabel ? `Message the ${activeFilterLabel} community...` : "Type a message to the community..."}
             className="flex-1 h-14 rounded-2xl bg-muted/50 border-transparent focus-visible:ring-primary/20 px-6 text-base pr-16"
             disabled={isPending}
           />
