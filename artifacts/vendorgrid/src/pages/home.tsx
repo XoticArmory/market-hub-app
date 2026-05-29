@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQueries } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { zipToState, US_STATES } from "@/lib/zip-to-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -199,6 +201,7 @@ function CalendarButton({ event }: { event: any }) {
 export default function Home() {
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
+  const [stateFilter, setStateFilter] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<"nearest" | "furthest">("nearest");
   const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(areaFilter);
   const [, navigate] = useLocation();
@@ -252,10 +255,12 @@ export default function Home() {
     });
   }, [events]);
 
-  const sortedEvents = [...(events || [])].sort((a, b) => {
-    const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
-    return sortOrder === "nearest" ? diff : -diff;
-  });
+  const sortedEvents = [...(events || [])]
+    .filter(e => !stateFilter || (e.areaCode && zipToState(e.areaCode) === stateFilter))
+    .sort((a, b) => {
+      const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
+      return sortOrder === "nearest" ? diff : -diff;
+    });
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-12">
@@ -290,23 +295,39 @@ export default function Home() {
             <p className="text-muted-foreground mt-2">Explore registered markets and vendor collections.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select
+                value={stateFilter}
+                onValueChange={val => setStateFilter(val === "__all__" ? "" : val)}
+              >
+                <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-state-filter">
+                  <SelectValue placeholder="All states" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__all__">All states</SelectItem>
+                  {US_STATES.map(s => (
+                    <SelectItem key={s.abbr} value={s.abbr}>
+                      {s.abbr} — {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <div className="relative flex items-center">
                 <Hash className="absolute left-3 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <Input
                   data-testid="input-area-filter"
-                  placeholder="Filter by area code..."
+                  placeholder="Zip code..."
                   value={areaInput}
                   onChange={e => setAreaInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') setAreaFilter(areaInput || undefined); }}
-                  className="pl-9 rounded-xl h-10 w-48 text-sm"
+                  className="pl-9 rounded-xl h-10 w-36 text-sm"
                 />
               </div>
               <Button size="sm" variant="outline" onClick={() => setAreaFilter(areaInput || undefined)} className="rounded-xl h-10" data-testid="button-filter">
                 <Filter className="w-4 h-4" />
               </Button>
-              {areaFilter && (
-                <Button size="sm" variant="ghost" onClick={() => { setAreaFilter(undefined); setAreaInput(""); }} className="rounded-xl h-10 text-muted-foreground text-sm">
+              {(areaFilter || stateFilter) && (
+                <Button size="sm" variant="ghost" onClick={() => { setAreaFilter(undefined); setAreaInput(""); setStateFilter(""); }} className="rounded-xl h-10 text-muted-foreground text-sm" data-testid="button-clear-filters">
                   Clear
                 </Button>
               )}
@@ -343,9 +364,10 @@ export default function Home() {
         </div>
 
         <TabsContent value="markets" className="mt-0">
-          {areaFilter && (
-            <div className="flex items-center gap-2 mb-4">
-              <Badge variant="secondary" className="text-sm py-1.5 px-3"><Hash className="w-3 h-3 mr-1" />Area: {areaFilter}</Badge>
+          {(stateFilter || areaFilter) && (
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              {stateFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><MapPin className="w-3 h-3 mr-1" />State: {US_STATES.find(s => s.abbr === stateFilter)?.name ?? stateFilter}</Badge>}
+              {areaFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><Hash className="w-3 h-3 mr-1" />Zip: {areaFilter}</Badge>}
             </div>
           )}
           {isLoadingEvents ? (
