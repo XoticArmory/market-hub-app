@@ -12,7 +12,7 @@ import { useColors } from "@/hooks/useColors";
 import WebView, { WebViewNavigation } from "react-native-webview";
 import SplashScreen from "@/components/SplashScreen";
 
-const LOAD_TIMEOUT_MS = 30000;
+const LOAD_TIMEOUT_MS = 60000;
 
 const VENDORGRID_URL = "https://www.vendorgrid.net";
 
@@ -97,7 +97,12 @@ export default function WebViewScreen() {
         domStorageEnabled
         startInLoadingState={true}
         allowsBackForwardNavigationGestures
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        mixedContentMode="always"
+        thirdPartyCookiesEnabled
         onNavigationStateChange={handleNavigationStateChange}
+        onShouldStartLoadWithRequest={() => true}
         onLoadStart={() => {
           setIsLoading(true);
           setHasError(false);
@@ -106,12 +111,16 @@ export default function WebViewScreen() {
         onError={(e) => {
           setIsLoading(false);
           setHasError(true);
-          setErrorDetail(`${e.nativeEvent.description} (${e.nativeEvent.code})`);
+          setErrorDetail(`${e.nativeEvent.description} (code ${e.nativeEvent.code})`);
         }}
-        onHttpError={() => {
+        onHttpError={(e) => {
           setIsLoading(false);
+          if (e.nativeEvent.statusCode >= 500) {
+            setHasError(true);
+            setErrorDetail(`Server error ${e.nativeEvent.statusCode}`);
+          }
         }}
-        userAgent="VendorGrid/1.0 Android"
+        userAgent="Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 VendorGrid/1.0"
         testID="vendorgrid-webview"
       />
 
