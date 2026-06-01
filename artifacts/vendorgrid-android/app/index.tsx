@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import {
   BackHandler,
   Platform,
@@ -12,8 +12,6 @@ import { useColors } from "@/hooks/useColors";
 import WebView, { WebViewNavigation } from "react-native-webview";
 import SplashScreen from "@/components/SplashScreen";
 
-const LOAD_TIMEOUT_MS = 60000;
-
 const VENDORGRID_URL = "https://www.vendorgrid.net";
 
 export default function WebViewScreen() {
@@ -24,6 +22,7 @@ export default function WebViewScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const initialLoadDone = useRef(false);
 
   const handleNavigationStateChange = useCallback(
     (navState: WebViewNavigation) => {
@@ -46,17 +45,6 @@ export default function WebViewScreen() {
       return () => subscription.remove();
     }
   }, [handleBackPress]);
-
-  // If the page never fires onLoadEnd (e.g. server timeout), show the error screen
-  useEffect(() => {
-    if (!isLoading) return;
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      setHasError(true);
-      setErrorDetail("Connection timed out");
-    }, LOAD_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [isLoading]);
 
   const handleReload = useCallback(() => {
     setHasError(false);
@@ -104,10 +92,17 @@ export default function WebViewScreen() {
         onNavigationStateChange={handleNavigationStateChange}
         onShouldStartLoadWithRequest={() => true}
         onLoadStart={() => {
-          setIsLoading(true);
-          setHasError(false);
+          if (!initialLoadDone.current) {
+            setIsLoading(true);
+            setHasError(false);
+          }
         }}
-        onLoadEnd={() => setIsLoading(false)}
+        onLoadEnd={() => {
+          if (!initialLoadDone.current) {
+            initialLoadDone.current = true;
+            setIsLoading(false);
+          }
+        }}
         onError={(e) => {
           setIsLoading(false);
           setHasError(true);
