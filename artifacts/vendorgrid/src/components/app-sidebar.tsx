@@ -69,7 +69,7 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar className="border-r border-border/50 bg-sidebar/50 backdrop-blur-xl">
+      <Sidebar className="border-r border-border/40 bg-sidebar">
         <SidebarContent>
           <div className="flex items-center gap-3 p-6 mb-2">
             <img src="/icon-512.png" alt="VendorGrid" className="w-10 h-10 rounded-xl shadow-sm" />
