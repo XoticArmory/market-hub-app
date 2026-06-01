@@ -44,6 +44,7 @@
     --radius: 0.75rem;
 
     --sidebar-background: 40 33% 96%;
+    --sidebar: 40 33% 96%;
     --sidebar-foreground: 20 14% 20%;
     --sidebar-primary: 24 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -83,6 +84,7 @@
     --ring: 24 95% 53%;
 
     --sidebar-background: 20 14% 12%;
+    --sidebar: 20 14% 12%;
     --sidebar-foreground: 40 33% 90%;
     --sidebar-primary: 24 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
