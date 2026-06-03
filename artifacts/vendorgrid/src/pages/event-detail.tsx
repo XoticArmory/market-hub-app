@@ -447,9 +447,14 @@ export default function EventDetail() {
     },
     onSuccess: (data) => {
       if (data.generated > 0) {
-        toast({ title: "Market report saved!", description: "Your report has been saved to My File Folder." });
-      } else {
+        const desc = data.generated === 1
+          ? "Your report has been saved to My File Folder."
+          : `${data.generated} vendor report(s) saved to File Folders.`;
+        toast({ title: "Market report saved!", description: desc });
+      } else if (data.skipped > 0) {
         toast({ title: "Report already exists", description: "A report for this event is already in your File Folder." });
+      } else {
+        toast({ title: "No inventory found", description: "No catalog items were assigned to this event.", variant: "destructive" });
       }
     },
     onError: (e: any) => toast({ title: "Failed to generate report", description: e.message, variant: "destructive" }),

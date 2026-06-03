@@ -1224,8 +1224,21 @@ export class DatabaseStorage implements IStorage {
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
+    // Effective end date = MAX(event_dates.date) when extra dates exist, else events.date
     return await db.select().from(events)
-      .where(and(gte(events.date, start), lt(events.date, end), isNull(events.canceledAt)));
+      .where(
+        and(
+          isNull(events.canceledAt),
+          sql`COALESCE(
+            (SELECT MAX(ed.date) FROM event_dates ed WHERE ed.event_id = ${events.id}),
+            ${events.date}
+          ) >= ${start}`,
+          sql`COALESCE(
+            (SELECT MAX(ed.date) FROM event_dates ed WHERE ed.event_id = ${events.id}),
+            ${events.date}
+          ) < ${end}`
+        )
+      );
   }
 
   async getProVendorsWithAssignmentsAtEvent(eventId: number): Promise<string[]> {

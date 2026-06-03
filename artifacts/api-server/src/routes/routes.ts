@@ -2221,7 +2221,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "Report can only be generated after the event date has passed" });
       }
 
-      const result = await generateReportsForEvent(eventId, userId);
+      // Determine role: event owner/admin generate for all eligible Pro vendors;
+      // vendors must have catalog assignments at this event and generate only for themselves.
+      const callerIsOwner = event.createdBy === userId || profile?.isAdmin === true;
+
+      if (!callerIsOwner) {
+        const assignments = await storage.getCatalogAssignmentsForEvent(eventId, userId);
+        if (!assignments || assignments.length === 0) {
+          return res.status(403).json({ message: "You must be the event owner or have inventory assigned to this event to generate a report" });
+        }
+      }
+
+      // Owner/admin → all eligible Pro vendors; vendor → self only
+      const targetVendorId = callerIsOwner ? undefined : userId;
+      const result = await generateReportsForEvent(eventId, targetVendorId);
       res.json(result);
     } catch (e: any) {
       res.status(500).json({ message: e.message || "Failed to generate report" });
