@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "../storage";
+import { generateReportsForEvent } from "../services/market-report";
 import { api, PRO_TIERS } from "../shared-routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "../replit_integrations/auth";
@@ -2201,6 +2202,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const summary = await storage.getCogsSummaryForEvent(userId, eventId);
       res.json(summary);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ---- MARKET DAY REPORT ----
+  app.post("/api/events/:id/generate-report", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const eventId = parseInt(req.params.id);
+      if (isNaN(eventId)) return res.status(400).json({ message: "Invalid event ID" });
+
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+
+      const event = await storage.getEvent(eventId);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+
+      if (new Date(event.date) > new Date()) {
+        return res.status(400).json({ message: "Report can only be generated after the event date has passed" });
+      }
+
+      const result = await generateReportsForEvent(eventId, userId);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to generate report" });
+    }
   });
 
   // Serve the React frontend for all non-API routes in production

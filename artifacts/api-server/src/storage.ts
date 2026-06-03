@@ -169,6 +169,11 @@ export interface IStorage {
   createUserFile(data: InsertUserFile): Promise<UserFile>;
   getUserFile(id: number, userId: string): Promise<UserFile | undefined>;
   deleteUserFile(id: number, userId: string): Promise<void>;
+
+  // Market Reports
+  getEventsEndingOn(date: Date): Promise<Event[]>;
+  getProVendorsWithAssignmentsAtEvent(eventId: number): Promise<string[]>;
+  hasExistingReport(userId: string, eventId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1211,6 +1216,45 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUserFile(id: number, userId: string): Promise<void> {
     await pool.query("DELETE FROM user_files WHERE id = $1 AND user_id = $2", [id, userId]);
+  }
+
+  // ---- Market Reports ----
+  async getEventsEndingOn(date: Date): Promise<Event[]> {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return await db.select().from(events)
+      .where(and(gte(events.date, start), lt(events.date, end), isNull(events.canceledAt)));
+  }
+
+  async getProVendorsWithAssignmentsAtEvent(eventId: number): Promise<string[]> {
+    const rows = await db
+      .select({ vendorId: vendorCatalogAssignments.vendorId })
+      .from(vendorCatalogAssignments)
+      .innerJoin(userProfiles, eq(userProfiles.userId, vendorCatalogAssignments.vendorId))
+      .where(
+        and(
+          eq(vendorCatalogAssignments.eventId, eventId),
+          or(
+            eq(userProfiles.isAdmin, true),
+            and(
+              inArray(userProfiles.subscriptionTier, ["vendor_pro", "event_owner_pro"]),
+              eq(userProfiles.subscriptionStatus, "active")
+            )
+          )
+        )
+      );
+    return [...new Set(rows.map(r => r.vendorId))];
+  }
+
+  async hasExistingReport(userId: string, eventId: number): Promise<boolean> {
+    const storagePath = `user-files/${userId}/market-report-${eventId}.csv`;
+    const [existing] = await db
+      .select({ id: userFiles.id })
+      .from(userFiles)
+      .where(and(eq(userFiles.userId, userId), eq(userFiles.storagePath, storagePath)));
+    return !!existing;
   }
 }
 

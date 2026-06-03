@@ -3,6 +3,9 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { registerRoutes } from "./routes/routes";
 import { pool } from "./db";
+import cron from "node-cron";
+import { generateReportsForEvent } from "./services/market-report";
+import { storage } from "./storage";
 
 const rawPort = process.env["PORT"];
 
@@ -22,6 +25,23 @@ const httpServer = createServer(app);
 
 (async () => {
   await registerRoutes(httpServer, app);
+
+  // Daily at 02:00 AM — generate market day reports for events that ended yesterday
+  cron.schedule("0 2 * * *", async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    logger.info("market-report-cron: checking for events that ended yesterday");
+    try {
+      const endedEvents = await storage.getEventsEndingOn(yesterday);
+      for (const event of endedEvents) {
+        logger.info({ eventId: event.id, title: event.title }, "market-report-cron: generating reports");
+        const result = await generateReportsForEvent(event.id);
+        logger.info({ eventId: event.id, ...result }, "market-report-cron: done");
+      }
+    } catch (err) {
+      logger.error({ err }, "market-report-cron: unexpected error");
+    }
+  });
 
   app.use((err: any, _req: any, res: any, next: any) => {
     const status = err.status || err.statusCode || 500;

@@ -436,6 +436,25 @@ export default function EventDetail() {
     onError: (e: any) => toast({ title: e.message || "Failed to register vendor.", variant: "destructive" }),
   });
 
+  const generateReport = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/generate-report`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Failed"); }
+      return res.json() as Promise<{ generated: number; skipped: number }>;
+    },
+    onSuccess: (data) => {
+      if (data.generated > 0) {
+        toast({ title: "Market report saved!", description: "Your report has been saved to My File Folder." });
+      } else {
+        toast({ title: "Report already exists", description: "A report for this event is already in your File Folder." });
+      }
+    },
+    onError: (e: any) => toast({ title: "Failed to generate report", description: e.message, variant: "destructive" }),
+  });
+
   const removeVendorEntry = useMutation({
     mutationFn: async (entryId: number) => {
       const res = await fetch(`/api/events/${eventId}/vendor-entries/${entryId}`, { method: "DELETE", credentials: "include" });
@@ -916,6 +935,24 @@ export default function EventDetail() {
                     </div>
                   </DialogContent>
                 </Dialog>
+              )}
+
+              {/* Generate Market Day Report — Pro users after event ends */}
+              {isAuthenticated && (isVendorPro || isEventOwnerPro) && new Date(event.date) < new Date() && (
+                <Button
+                  size="default"
+                  variant="outline"
+                  className="rounded-xl gap-2"
+                  onClick={() => generateReport.mutate()}
+                  disabled={generateReport.isPending}
+                  data-testid="button-generate-report"
+                >
+                  {generateReport.isPending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" />Generating...</>
+                  ) : (
+                    <><ClipboardList className="w-4 h-4" />Generate Market Report</>
+                  )}
+                </Button>
               )}
 
               {/* ===== VENDOR MANAGEMENT (Pro vendors / admins) ===== */}
