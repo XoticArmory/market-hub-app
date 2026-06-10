@@ -1,0 +1,1 @@
+- [Vending Intent Flow](vending-intent-flow.md) — intent_pending status bridges free+Pro vendor registration; approve endpoint routes by subscription tier.

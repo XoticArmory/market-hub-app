@@ -5,7 +5,7 @@ import { useSetAttendance, useRemoveAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 import { useAdminPreview } from "@/contexts/admin-preview";
-import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace } from "@/hooks/use-registrations";
+import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace, useDeclareVendingIntent } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
 import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store, Navigation } from "lucide-react";
@@ -243,6 +243,7 @@ export default function EventDetail() {
   const { data: mapData } = useEventMap(eventId);
   const { mutate: registerSpace, isPending: isRegistering } = useRegisterVendorSpace(eventId);
   const { mutate: unregisterSpace, isPending: isUnregistering } = useUnregisterVendorSpace(eventId);
+  const { mutate: declareIntent, isPending: isDeclaring } = useDeclareVendingIntent(eventId);
 
   const { mutate: cancelEvent, isPending: isCanceling } = useCancelEvent(eventId);
 
@@ -254,6 +255,7 @@ export default function EventDetail() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [addPhotoDialogOpen, setAddPhotoDialogOpen] = useState(false);
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
+  const [intentDialogOpen, setIntentDialogOpen] = useState(false);
   const [emailCopyOpen, setEmailCopyOpen] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
   const [addPhotoUrl, setAddPhotoUrl] = useState("");
@@ -886,6 +888,41 @@ export default function EventDetail() {
                 )
               )}
 
+              {/* I'm Vending Here — all authenticated non-owners, when not already registered */}
+              {!isOwner && !event.canceledAt && !alreadyRegistered && !myPost && (
+                <Button
+                  size="default"
+                  variant="outline"
+                  className="rounded-xl gap-2 border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => setIntentDialogOpen(true)}
+                  data-testid="button-im-vending-here"
+                >
+                  <Store className="w-4 h-4" />I'm Vending Here
+                </Button>
+              )}
+
+              {/* Vending intent status badges */}
+              {!isOwner && myRegistration?.status === 'intent_pending' && (
+                <Badge variant="outline" className="gap-1.5 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5" data-testid="badge-intent-pending">
+                  <Clock3 className="w-3.5 h-3.5" />Intent Pending Approval
+                </Badge>
+              )}
+              {!isOwner && myRegistration?.status === 'approved' && myRegistration?.isPro === false && (
+                <Badge variant="outline" className="gap-1.5 text-green-600 border-green-300 bg-green-50 dark:bg-green-950/30 px-3 py-1.5" data-testid="badge-intent-approved">
+                  <CheckCircle className="w-3.5 h-3.5" />Listed as Vendor
+                </Badge>
+              )}
+              {!isOwner && myRegistration?.status === 'approved' && myRegistration?.isPro === true && (
+                <Badge variant="outline" className="gap-1.5 text-green-600 border-green-300 bg-green-50 dark:bg-green-950/30 px-3 py-1.5" data-testid="badge-intent-approved-pro">
+                  <CheckCircle className="w-3.5 h-3.5" />Intent Approved
+                </Badge>
+              )}
+              {!isOwner && myRegistration?.status === 'rejected' && (
+                <Badge variant="outline" className="gap-1.5 text-red-600 border-red-300 bg-red-50 dark:bg-red-950/30 px-3 py-1.5" data-testid="badge-intent-rejected">
+                  <X className="w-3.5 h-3.5" />Intent Declined
+                </Badge>
+              )}
+
               {/* Application status badges for form-based events */}
               {isVendorPro && !isOwner && isFormReg && myRegistration?.status === 'awaiting_approval' && (
                 <Badge variant="outline" className="gap-1.5 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5" data-testid="badge-application-pending">
@@ -1188,7 +1225,7 @@ export default function EventDetail() {
             Vendors <Badge variant="secondary" className="ml-2 text-xs">{posts?.length || 0}</Badge>
           </TabsTrigger>
           <TabsTrigger value="gallery" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Gallery</TabsTrigger>
-          {hasVendorSpaces && (
+          {(hasVendorSpaces || (canManageEvent && (registrations || []).some((r: any) => r.status === 'intent_pending'))) && (
             <TabsTrigger value="spaces" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Package className="w-4 h-4 mr-1.5" />Vendor Spaces
               <Badge variant="secondary" className="ml-2 text-xs">{(registrations || []).filter((r: any) => r.status === 'paid').length}</Badge>
@@ -1576,23 +1613,31 @@ export default function EventDetail() {
           </div>
         </TabsContent>
 
-        {hasVendorSpaces && (
+        {(hasVendorSpaces || (canManageEvent && (registrations || []).some((r: any) => r.status === 'intent_pending'))) && (
           <TabsContent value="spaces" className="mt-0">
             <div className="space-y-6">
-              {/* Pending Applications section — visible to owner when form-based */}
-              {canManageEvent && isFormReg && (registrations || []).some((r: any) => r.status === 'awaiting_approval') && (
+              {/* Pending Requests — vending intents + form applications */}
+              {canManageEvent && (registrations || []).some((r: any) => r.status === 'awaiting_approval' || r.status === 'intent_pending') && (
                 <div>
                   <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
-                    <Clock3 className="w-4 h-4 text-amber-500" />Pending Applications
-                    <Badge variant="secondary" className="text-xs">{(registrations || []).filter((r: any) => r.status === 'awaiting_approval').length}</Badge>
+                    <Clock3 className="w-4 h-4 text-amber-500" />Pending Requests
+                    <Badge variant="secondary" className="text-xs">{(registrations || []).filter((r: any) => r.status === 'awaiting_approval' || r.status === 'intent_pending').length}</Badge>
                   </h3>
                   <div className="space-y-3">
-                    {(registrations || []).filter((r: any) => r.status === 'awaiting_approval').map((r: any) => (
+                    {(registrations || []).filter((r: any) => r.status === 'awaiting_approval' || r.status === 'intent_pending').map((r: any) => (
                       <div key={r.id} className="flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl" data-testid={`application-${r.id}`}>
                         <Avatar className="w-10 h-10"><AvatarImage src={r.vendorAvatar || ""} /><AvatarFallback><User className="w-4 h-4" /></AvatarFallback></Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold truncate">{r.vendorName || "Vendor"}</p>
-                          <p className="text-xs text-muted-foreground">Applied {format(new Date(r.createdAt), 'MMM d, h:mm a')}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {r.status === 'intent_pending' ? (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary gap-1"><Store className="w-2.5 h-2.5" />Vending Intent</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400/60 text-amber-600 gap-1"><ClipboardList className="w-2.5 h-2.5" />Application</Badge>
+                            )}
+                            {r.isPro && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-600 gap-1"><Crown className="w-2.5 h-2.5" />Pro</Badge>}
+                            <p className="text-xs text-muted-foreground">{format(new Date(r.createdAt), 'MMM d, h:mm a')}</p>
+                          </div>
                         </div>
                         <div className="flex gap-2 shrink-0">
                           <Button
@@ -1624,14 +1669,14 @@ export default function EventDetail() {
               {/* Confirmed registrations */}
               <div>
                 {canManageEvent && isFormReg && <h3 className="text-base font-semibold mb-3">Confirmed Vendors</h3>}
-                {(registrations || []).filter((r: any) => r.status !== 'awaiting_approval').length === 0 ? (
+                {(registrations || []).filter((r: any) => r.status !== 'awaiting_approval' && r.status !== 'intent_pending').length === 0 ? (
                   <div className="text-center py-12 bg-card rounded-2xl border border-dashed">
                     <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
                     <p className="text-muted-foreground">No vendors registered yet.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {(registrations || []).filter((r: any) => r.status !== 'awaiting_approval').map((r: any) => (
+                    {(registrations || []).filter((r: any) => r.status !== 'awaiting_approval' && r.status !== 'intent_pending').map((r: any) => (
                       <div key={r.id} className="flex items-center gap-4 p-4 bg-card rounded-2xl border border-border/50 shadow-sm" data-testid={`registration-${r.id}`}>
                         <Avatar className="w-10 h-10"><AvatarImage src={r.vendorAvatar || ""} /><AvatarFallback><User className="w-4 h-4" /></AvatarFallback></Avatar>
                         <div className="flex-1 min-w-0">
@@ -1666,6 +1711,45 @@ export default function EventDetail() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* I'm Vending Here — confirmation dialog */}
+      <Dialog open={intentDialogOpen} onOpenChange={setIntentDialogOpen}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display flex items-center gap-2">
+              <Store className="w-5 h-5 text-primary" />I'm Vending Here
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-1">
+            <p className="text-sm text-muted-foreground">
+              Let <strong>{event.title}</strong>'s organizer know you plan to vend at this event. They'll be notified and can approve your listing.
+            </p>
+            {(profile?.businessName || user?.name) && (
+              <div className="flex items-center gap-3 bg-muted/60 rounded-xl px-4 py-3">
+                <Store className="w-4 h-4 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-xs text-muted-foreground">You'll appear as</p>
+                  <p className="text-sm font-semibold">{profile?.businessName || user?.name}</p>
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3 pt-1">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setIntentDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 rounded-xl gap-2"
+                disabled={isDeclaring}
+                onClick={() => { declareIntent(); setIntentDialogOpen(false); }}
+                data-testid="button-confirm-intent"
+              >
+                {isDeclaring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Store className="w-4 h-4" />}
+                Confirm
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Register via Email — copy prompt dialog */}
       <Dialog open={emailCopyOpen} onOpenChange={(o) => { setEmailCopyOpen(o); if (!o) setEmailCopied(false); }}>

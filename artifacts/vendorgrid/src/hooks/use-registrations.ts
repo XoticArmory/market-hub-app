@@ -57,6 +57,26 @@ export function useUserRegistrations() {
   });
 }
 
+export function useDeclareVendingIntent(eventId: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/events/${eventId}/declare-intent`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
+      toast({ title: "Intent submitted!", description: "The event organizer has been notified and will review your request." });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+}
+
 export function useUnregisterVendorSpace(eventId: number) {
   const queryClient = useQueryClient();
   const { toast } = useToast();

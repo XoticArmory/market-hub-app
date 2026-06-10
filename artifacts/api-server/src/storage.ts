@@ -84,6 +84,7 @@ export interface IStorage {
 
   // Vendor Registrations
   getVendorRegistrations(eventId: number): Promise<VendorRegistration[]>;
+  getVendorRegistrationById(id: number): Promise<VendorRegistration | undefined>;
   getVendorRegistrationForUser(eventId: number, vendorId: string): Promise<VendorRegistration | undefined>;
   getUserRegistrations(userId: string): Promise<VendorRegistration[]>;
   createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt'>): Promise<VendorRegistration>;
@@ -555,6 +556,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(vendorRegistrations)
       .where(eq(vendorRegistrations.eventId, eventId))
       .orderBy(desc(vendorRegistrations.createdAt));
+  }
+
+  async getVendorRegistrationById(id: number): Promise<VendorRegistration | undefined> {
+    const [r] = await db.select().from(vendorRegistrations).where(eq(vendorRegistrations.id, id));
+    return r;
   }
 
   async getVendorRegistrationForUser(eventId: number, vendorId: string): Promise<VendorRegistration | undefined> {

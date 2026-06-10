@@ -930,6 +930,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ---- VENDING INTENT ----
+  app.post('/api/events/:eventId/declare-intent', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const eventId = Number(req.params.eventId);
+      const event = await storage.getEvent(eventId);
+      if (!event) return res.status(404).json({ message: "Event not found" });
+      if (event.canceledAt) return res.status(400).json({ message: "Event has been canceled." });
+      if (event.createdBy === userId) return res.status(400).json({ message: "Event owners cannot declare vending intent." });
+
+      const existing = await storage.getVendorRegistrationForUser(eventId, userId);
+      if (existing) return res.status(409).json({ message: "You already have a registration or pending intent for this event." });
+
+      const profile = await storage.getUserProfile(userId);
+      const vendorName = profile?.businessName || (await enrichUser(userId)).name || "A vendor";
+      const isProVendor = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+
+      const reg = await storage.createVendorRegistration({
+        eventId,
+        vendorId: userId,
+        spotId: null,
+        spotName: null,
+        amountCents: 0,
+        feeCents: 0,
+        isPro: isProVendor,
+        status: 'intent_pending',
+        stripePaymentIntentId: null,
+      });
+
+      // Notify event owner
+      await storage.createNotification({
+        userId: event.createdBy,
+        fromUserId: userId,
+        type: 'vending_intent',
+        title: `${vendorName} wants to vendor at your event`,
+        message: `${vendorName} has declared intent to vend at "${event.title}". Approve or decline in the Vendor Spaces tab.`,
+        eventId,
+      });
+
+      res.status(201).json(reg);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to declare intent" });
+    }
+  });
+
   // ---- APPLICATION APPROVAL ----
   app.patch('/api/events/:eventId/registrations/:regId/approve', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
@@ -941,6 +986,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const profile = await storage.getUserProfile(userId);
       if (!profile?.isAdmin) return res.status(403).json({ message: "Only the event owner can approve applications." });
     }
+
+    const reg = await storage.getVendorRegistrationById(regId);
+    if (!reg) return res.status(404).json({ message: "Registration not found" });
+
+    if (reg.status === 'intent_pending') {
+      // Intent approval — route by Pro vs Free
+      const vendorProfile = await storage.getUserProfile(reg.vendorId);
+      const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+      const vendorDisplayName = vendorProfile?.businessName || (await enrichUser(reg.vendorId)).name || "Vendor";
+
+      await storage.updateRegistrationStatus(regId, 'approved');
+
+      if (!isProVendor) {
+        // Free user: auto-create a minimal vendor post (company name only)
+        const existingPost = await storage.getVendorPostForUser(eventId, reg.vendorId);
+        if (!existingPost) {
+          await storage.createVendorPost({
+            eventId,
+            vendorId: reg.vendorId,
+            itemsDescription: vendorDisplayName,
+            isVendorPro: false,
+            imageUrl: null,
+            imageUrls: [],
+          });
+        }
+        await storage.createNotification({
+          userId: reg.vendorId,
+          fromUserId: userId,
+          type: 'intent_approved',
+          title: 'Your vending intent was approved!',
+          message: `You've been listed as a vendor at "${event.title}".`,
+          eventId,
+        });
+      } else {
+        // Pro user: notify them to link their inventory
+        await storage.createNotification({
+          userId: reg.vendorId,
+          fromUserId: userId,
+          type: 'intent_approved',
+          title: 'Your vending intent was approved!',
+          message: `You're approved to vend at "${event.title}". Visit the event page to set up your listing and link your inventory.`,
+          eventId,
+        });
+      }
+
+      return res.json({ success: true });
+    }
+
+    // Default: form-based awaiting_approval — approve and count space
     await storage.updateRegistrationStatus(regId, 'approved');
     await storage.updateVendorSpacesUsed(eventId, 1);
     res.json({ success: true });
