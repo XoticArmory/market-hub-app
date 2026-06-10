@@ -887,6 +887,19 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getAllCatalogVendorsAtEvent(eventId: number): Promise<{ vendorId: string; assignments: (VendorCatalogAssignment & { item: VendorCatalogItem })[] }[]> {
+    const vendorRows = await db
+      .selectDistinct({ vendorId: vendorCatalogAssignments.vendorId })
+      .from(vendorCatalogAssignments)
+      .where(eq(vendorCatalogAssignments.eventId, eventId));
+    return await Promise.all(
+      vendorRows.map(async ({ vendorId }) => ({
+        vendorId,
+        assignments: await this.getCatalogAssignmentsForEvent(eventId, vendorId),
+      }))
+    );
+  }
+
   // ---- Roadmap ----
   async getRoadmapItems(): Promise<RoadmapItem[]> {
     return await db.select().from(roadmapItems).orderBy(roadmapItems.createdAt);

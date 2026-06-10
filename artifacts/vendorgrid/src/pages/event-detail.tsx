@@ -1468,7 +1468,7 @@ export default function EventDetail() {
                             </a>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{format(new Date(post.createdAt!), 'MMM d, h:mm a')}</p>
+                        {post.createdAt && <p className="text-xs text-muted-foreground">{format(new Date(post.createdAt), 'MMM d, h:mm a')}</p>}
                       </div>
                     </div>
 
@@ -1492,7 +1492,9 @@ export default function EventDetail() {
                       </div>
                     )}
 
-                    <div className="bg-muted/50 p-4 rounded-xl text-foreground text-sm leading-relaxed">{post.itemsDescription}</div>
+                    {post.itemsDescription && (
+                      <div className="bg-muted/50 p-4 rounded-xl text-foreground text-sm leading-relaxed">{post.itemsDescription}</div>
+                    )}
 
                     {/* Catalog-assigned items */}
                     {(post as any).catalogAssignments?.length > 0 && (

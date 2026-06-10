@@ -835,17 +835,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get(api.vendorPosts.listByEvent.path, async (req: any, res) => {
     const eventId = Number(req.params.eventId);
     const posts = await storage.getVendorPosts(eventId);
+    const postVendorIds = new Set(posts.map(p => p.vendorId));
+
     const enriched = await Promise.all(posts.map(async (p) => {
       const u = await enrichUser(p.vendorId);
       const vendorProfile = await storage.getUserProfile(p.vendorId);
-      const isVendorProAccount = vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active';
-      const vendorWebsiteUrl = (isVendorProAccount || vendorProfile?.isAdmin) ? (vendorProfile?.websiteUrl || null) : null;
-      const catalogAssignments = (isVendorProAccount || vendorProfile?.isAdmin)
+      const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+      const vendorWebsiteUrl = isProVendor ? (vendorProfile?.websiteUrl || null) : null;
+      const catalogAssignments = isProVendor
         ? await storage.getCatalogAssignmentsForEvent(eventId, p.vendorId)
         : [];
       return { ...p, vendorName: vendorProfile?.businessName || u.name, vendorAvatar: u.avatar, vendorWebsiteUrl, catalogAssignments };
     }));
-    res.json(enriched);
+
+    // Include vendors who have catalog assignments but no explicit post
+    const allCatalogVendors = await storage.getAllCatalogVendorsAtEvent(eventId);
+    const syntheticPosts = await Promise.all(
+      allCatalogVendors
+        .filter(({ vendorId }) => !postVendorIds.has(vendorId))
+        .map(async ({ vendorId, assignments }) => {
+          const u = await enrichUser(vendorId);
+          const vendorProfile = await storage.getUserProfile(vendorId);
+          const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+          return {
+            id: null as number | null,
+            vendorId,
+            eventId,
+            itemsDescription: null as string | null,
+            imageUrl: null as string | null,
+            imageUrls: [] as string[],
+            isVendorPro: isProVendor,
+            isCatalogOnly: true,
+            createdAt: null as Date | null,
+            vendorName: vendorProfile?.businessName || u.name,
+            vendorAvatar: u.avatar,
+            vendorWebsiteUrl: isProVendor ? (vendorProfile?.websiteUrl || null) : null,
+            catalogAssignments: assignments,
+          };
+        })
+    );
+
+    res.json([...enriched, ...syntheticPosts]);
   });
 
   app.post(api.vendorPosts.create.path, isAuthenticated, async (req: any, res) => {
