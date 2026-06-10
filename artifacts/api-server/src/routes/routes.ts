@@ -989,6 +989,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const reg = await storage.getVendorRegistrationById(regId);
     if (!reg) return res.status(404).json({ message: "Registration not found" });
+    if (reg.eventId !== eventId) return res.status(403).json({ message: "Registration does not belong to this event." });
 
     if (reg.status === 'intent_pending') {
       // Intent approval — route by Pro vs Free
