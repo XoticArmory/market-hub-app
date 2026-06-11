@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation } from "lucide-react";
+import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation, Smartphone } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -198,6 +198,77 @@ function CalendarButton({ event }: { event: any }) {
   );
 }
 
+const PWA_DISMISS_KEY = "vg_pwa_dismissed";
+
+function PwaInstallBanner() {
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    setIsStandalone(window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true);
+    setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
+    setDismissed(localStorage.getItem(PWA_DISMISS_KEY) === "1");
+
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === "accepted") setInstallPrompt(null);
+  };
+
+  const handleDismiss = () => {
+    localStorage.setItem(PWA_DISMISS_KEY, "1");
+    setDismissed(true);
+  };
+
+  if (isStandalone || dismissed) return null;
+  if (!installPrompt && !isIOS) return null;
+
+  return (
+    <section className="glass-panel rounded-3xl p-5 md:p-7 flex flex-col sm:flex-row items-center gap-5">
+      <div className="shrink-0 w-13 h-13 w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+        <Smartphone className="w-6 h-6 text-primary-foreground" />
+      </div>
+      <div className="flex-1 text-center sm:text-left">
+        <h2 className="text-lg font-display font-bold text-foreground">Get the VendorGrid App</h2>
+        {isIOS ? (
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Tap <strong>Share</strong> <span className="text-xs">⬆</span> in Safari then <strong>"Add to Home Screen"</strong> to install.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground mt-0.5">Browse events, manage listings, and chat — right from your home screen.</p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {!isIOS && (
+          <button
+            onClick={handleInstall}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shadow-md shadow-primary/25 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 whitespace-nowrap"
+            data-testid="button-pwa-install"
+          >
+            <Download className="w-4 h-4" />Install App
+          </button>
+        )}
+        <button
+          onClick={handleDismiss}
+          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          aria-label="Dismiss"
+          data-testid="button-pwa-dismiss"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
@@ -287,27 +358,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* App Download Banner */}
-      {import.meta.env.VITE_APK_DOWNLOAD_URL && (
-        <section className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row items-center gap-6">
-          <div className="shrink-0 w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-            <Download className="w-7 h-7 text-primary-foreground" />
-          </div>
-          <div className="flex-1 text-center sm:text-left">
-            <h2 className="text-xl font-display font-bold text-foreground">Get the VendorGrid App</h2>
-            <p className="text-sm text-muted-foreground mt-1">Take the marketplace with you — browse events, manage your listings, and chat on the go.</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Android · You may need to allow "Install from Unknown Sources" in your device settings.</p>
-          </div>
-          <a
-            href={import.meta.env.VITE_APK_DOWNLOAD_URL}
-            download
-            className="shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md shadow-primary/25 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 whitespace-nowrap"
-            data-testid="button-download-apk"
-          >
-            <Download className="w-4 h-4" />Download APK
-          </a>
-        </section>
-      )}
+      <PwaInstallBanner />
 
       {/* Tabs */}
       <Tabs defaultValue="markets" className="space-y-8">
