@@ -287,6 +287,28 @@ export default function Home() {
         </div>
       </section>
 
+      {/* App Download Banner */}
+      {import.meta.env.VITE_APK_DOWNLOAD_URL && (
+        <section className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row items-center gap-6">
+          <div className="shrink-0 w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+            <Download className="w-7 h-7 text-primary-foreground" />
+          </div>
+          <div className="flex-1 text-center sm:text-left">
+            <h2 className="text-xl font-display font-bold text-foreground">Get the VendorGrid App</h2>
+            <p className="text-sm text-muted-foreground mt-1">Take the marketplace with you — browse events, manage your listings, and chat on the go.</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">Android · You may need to allow "Install from Unknown Sources" in your device settings.</p>
+          </div>
+          <a
+            href={import.meta.env.VITE_APK_DOWNLOAD_URL}
+            download
+            className="shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md shadow-primary/25 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 whitespace-nowrap"
+            data-testid="button-download-apk"
+          >
+            <Download className="w-4 h-4" />Download APK
+          </a>
+        </section>
+      )}
+
       {/* Tabs */}
       <Tabs defaultValue="markets" className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

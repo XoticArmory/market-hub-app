@@ -24,6 +24,7 @@ timeoutMs = 20000
 [userenv.shared]
 SUPABASE_URL = "https://yyjvtrcknlcnvocwjonx.supabase.co"
 VITE_SUPABASE_URL = "https://yyjvtrcknlcnvocwjonx.supabase.co"
+VITE_APK_DOWNLOAD_URL = ""
 
 [[ports]]
 localPort = 8080
