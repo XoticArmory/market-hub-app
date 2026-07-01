@@ -59,6 +59,7 @@ function ShareButton({ event }: { event: any }) {
   const eventId = event.id;
   const eventTitle = event.title;
   const eventUrl = `${window.location.origin}/events/${eventId}`;
+  const ogShareUrl = `${window.location.origin}/api/og/events/${eventId}`;
 
   const handleCopy = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -74,7 +75,7 @@ function ShareButton({ event }: { event: any }) {
     e.preventDefault();
     e.stopPropagation();
     const text = encodeURIComponent(`Check out this market event: ${eventTitle}`);
-    const url = encodeURIComponent(eventUrl);
+    const url = encodeURIComponent(ogShareUrl);
     const urls = {
       twitter: `https://twitter.com/intent/tweet?text=${text}&url=${url}`,
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,

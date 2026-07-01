@@ -131,6 +131,67 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/logout", (_req, res) => res.redirect("/"));
   app.get("/api/callback", (_req, res) => res.redirect("/auth"));
 
+  // ---- Social / OG preview endpoint ----
+  // Social crawlers (bots) can't execute JS so they always get the generic index.html.
+  // This endpoint returns event-specific OG meta tags for bots and redirects humans
+  // to the real /events/:id SPA route.
+  const BOT_RE = /Twitterbot|facebookexternalhit|LinkedInBot|WhatsApp|Slackbot|TelegramBot|Discordbot|Pinterest|Snapchat|Googlebot|bingbot|AhrefsBot|SemrushBot/i;
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  app.get("/api/og/events/:id", async (req, res) => {
+    const eventId = parseInt(req.params.id, 10);
+    if (isNaN(eventId)) return res.redirect(302, "/");
+
+    // Non-bot visitors get sent straight to the real SPA page
+    if (!BOT_RE.test(req.headers["user-agent"] || "")) {
+      return res.redirect(302, `/events/${eventId}`);
+    }
+
+    try {
+      const event = await storage.getEvent(eventId);
+      if (!event) return res.redirect(302, "/");
+
+      const host = getHost(req);
+      const canonicalUrl = `${host}/events/${eventId}`;
+      const image = event.bannerUrl || `${host}/og-image.png`;
+      const dateStr = event.date
+        ? new Date(event.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+        : "";
+      const description = esc([event.location, dateStr].filter(Boolean).join(" · "));
+      const title = esc(event.title);
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${title} — VendorGrid</title>
+  <meta name="description" content="${description}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="${esc(canonicalUrl)}" />
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${description}" />
+  <meta property="og:image" content="${esc(image)}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="VendorGrid" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${title}" />
+  <meta name="twitter:description" content="${description}" />
+  <meta name="twitter:image" content="${esc(image)}" />
+  <meta http-equiv="refresh" content="0; url=${esc(canonicalUrl)}" />
+</head>
+<body>
+  <script>window.location.replace(${JSON.stringify(canonicalUrl)});</script>
+  <p>Redirecting to <a href="${esc(canonicalUrl)}">${title}</a>…</p>
+</body>
+</html>`);
+    } catch {
+      return res.redirect(302, "/");
+    }
+  });
+
   await setupAuth(app);
   registerAuthRoutes(app);
 
