@@ -1278,6 +1278,7 @@ export class DatabaseStorage implements IStorage {
       return {
         catalogItemId: item.id,
         itemName: item.itemName,
+        quantity: item.quantity ?? 0,
         sellPriceCents,
         totalAssigned,
         assignments,

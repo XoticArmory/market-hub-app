@@ -17,6 +17,7 @@ import {
 interface CatalogSummaryItem {
   catalogItemId: number;
   itemName: string;
+  quantity: number;
   sellPriceCents: number;
   totalAssigned: number;
   assignments: { eventId: number; eventTitle: string; quantityAssigned: number }[];
@@ -49,7 +50,7 @@ export default function InventoryAnalyticsPage() {
   const hasActivePro = profile?.subscriptionStatus === "active" && profile?.subscriptionTier && profile.subscriptionTier !== "free";
 
   const { data: catalogSummary, isLoading: loadingCatalog } = useQuery<{ items: CatalogSummaryItem[] }>({
-    queryKey: ["/api/vendor/catalog/inventory"],
+    queryKey: ["/api/vendor/cogs/inventory"],
     enabled: hasActivePro === true,
   });
 
@@ -75,6 +76,8 @@ export default function InventoryAnalyticsPage() {
   const totalUnits = sales.reduce((s, r) => s + r.quantitySold, 0);
   const totalAssigned = items.reduce((s, i) => s + i.totalAssigned, 0);
   const sellThrough = totalAssigned > 0 ? Math.round((totalUnits / totalAssigned) * 100) : 0;
+
+  const totalCatalogValue = items.reduce((s, i) => s + i.quantity * i.sellPriceCents, 0);
 
   const allocatedItems = items.filter(i => (i.assignments?.length ?? 0) > 0).length;
   const unallocatedItems = items.length - allocatedItems;
@@ -136,9 +139,9 @@ export default function InventoryAnalyticsPage() {
           {/* Primary KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <MetricCard icon={<DollarSign className="w-4 h-4" />} label="Total Revenue" value={formatPrice(totalRevenue)} color="text-primary" />
+            <MetricCard icon={<DollarSign className="w-4 h-4" />} label="Total Value" value={formatPrice(totalCatalogValue)} color="text-violet-600" />
             <MetricCard icon={<Package className="w-4 h-4" />} label="Units Sold" value={String(totalUnits)} color="text-emerald-600" />
             <MetricCard icon={<TrendingUp className="w-4 h-4" />} label="Sell-through" value={`${sellThrough}%`} color="text-blue-600" />
-            <MetricCard icon={<BarChart3 className="w-4 h-4" />} label="Catalog Items" value={String(items.length)} color="text-orange-600" />
           </div>
 
           {/* Allocated vs Unallocated */}
