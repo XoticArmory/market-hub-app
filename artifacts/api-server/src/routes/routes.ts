@@ -1623,6 +1623,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ---- CATALOG IMAGE UPLOAD ----
+  app.post('/api/vendor/catalog/upload-image', isAuthenticated, upload.single("file"), async (req: any, res) => {
+    try {
+      if (!(await requirePro(req, res))) return;
+      const userId = req.user.claims.sub;
+      const supabase = getStorageClient();
+      if (!supabase) return res.status(503).json({ message: "Storage not configured" });
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const ext = path.extname(req.file.originalname) || ".jpg";
+      const storagePath = `catalog-images/${userId}/${Date.now()}${ext}`;
+      const { error } = await supabase.storage
+        .from(UPLOAD_BUCKET)
+        .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+      if (error) return res.status(500).json({ message: error.message });
+      const { data: urlData } = supabase.storage.from(UPLOAD_BUCKET).getPublicUrl(storagePath);
+      res.json({ url: urlData.publicUrl });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ---- INVENTORY SALES ROUTES ----
   app.post('/api/vendor/inventory/sales', isAuthenticated, async (req: any, res) => {
     try {
@@ -1632,7 +1651,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!catalogItemId || !eventId || quantitySold === undefined) {
         return res.status(400).json({ message: "catalogItemId, eventId and quantitySold required" });
       }
-      const sale = await storage.logInventorySale(userId, Number(catalogItemId), Number(eventId), Number(quantitySold));
+      const catId = Number(catalogItemId);
+      const evId = Number(eventId);
+      const qty = Number(quantitySold);
+      if (qty <= 0) return res.status(400).json({ message: "quantitySold must be positive" });
+
+      // Verify the catalog item belongs to this vendor
+      const item = await storage.getCatalogItem(catId);
+      if (!item || item.vendorId !== userId) {
+        return res.status(403).json({ message: "Catalog item not found or not owned by you" });
+      }
+
+      // Verify the item is assigned to this event
+      const assignResult = await pool.query<any>(
+        `SELECT quantity_assigned FROM vendor_catalog_assignments WHERE catalog_item_id = $1 AND event_id = $2 AND vendor_id = $3`,
+        [catId, evId, userId]
+      );
+      if (!assignResult.rows[0]) {
+        return res.status(400).json({ message: "Item is not assigned to this event" });
+      }
+      const quantityAssigned: number = assignResult.rows[0].quantity_assigned;
+
+      // Verify remaining stock is sufficient
+      const soldResult = await pool.query<any>(
+        `SELECT COALESCE(SUM(quantity_sold),0)::int AS total FROM vendor_inventory_sales WHERE catalog_item_id = $1 AND event_id = $2 AND vendor_id = $3`,
+        [catId, evId, userId]
+      );
+      const alreadySold: number = soldResult.rows[0]?.total ?? 0;
+      const remaining = quantityAssigned - alreadySold;
+      if (qty > remaining) {
+        return res.status(400).json({ message: `Only ${remaining} unit(s) remaining — cannot log ${qty}` });
+      }
+
+      const sale = await storage.logInventorySale(userId, catId, evId, qty);
       res.json(sale);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

@@ -171,6 +171,7 @@ export const vendorCatalog = pgTable("vendor_catalog", {
   itemName: text("item_name").notNull(),
   quantity: integer("quantity").notNull().default(0),
   priceCents: integer("price_cents").notNull().default(0),
+  costCents: integer("cost_cents").notNull().default(0),
   imageUrl: text("image_url"),
   images: text("images").array().default([]),
   variations: text("variations").array().default([]),

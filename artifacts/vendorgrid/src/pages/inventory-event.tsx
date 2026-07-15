@@ -6,11 +6,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, ShoppingCart, Package, TrendingUp, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Package, Loader2, Plus, TrendingUp, DollarSign } from "lucide-react";
 
 interface EventSummaryItem {
   catalogItemId: number;
@@ -18,6 +18,9 @@ interface EventSummaryItem {
   quantityAssigned: number;
   totalSold: number;
   priceCents: number;
+  costCents: number;
+  revenueCents: number;
+  profitCents: number;
   afterMarketReport: boolean;
 }
 
@@ -63,7 +66,8 @@ export default function InventoryEventPage() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const totalRevenue = summary.reduce((s, item) => s + item.totalSold * item.priceCents, 0);
+  const totalRevenue = summary.reduce((s, item) => s + item.revenueCents, 0);
+  const totalProfit = summary.reduce((s, item) => s + item.profitCents, 0);
   const totalAssigned = summary.reduce((s, item) => s + item.quantityAssigned, 0);
   const totalSold = summary.reduce((s, item) => s + item.totalSold, 0);
   const sellThrough = totalAssigned > 0 ? Math.round((totalSold / totalAssigned) * 100) : 0;
@@ -91,20 +95,20 @@ export default function InventoryEventPage() {
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="text-2xl font-bold">{totalAssigned}</div>
-            <div className="text-xs text-muted-foreground">Units brought</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold text-emerald-600">{totalSold}</div>
-            <div className="text-xs text-muted-foreground">Units sold</div>
+            <div className="text-2xl font-bold">{totalSold} <span className="text-base text-muted-foreground font-normal">/ {totalAssigned}</span></div>
+            <div className="text-xs text-muted-foreground">Units sold / brought</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
             <div className="text-2xl font-bold text-primary">{formatPrice(totalRevenue)}</div>
             <div className="text-xs text-muted-foreground">Revenue</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className={`text-2xl font-bold ${totalProfit >= 0 ? "text-emerald-600" : "text-destructive"}`}>{formatPrice(totalProfit)}</div>
+            <div className="text-xs text-muted-foreground">Total profit</div>
           </CardContent>
         </Card>
       </div>
@@ -152,11 +156,16 @@ export default function InventoryEventPage() {
                           <Badge variant="secondary" className="text-xs">After Market Report</Badge>
                         )}
                       </div>
-                      <div className="flex gap-3 text-sm text-muted-foreground mt-1">
-                        <span>Brought: {item.quantityAssigned}</span>
-                        <span className="text-emerald-600 font-medium">Sold: {item.totalSold}</span>
-                        <span>Remaining: {remaining}</span>
+
+                      <div className="grid grid-cols-3 gap-x-4 gap-y-0.5 text-sm mt-2">
+                        <span className="text-muted-foreground">Brought</span>
+                        <span className="text-muted-foreground">Sold</span>
+                        <span className="text-muted-foreground">Remaining</span>
+                        <span className="font-medium">{item.quantityAssigned}</span>
+                        <span className="font-medium text-emerald-600">{item.totalSold}</span>
+                        <span className="font-medium">{remaining}</span>
                       </div>
+
                       <div className="mt-2">
                         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                           <span>Sell-through</span>
@@ -164,14 +173,27 @@ export default function InventoryEventPage() {
                         </div>
                         <Progress value={pct} className="h-1.5" />
                       </div>
-                      <div className="mt-2 text-sm font-medium text-primary">
-                        Revenue: {formatPrice(item.totalSold * item.priceCents)}
+
+                      <div className="flex gap-4 mt-2">
+                        <div className="flex items-center gap-1 text-sm">
+                          <DollarSign className="w-3.5 h-3.5 text-primary" />
+                          <span className="font-medium text-primary">{formatPrice(item.revenueCents)}</span>
+                          <span className="text-muted-foreground text-xs">revenue</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm">
+                          <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className={`font-medium ${item.profitCents >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                            {formatPrice(item.profitCents)}
+                          </span>
+                          <span className="text-muted-foreground text-xs">profit</span>
+                        </div>
                       </div>
                     </div>
                     <Button
                       size="sm"
                       variant="outline"
                       className="flex-shrink-0"
+                      disabled={remaining <= 0}
                       onClick={() => {
                         setSelectedItem(item);
                         setSaleQty("");
@@ -195,7 +217,7 @@ export default function InventoryEventPage() {
             <DialogTitle>Log Sale — {selectedItem?.itemName}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="p-3 rounded-lg bg-muted/50 text-sm">
+            <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Brought</span>
                 <span className="font-medium">{selectedItem?.quantityAssigned}</span>
@@ -221,8 +243,19 @@ export default function InventoryEventPage() {
               />
             </div>
             {saleQty && Number(saleQty) > 0 && (
-              <div className="p-2 rounded-lg bg-primary/5 text-sm text-center font-medium">
-                Revenue: {formatPrice(Number(saleQty) * (selectedItem?.priceCents ?? 0))}
+              <div className="p-2 rounded-lg bg-primary/5 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Revenue</span>
+                  <span className="font-medium text-primary">{formatPrice(Number(saleQty) * (selectedItem?.priceCents ?? 0))}</span>
+                </div>
+                {(selectedItem?.costCents ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Profit</span>
+                    <span className="font-medium text-emerald-600">
+                      {formatPrice(Number(saleQty) * ((selectedItem?.priceCents ?? 0) - (selectedItem?.costCents ?? 0)))}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

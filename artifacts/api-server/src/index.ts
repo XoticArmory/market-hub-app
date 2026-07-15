@@ -43,6 +43,27 @@ const httpServer = createServer(app);
     }
   });
 
+  // Hourly — after-market report automation: generate reports for vendors who flagged
+  // after_market_report = true on assignments for events that ended in the last 25 hours.
+  cron.schedule("30 * * * *", async () => {
+    logger.info("after-market-report-cron: checking pending flagged assignments");
+    try {
+      const pending = await storage.getPendingAfterMarketReportAssignments();
+      for (const { vendorId, eventId } of pending) {
+        logger.info({ vendorId, eventId }, "after-market-report-cron: generating report");
+        const result = await generateReportsForEvent(eventId, vendorId);
+        if (result.generated > 0) {
+          await storage.markAfterMarketReportGenerated(vendorId, eventId);
+          logger.info({ vendorId, eventId }, "after-market-report-cron: report saved and marked generated");
+        } else {
+          logger.info({ vendorId, eventId, ...result }, "after-market-report-cron: skipped");
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "after-market-report-cron: unexpected error");
+    }
+  });
+
   app.use((err: any, _req: any, res: any, next: any) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

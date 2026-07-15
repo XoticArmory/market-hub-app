@@ -133,7 +133,9 @@ export interface IStorage {
   // Inventory Sales
   logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale>;
   getInventorySales(vendorId: string, eventId?: number): Promise<(VendorInventorySale & { itemName: string })[]>;
-  getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; afterMarketReport: boolean }[]>;
+  getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]>;
+  getPendingAfterMarketReportAssignments(): Promise<{ vendorId: string; eventId: number }[]>;
+  markAfterMarketReportGenerated(vendorId: string, eventId: number): Promise<void>;
 
   // Roadmap
   getRoadmapItems(): Promise<RoadmapItem[]>;
@@ -904,7 +906,7 @@ export class DatabaseStorage implements IStorage {
     return rows.rows;
   }
 
-  async getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; afterMarketReport: boolean }[]> {
+  async getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]> {
     const rows = await pool.query<any>(`
       SELECT
         vca.catalog_item_id AS "catalogItemId",
@@ -912,14 +914,37 @@ export class DatabaseStorage implements IStorage {
         vca.quantity_assigned AS "quantityAssigned",
         COALESCE(SUM(vis.quantity_sold), 0)::int AS "totalSold",
         vc.price_cents AS "priceCents",
+        COALESCE(vc.cost_cents, 0) AS "costCents",
+        (COALESCE(SUM(vis.quantity_sold), 0) * vc.price_cents)::int AS "revenueCents",
+        (COALESCE(SUM(vis.quantity_sold), 0) * (vc.price_cents - COALESCE(vc.cost_cents, 0)))::int AS "profitCents",
         vca.after_market_report AS "afterMarketReport"
       FROM vendor_catalog_assignments vca
       JOIN vendor_catalog vc ON vc.id = vca.catalog_item_id
       LEFT JOIN vendor_inventory_sales vis ON vis.catalog_item_id = vca.catalog_item_id AND vis.event_id = vca.event_id AND vis.vendor_id = vca.vendor_id
       WHERE vca.vendor_id = $1 AND vca.event_id = $2
-      GROUP BY vca.catalog_item_id, vc.item_name, vca.quantity_assigned, vc.price_cents, vca.after_market_report
+      GROUP BY vca.catalog_item_id, vc.item_name, vca.quantity_assigned, vc.price_cents, vc.cost_cents, vca.after_market_report
     `, [vendorId, eventId]);
     return rows.rows;
+  }
+
+  async getPendingAfterMarketReportAssignments(): Promise<{ vendorId: string; eventId: number }[]> {
+    const rows = await pool.query<any>(`
+      SELECT DISTINCT vca.vendor_id AS "vendorId", vca.event_id AS "eventId"
+      FROM vendor_catalog_assignments vca
+      JOIN events e ON e.id = vca.event_id
+      WHERE vca.after_market_report = true
+        AND vca.report_generated = false
+        AND e.date < NOW()
+        AND e.date >= NOW() - INTERVAL '25 hours'
+    `);
+    return rows.rows;
+  }
+
+  async markAfterMarketReportGenerated(vendorId: string, eventId: number): Promise<void> {
+    await pool.query(
+      `UPDATE vendor_catalog_assignments SET report_generated = true WHERE vendor_id = $1 AND event_id = $2`,
+      [vendorId, eventId]
+    );
   }
 
   async removeCatalogItemFromEvent(catalogItemId: number, eventId: number): Promise<void> {

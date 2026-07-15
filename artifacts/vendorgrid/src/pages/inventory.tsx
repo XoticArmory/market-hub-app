@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,6 +22,7 @@ interface CatalogItem {
   itemName: string;
   quantity: number;
   priceCents: number;
+  costCents: number;
   imageUrl: string | null;
   images: string[];
   variations: string[];
@@ -32,6 +33,13 @@ interface EventOption {
   id: number;
   title: string;
   date: string | null;
+}
+
+interface AllocateRow {
+  catalogItemId: number;
+  itemName: string;
+  qty: string;
+  afterMarketReport: boolean;
 }
 
 function formatPrice(cents: number) {
@@ -53,18 +61,15 @@ export default function InventoryPage() {
   const [manageOpen, setManageOpen] = useState(false);
   const [editItem, setEditItem] = useState<CatalogItem | null>(null);
 
-  const [form, setForm] = useState({ itemName: "", quantity: "", priceCents: "", variations: "" });
+  const [form, setForm] = useState({ itemName: "", quantity: "", priceCents: "", costCents: "", variations: "" });
   const [images, setImages] = useState<string[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [allocateForm, setAllocateForm] = useState({
-    catalogItemId: "",
-    eventId: "",
-    quantityAssigned: "",
-    afterMarketReport: false,
-  });
+  // Batch allocate state
+  const [batchEventId, setBatchEventId] = useState("");
+  const [allocateRows, setAllocateRows] = useState<AllocateRow[]>([]);
 
   const { data: catalog = [] } = useQuery<CatalogItem[]>({
     queryKey: ["/api/vendor/catalog"],
@@ -86,7 +91,7 @@ export default function InventoryPage() {
   const uploadImage = async (file: File): Promise<string | null> => {
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+    const res = await fetch("/api/vendor/catalog/upload-image", { method: "POST", body: fd, credentials: "include" });
     if (!res.ok) return null;
     const data = await res.json();
     return data.url || null;
@@ -136,21 +141,44 @@ export default function InventoryPage() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const allocateItem = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", `/api/vendor/catalog/${data.catalogItemId}/assign`, data),
+  const allocateBatch = useMutation({
+    mutationFn: async ({ eventId, rows }: { eventId: number; rows: AllocateRow[] }) => {
+      const toAllocate = rows.filter(r => Number(r.qty) > 0);
+      await Promise.all(toAllocate.map(r =>
+        apiRequest("POST", `/api/vendor/catalog/${r.catalogItemId}/assign`, {
+          catalogItemId: r.catalogItemId,
+          eventId,
+          quantityAssigned: Number(r.qty),
+          afterMarketReport: r.afterMarketReport,
+        })
+      ));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
-      toast({ title: "Allocated to event!" });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/cogs/events"] });
+      toast({ title: "Items allocated to event!" });
       setAllocateOpen(false);
-      setAllocateForm({ catalogItemId: "", eventId: "", quantityAssigned: "", afterMarketReport: false });
+      setBatchEventId("");
+      setAllocateRows([]);
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  function openAllocate() {
+    setBatchEventId("");
+    setAllocateRows(catalog.map(item => ({
+      catalogItemId: item.id,
+      itemName: item.itemName,
+      qty: "",
+      afterMarketReport: false,
+    })));
+    setAllocateOpen(true);
+  }
+
   function closeLog() {
     setLogOpen(false);
     setEditItem(null);
-    setForm({ itemName: "", quantity: "", priceCents: "", variations: "" });
+    setForm({ itemName: "", quantity: "", priceCents: "", costCents: "", variations: "" });
     setImages([]);
   }
 
@@ -160,6 +188,7 @@ export default function InventoryPage() {
       itemName: item.itemName,
       quantity: String(item.quantity),
       priceCents: String(item.priceCents / 100),
+      costCents: String((item.costCents ?? 0) / 100),
       variations: item.variations?.join(", ") || "",
     });
     setImages(item.images || []);
@@ -171,14 +200,17 @@ export default function InventoryPage() {
       itemName: form.itemName.trim(),
       quantity: Number(form.quantity) || 0,
       priceCents: Math.round(Number(form.priceCents) * 100) || 0,
+      costCents: Math.round(Number(form.costCents) * 100) || 0,
       images,
       imageUrl: images[0] || null,
       variations: form.variations ? form.variations.split(",").map(v => v.trim()).filter(Boolean) : [],
     };
-    if (!data.itemName) return toast({ title: "Item name required", variant: "destructive" });
+    if (!data.itemName) { toast({ title: "Item name required", variant: "destructive" }); return; }
     if (editItem) updateItem.mutate(data);
     else createItem.mutate(data);
   }
+
+  const batchHasAny = allocateRows.some(r => Number(r.qty) > 0);
 
   if (!hasActivePro) {
     return (
@@ -193,6 +225,8 @@ export default function InventoryPage() {
 
   const totalItems = catalog.reduce((s, i) => s + i.quantity, 0);
   const totalValue = catalog.reduce((s, i) => s + i.quantity * i.priceCents, 0);
+  const allocatedCount = catalog.filter(i => i.assignments?.length > 0).length;
+  const unallocatedCount = catalog.length - allocatedCount;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -206,7 +240,7 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="text-2xl font-bold">{catalog.length}</div>
@@ -221,8 +255,14 @@ export default function InventoryPage() {
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="text-2xl font-bold">{formatPrice(totalValue)}</div>
-            <div className="text-sm text-muted-foreground">Catalog value</div>
+            <div className="text-2xl font-bold text-emerald-600">{allocatedCount}</div>
+            <div className="text-sm text-muted-foreground">Allocated to events</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold text-orange-500">{unallocatedCount}</div>
+            <div className="text-sm text-muted-foreground">Unallocated</div>
           </CardContent>
         </Card>
       </div>
@@ -247,7 +287,7 @@ export default function InventoryPage() {
           title="Allocate to Event"
           description="Assign catalog items to an upcoming event"
           color="bg-purple-500/10 text-purple-600"
-          onClick={() => setAllocateOpen(true)}
+          onClick={openAllocate}
         />
         <ActionCard
           icon={<Map className="w-6 h-6" />}
@@ -282,9 +322,13 @@ export default function InventoryPage() {
                 <Input type="number" min="0" placeholder="0" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>Price ($)</Label>
+                <Label>Sell Price ($)</Label>
                 <Input type="number" min="0" step="0.01" placeholder="0.00" value={form.priceCents} onChange={e => setForm(f => ({ ...f, priceCents: e.target.value }))} />
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Cost / Unit ($) <span className="text-muted-foreground text-xs">optional — used to calculate profit</span></Label>
+              <Input type="number" min="0" step="0.01" placeholder="0.00" value={form.costCents} onChange={e => setForm(f => ({ ...f, costCents: e.target.value }))} />
             </div>
             <div className="space-y-1">
               <Label>Variations <span className="text-muted-foreground text-xs">(comma-separated, e.g. Small, Medium, Large)</span></Label>
@@ -399,29 +443,16 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ALLOCATE TO EVENT DIALOG */}
-      <Dialog open={allocateOpen} onOpenChange={setAllocateOpen}>
-        <DialogContent className="max-w-md">
+      {/* ALLOCATE TO EVENT DIALOG — batch mode */}
+      <Dialog open={allocateOpen} onOpenChange={open => { if (!open) { setAllocateOpen(false); setBatchEventId(""); setAllocateRows([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Allocate to Event</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1">
-              <Label>Catalog Item *</Label>
-              <Select value={allocateForm.catalogItemId} onValueChange={v => setAllocateForm(f => ({ ...f, catalogItemId: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an item" />
-                </SelectTrigger>
-                <SelectContent>
-                  {catalog.map(item => (
-                    <SelectItem key={item.id} value={String(item.id)}>{item.itemName} ({item.quantity} units)</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
               <Label>Event *</Label>
-              <Select value={allocateForm.eventId} onValueChange={v => setAllocateForm(f => ({ ...f, eventId: v }))}>
+              <Select value={batchEventId} onValueChange={setBatchEventId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose an event" />
                 </SelectTrigger>
@@ -435,36 +466,56 @@ export default function InventoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>Quantity to Bring *</Label>
-              <Input type="number" min="0" placeholder="0" value={allocateForm.quantityAssigned}
-                onChange={e => setAllocateForm(f => ({ ...f, quantityAssigned: e.target.value }))} />
-            </div>
-            <div className="flex items-center gap-2 p-3 rounded-lg border">
-              <Checkbox
-                id="amr"
-                checked={allocateForm.afterMarketReport}
-                onCheckedChange={checked => setAllocateForm(f => ({ ...f, afterMarketReport: !!checked }))}
-              />
-              <div>
-                <Label htmlFor="amr" className="cursor-pointer">After Market Report</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">Generate a sales summary report after the event ends</p>
+
+            {allocateRows.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Package className="w-8 h-8 mx-auto mb-2" />
+                <p className="text-sm">No catalog items yet. Log items first.</p>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Enter quantity for each item to bring. Leave blank to skip.</p>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {allocateRows.map((row, idx) => (
+                    <div key={row.catalogItemId} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{row.itemName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatPrice(catalog.find(c => c.id === row.catalogItemId)?.priceCents ?? 0)} · {catalog.find(c => c.id === row.catalogItemId)?.quantity ?? 0} in stock
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="Qty"
+                          className="w-20 h-8 text-sm"
+                          value={row.qty}
+                          onChange={e => setAllocateRows(rows => rows.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))}
+                        />
+                        <div className="flex items-center gap-1" title="After Market Report">
+                          <Checkbox
+                            checked={row.afterMarketReport}
+                            onCheckedChange={checked => setAllocateRows(rows => rows.map((r, i) => i === idx ? { ...r, afterMarketReport: !!checked } : r))}
+                          />
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">AMR</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">AMR = After Market Report — auto-generate a sales CSV after the event ends.</p>
+              </div>
+            )}
           </div>
           <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => setAllocateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAllocateOpen(false); setBatchEventId(""); setAllocateRows([]); }}>Cancel</Button>
             <Button
-              disabled={!allocateForm.catalogItemId || !allocateForm.eventId || !allocateForm.quantityAssigned || allocateItem.isPending}
-              onClick={() => allocateItem.mutate({
-                catalogItemId: Number(allocateForm.catalogItemId),
-                eventId: Number(allocateForm.eventId),
-                quantityAssigned: Number(allocateForm.quantityAssigned),
-                afterMarketReport: allocateForm.afterMarketReport,
-              })}
+              disabled={!batchEventId || !batchHasAny || allocateBatch.isPending}
+              onClick={() => allocateBatch.mutate({ eventId: Number(batchEventId), rows: allocateRows })}
             >
-              {allocateItem.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Allocate
+              {allocateBatch.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Allocate Selected
             </Button>
           </DialogFooter>
         </DialogContent>
