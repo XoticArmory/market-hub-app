@@ -1528,12 +1528,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.getUserProfile(userId);
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
-    const { itemName, quantity, priceCents, imageUrl, images, variations } = req.body;
+    const { itemName, quantity, priceCents, costCents, imageUrl, images, variations } = req.body;
     if (!itemName) return res.status(400).json({ message: "itemName required" });
     const item = await storage.createVendorCatalogItem(userId, {
       itemName,
       quantity: Number(quantity) || 0,
       priceCents: Number(priceCents) || 0,
+      costCents: Number(costCents) || 0,
       imageUrl: imageUrl || null,
       images: Array.isArray(images) ? images : [],
       variations: Array.isArray(variations) ? variations : [],
@@ -1547,11 +1548,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const id = Number(req.params.id);
-    const { itemName, quantity, priceCents, imageUrl, images, variations } = req.body;
+    const existingItem = await storage.getCatalogItem(id);
+    if (!existingItem || existingItem.vendorId !== userId) return res.status(403).json({ message: "Catalog item not found or not owned by you" });
+    const { itemName, quantity, priceCents, costCents, imageUrl, images, variations } = req.body;
     const updateData: any = {
       itemName,
       quantity: Number(quantity),
       priceCents: Number(priceCents),
+      costCents: Number(costCents) || 0,
       imageUrl: imageUrl || null,
     };
     if (Array.isArray(images)) updateData.images = images;
@@ -1565,7 +1569,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.getUserProfile(userId);
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
-    await storage.deleteVendorCatalogItem(Number(req.params.id));
+    const itemId = Number(req.params.id);
+    const existingItem = await storage.getCatalogItem(itemId);
+    if (!existingItem || existingItem.vendorId !== userId) return res.status(403).json({ message: "Catalog item not found or not owned by you" });
+    await storage.deleteVendorCatalogItem(itemId);
     res.json({ ok: true });
   });
 
@@ -1577,10 +1584,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const catalogItemId = Number(req.params.id);
     const { eventId, quantityAssigned, afterMarketReport } = req.body;
     if (!eventId || quantityAssigned === undefined) return res.status(400).json({ message: "eventId and quantityAssigned required" });
+    // Ownership check: ensure this catalog item belongs to the requesting vendor
+    const catalogItem = await storage.getCatalogItem(catalogItemId);
+    if (!catalogItem || catalogItem.vendorId !== userId) return res.status(403).json({ message: "Catalog item not found or not owned by you" });
     const assignment = await storage.assignCatalogItemToEvent(catalogItemId, Number(eventId), userId, Number(quantityAssigned), afterMarketReport === true);
 
     // Auto-create or update the inventory tracker entry for this event
-    const catalogItem = await storage.getCatalogItem(catalogItemId);
     if (catalogItem) {
       const ev = await storage.getEvent(Number(eventId));
       const existing = await storage.getVendorInventoryByNameAndEvent(userId, Number(eventId), catalogItem.itemName);
@@ -1610,8 +1619,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const catalogItemId = Number(req.params.id);
     const eid = Number(req.params.eventId);
 
-    // Remove matching inventory entry (only if no sales have been logged)
+    // Ownership check before removing assignment
     const catalogItem = await storage.getCatalogItem(catalogItemId);
+    if (!catalogItem || catalogItem.vendorId !== userId) return res.status(403).json({ message: "Catalog item not found or not owned by you" });
+
+    // Remove matching inventory entry (only if no sales have been logged)
     if (catalogItem) {
       const existing = await storage.getVendorInventoryByNameAndEvent(userId, eid, catalogItem.itemName);
       if (existing && existing.quantitySold === 0) {
