@@ -3,7 +3,7 @@ import { eq, desc, and, inArray, sql, gte, or, isNull, lt } from "drizzle-orm";
 import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
-  vendorCatalog, vendorCatalogAssignments, roadmapItems,
+  vendorCatalog, vendorCatalogAssignments, vendorInventorySales, roadmapItems,
   promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
   vendorItemCogs, vendorEventOverhead, documents, userFiles,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
@@ -13,6 +13,7 @@ import {
   type VendorInventoryItem, type InsertVendorInventory,
   type RoadmapItem, type InsertRoadmapItem,
   type VendorCatalogItem, type InsertVendorCatalog, type VendorCatalogAssignment,
+  type VendorInventorySale,
   type EventVendorEntry,
   type VendorItemCogs, type VendorEventOverhead,
   type Document, type InsertDocument,
@@ -125,9 +126,14 @@ export interface IStorage {
   createVendorCatalogItem(vendorId: string, data: InsertVendorCatalog): Promise<VendorCatalogItem>;
   updateVendorCatalogItem(id: number, data: Partial<InsertVendorCatalog>): Promise<VendorCatalogItem>;
   deleteVendorCatalogItem(id: number): Promise<void>;
-  assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number): Promise<VendorCatalogAssignment>;
+  assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number, afterMarketReport?: boolean): Promise<VendorCatalogAssignment>;
   removeCatalogItemFromEvent(catalogItemId: number, eventId: number): Promise<void>;
   getCatalogAssignmentsForEvent(eventId: number, vendorId: string): Promise<(VendorCatalogAssignment & { item: VendorCatalogItem })[]>;
+
+  // Inventory Sales
+  logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale>;
+  getInventorySales(vendorId: string, eventId?: number): Promise<(VendorInventorySale & { itemName: string })[]>;
+  getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; afterMarketReport: boolean }[]>;
 
   // Roadmap
   getRoadmapItems(): Promise<RoadmapItem[]>;
@@ -861,20 +867,59 @@ export class DatabaseStorage implements IStorage {
     await pool.query("DELETE FROM vendor_catalog WHERE id = $1", [id]);
   }
 
-  async assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number): Promise<VendorCatalogAssignment> {
+  async assignCatalogItemToEvent(catalogItemId: number, eventId: number, vendorId: string, quantityAssigned: number, afterMarketReport?: boolean): Promise<VendorCatalogAssignment> {
     const existing = await db.select().from(vendorCatalogAssignments)
       .where(and(eq(vendorCatalogAssignments.catalogItemId, catalogItemId), eq(vendorCatalogAssignments.eventId, eventId)));
+    const updateSet: any = { quantityAssigned };
+    if (afterMarketReport !== undefined) updateSet.afterMarketReport = afterMarketReport;
     if (existing.length > 0) {
       const [updated] = await db.update(vendorCatalogAssignments)
-        .set({ quantityAssigned })
+        .set(updateSet)
         .where(and(eq(vendorCatalogAssignments.catalogItemId, catalogItemId), eq(vendorCatalogAssignments.eventId, eventId)))
         .returning();
       return updated;
     }
     const [assignment] = await db.insert(vendorCatalogAssignments)
-      .values({ catalogItemId, eventId, vendorId, quantityAssigned })
+      .values({ catalogItemId, eventId, vendorId, quantityAssigned, afterMarketReport: afterMarketReport ?? false })
       .returning();
     return assignment;
+  }
+
+  async logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale> {
+    const [sale] = await db.insert(vendorInventorySales)
+      .values({ vendorId, catalogItemId, eventId, quantitySold })
+      .returning();
+    return sale;
+  }
+
+  async getInventorySales(vendorId: string, eventId?: number): Promise<(VendorInventorySale & { itemName: string })[]> {
+    const rows = await pool.query<any>(`
+      SELECT vis.*, vc.item_name AS "itemName"
+      FROM vendor_inventory_sales vis
+      JOIN vendor_catalog vc ON vc.id = vis.catalog_item_id
+      WHERE vis.vendor_id = $1
+      ${eventId ? 'AND vis.event_id = $2' : ''}
+      ORDER BY vis.sold_at DESC
+    `, eventId ? [vendorId, eventId] : [vendorId]);
+    return rows.rows;
+  }
+
+  async getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; afterMarketReport: boolean }[]> {
+    const rows = await pool.query<any>(`
+      SELECT
+        vca.catalog_item_id AS "catalogItemId",
+        vc.item_name AS "itemName",
+        vca.quantity_assigned AS "quantityAssigned",
+        COALESCE(SUM(vis.quantity_sold), 0)::int AS "totalSold",
+        vc.price_cents AS "priceCents",
+        vca.after_market_report AS "afterMarketReport"
+      FROM vendor_catalog_assignments vca
+      JOIN vendor_catalog vc ON vc.id = vca.catalog_item_id
+      LEFT JOIN vendor_inventory_sales vis ON vis.catalog_item_id = vca.catalog_item_id AND vis.event_id = vca.event_id AND vis.vendor_id = vca.vendor_id
+      WHERE vca.vendor_id = $1 AND vca.event_id = $2
+      GROUP BY vca.catalog_item_id, vc.item_name, vca.quantity_assigned, vc.price_cents, vca.after_market_report
+    `, [vendorId, eventId]);
+    return rows.rows;
   }
 
   async removeCatalogItemFromEvent(catalogItemId: number, eventId: number): Promise<void> {

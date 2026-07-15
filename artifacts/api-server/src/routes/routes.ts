@@ -1528,13 +1528,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.getUserProfile(userId);
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
-    const { itemName, quantity, priceCents, imageUrl } = req.body;
+    const { itemName, quantity, priceCents, imageUrl, images, variations } = req.body;
     if (!itemName) return res.status(400).json({ message: "itemName required" });
     const item = await storage.createVendorCatalogItem(userId, {
       itemName,
       quantity: Number(quantity) || 0,
       priceCents: Number(priceCents) || 0,
       imageUrl: imageUrl || null,
+      images: Array.isArray(images) ? images : [],
+      variations: Array.isArray(variations) ? variations : [],
     });
     res.json(item);
   });
@@ -1545,8 +1547,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const id = Number(req.params.id);
-    const { itemName, quantity, priceCents, imageUrl } = req.body;
-    const item = await storage.updateVendorCatalogItem(id, { itemName, quantity: Number(quantity), priceCents: Number(priceCents), imageUrl: imageUrl || null });
+    const { itemName, quantity, priceCents, imageUrl, images, variations } = req.body;
+    const updateData: any = {
+      itemName,
+      quantity: Number(quantity),
+      priceCents: Number(priceCents),
+      imageUrl: imageUrl || null,
+    };
+    if (Array.isArray(images)) updateData.images = images;
+    if (Array.isArray(variations)) updateData.variations = variations;
+    const item = await storage.updateVendorCatalogItem(id, updateData);
     res.json(item);
   });
 
@@ -1565,9 +1575,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const catalogItemId = Number(req.params.id);
-    const { eventId, quantityAssigned } = req.body;
+    const { eventId, quantityAssigned, afterMarketReport } = req.body;
     if (!eventId || quantityAssigned === undefined) return res.status(400).json({ message: "eventId and quantityAssigned required" });
-    const assignment = await storage.assignCatalogItemToEvent(catalogItemId, Number(eventId), userId, Number(quantityAssigned));
+    const assignment = await storage.assignCatalogItemToEvent(catalogItemId, Number(eventId), userId, Number(quantityAssigned), afterMarketReport === true);
 
     // Auto-create or update the inventory tracker entry for this event
     const catalogItem = await storage.getCatalogItem(catalogItemId);
@@ -1611,6 +1621,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     await storage.removeCatalogItemFromEvent(catalogItemId, eid);
     res.json({ ok: true });
+  });
+
+  // ---- INVENTORY SALES ROUTES ----
+  app.post('/api/vendor/inventory/sales', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      if (!(await requirePro(req, res))) return;
+      const { catalogItemId, eventId, quantitySold } = req.body;
+      if (!catalogItemId || !eventId || quantitySold === undefined) {
+        return res.status(400).json({ message: "catalogItemId, eventId and quantitySold required" });
+      }
+      const sale = await storage.logInventorySale(userId, Number(catalogItemId), Number(eventId), Number(quantitySold));
+      res.json(sale);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get('/api/vendor/inventory/sales', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      if (!(await requirePro(req, res))) return;
+      const eventId = req.query.eventId ? Number(req.query.eventId) : undefined;
+      const sales = await storage.getInventorySales(userId, eventId);
+      res.json(sales);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get('/api/vendor/inventory/event-summary/:eventId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      if (!(await requirePro(req, res))) return;
+      const eventId = Number(req.params.eventId);
+      const summary = await storage.getEventInventorySummary(userId, eventId);
+      res.json(summary);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // ---- ADMIN ROUTES ----

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, BarChart3, FolderOpen, Lock } from "lucide-react";
+import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, BarChart3, FolderOpen, Lock, Package } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -62,6 +62,7 @@ export function AppSidebar() {
     { title: "Market Events", url: "/", icon: CalendarDays },
     { title: "Community Chat", url: "/chat", icon: MessageCircle },
     ...(isEventOwnerPro ? [{ title: "Add Event", url: "/events/new", icon: PlusCircle }] : []),
+    ...(hasActivePro ? [{ title: "Inventory", url: "/inventory", icon: Package }] : []),
     ...(hasActivePro ? [{ title: "COGS & Profit Tracker", url: "/cogs", icon: BarChart3 }] : []),
     ...(hasActivePro ? [{ title: "My File Folder", url: "/my-files", icon: Lock }] : []),
     { title: "Documents", url: "/documents", icon: FolderOpen },

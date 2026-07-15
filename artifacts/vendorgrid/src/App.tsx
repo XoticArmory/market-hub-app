@@ -32,6 +32,9 @@ import UpgradePage from "@/pages/upgrade";
 import CogsTrackerPage from "@/pages/cogs-tracker";
 import DocumentsPage from "@/pages/documents";
 import MyFilesPage from "@/pages/my-files";
+import InventoryPage from "@/pages/inventory";
+import InventoryEventPage from "@/pages/inventory-event";
+import InventoryAnalyticsPage from "@/pages/inventory-analytics";
 import NotFound from "@/pages/not-found";
 import PrivacyPolicyPage from "@/pages/privacy-policy";
 import TermsOfServicePage from "@/pages/terms-of-service";
@@ -423,6 +426,9 @@ function Router() {
       <Route path="/cogs" component={CogsTrackerPage} />
       <Route path="/documents" component={DocumentsPage} />
       <Route path="/my-files" component={MyFilesPage} />
+      <Route path="/inventory" component={InventoryPage} />
+      <Route path="/inventory/events/:eventId" component={InventoryEventPage} />
+      <Route path="/inventory/analytics" component={InventoryAnalyticsPage} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
       <Route path="/terms" component={TermsOfServicePage} />
       <Route component={NotFound} />

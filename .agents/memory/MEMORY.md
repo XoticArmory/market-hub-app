@@ -1,1 +1,2 @@
 - [Vending Intent Flow](vending-intent-flow.md) — intent_pending status bridges free+Pro vendor registration; approve endpoint routes by subscription tier.
+- [Inventory section architecture](inventory-section.md) — Pro-gated catalog mgmt with images/variations, event allocation, per-event sales logging, and analytics.

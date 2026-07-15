@@ -172,6 +172,8 @@ export const vendorCatalog = pgTable("vendor_catalog", {
   quantity: integer("quantity").notNull().default(0),
   priceCents: integer("price_cents").notNull().default(0),
   imageUrl: text("image_url"),
+  images: text("images").array().default([]),
+  variations: text("variations").array().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -182,8 +184,19 @@ export const vendorCatalogAssignments = pgTable("vendor_catalog_assignments", {
   eventId: integer("event_id").notNull().references(() => events.id),
   vendorId: varchar("vendor_id").notNull().references(() => users.id),
   quantityAssigned: integer("quantity_assigned").notNull().default(0),
+  afterMarketReport: boolean("after_market_report").default(false),
+  reportGenerated: boolean("report_generated").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [unique("vendor_catalog_assignment_unique").on(t.catalogItemId, t.eventId)]);
+
+export const vendorInventorySales = pgTable("vendor_inventory_sales", {
+  id: serial("id").primaryKey(),
+  vendorId: varchar("vendor_id").notNull().references(() => users.id),
+  catalogItemId: integer("catalog_item_id").notNull().references(() => vendorCatalog.id),
+  eventId: integer("event_id").notNull().references(() => events.id),
+  quantitySold: integer("quantity_sold").notNull().default(0),
+  soldAt: timestamp("sold_at").defaultNow(),
+});
 
 export const eventVendorEntries = pgTable("event_vendor_entries", {
   id: serial("id").primaryKey(),
@@ -254,6 +267,9 @@ export const insertVendorInventorySchema = createInsertSchema(vendorInventory).o
 export const insertRoadmapItemSchema = createInsertSchema(roadmapItems).omit({ id: true, createdBy: true, createdAt: true, updatedAt: true });
 export const insertVendorCatalogSchema = createInsertSchema(vendorCatalog).omit({ id: true, vendorId: true, createdAt: true, updatedAt: true });
 export const insertVendorCatalogAssignmentSchema = createInsertSchema(vendorCatalogAssignments).omit({ id: true, vendorId: true, createdAt: true });
+export const insertVendorInventorySalesSchema = createInsertSchema(vendorInventorySales).omit({ id: true, soldAt: true });
+export type VendorInventorySale = typeof vendorInventorySales.$inferSelect;
+export type InsertVendorInventorySale = z.infer<typeof insertVendorInventorySalesSchema>;
 export const insertEventVendorEntrySchema = createInsertSchema(eventVendorEntries).omit({ id: true, addedBy: true, createdAt: true });
 export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({ id: true, createdBy: true, usesCount: true, createdAt: true });
 export type PromoCode = typeof promoCodes.$inferSelect;
