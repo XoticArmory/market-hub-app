@@ -1708,6 +1708,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // Spec-contract alias: /api/vendor/inventory/event/:eventId
+  app.get('/api/vendor/inventory/event/:eventId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      if (!(await requirePro(req, res))) return;
+      const eventId = Number(req.params.eventId);
+      const summary = await storage.getEventInventorySummary(userId, eventId);
+      res.json(summary);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ---- ADMIN ROUTES ----
   app.get(api.admin.getSettings.path, isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });

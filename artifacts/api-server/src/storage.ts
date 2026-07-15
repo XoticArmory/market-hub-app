@@ -1173,8 +1173,24 @@ export class DatabaseStorage implements IStorage {
     // Get event overhead
     const overhead = await this.getEventOverhead(vendorId, eventId);
 
-    // Get inventory (quantity sold) for this event
-    const inventory = catalogItemIds.length > 0
+    // Get sold quantities from vendor_inventory_sales (primary source)
+    // Fall back to legacy vendorInventory table if no sales rows exist for backwards compatibility
+    let salesMap = new Map<number, number>();
+    if (catalogItemIds.length > 0) {
+      const salesResult = await pool.query<{ catalog_item_id: number; quantity_sold: number }>(
+        `SELECT catalog_item_id, COALESCE(SUM(quantity_sold), 0)::int AS quantity_sold
+         FROM vendor_inventory_sales
+         WHERE vendor_id = $1 AND event_id = $2 AND catalog_item_id = ANY($3::int[])
+         GROUP BY catalog_item_id`,
+        [vendorId, eventId, catalogItemIds]
+      );
+      for (const row of salesResult.rows) {
+        salesMap.set(row.catalog_item_id, row.quantity_sold);
+      }
+    }
+
+    // Legacy fallback: if no sales records exist at all for this event, read from vendorInventory
+    const legacyInventory = salesMap.size === 0 && catalogItemIds.length > 0
       ? await db.select().from(vendorInventory)
           .where(and(eq(vendorInventory.vendorId, vendorId), eq(vendorInventory.eventId as any, eventId)))
       : [];
@@ -1189,9 +1205,9 @@ export class DatabaseStorage implements IStorage {
     const items = catalogItems.map(item => {
       const assignment = assignments.find(a => a.catalogItemId === item.id);
       const itemCogs = allCogs.filter(c => c.catalogItemId === item.id);
-      const inv = inventory.find((i: any) => i.itemName === item.itemName);
+      const legacyInv = legacyInventory.find((i: any) => i.itemName === item.itemName);
       const quantityAssigned = assignment?.quantityAssigned ?? 0;
-      const quantitySold = inv?.quantitySold ?? 0;
+      const quantitySold = salesMap.get(item.id) ?? legacyInv?.quantitySold ?? 0;
       const sellPriceCents = item.priceCents ?? 0;
       const directCogsCents = itemCogs.reduce((sum, c) => sum + (c.amountCents ?? 0), 0);
       const totalCogsPerItemCents = directCogsCents + overheadPerItemCents;

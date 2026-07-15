@@ -61,7 +61,9 @@ export default function InventoryPage() {
   const [manageOpen, setManageOpen] = useState(false);
   const [editItem, setEditItem] = useState<CatalogItem | null>(null);
 
-  const [form, setForm] = useState({ itemName: "", quantity: "", priceCents: "", costCents: "", variations: "" });
+  const [form, setForm] = useState({ itemName: "", quantity: "", priceCents: "", costCents: "" });
+  const [variations, setVariations] = useState<string[]>([]);
+  const [chipInput, setChipInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -178,7 +180,9 @@ export default function InventoryPage() {
   function closeLog() {
     setLogOpen(false);
     setEditItem(null);
-    setForm({ itemName: "", quantity: "", priceCents: "", costCents: "", variations: "" });
+    setForm({ itemName: "", quantity: "", priceCents: "", costCents: "" });
+    setVariations([]);
+    setChipInput("");
     setImages([]);
   }
 
@@ -189,8 +193,9 @@ export default function InventoryPage() {
       quantity: String(item.quantity),
       priceCents: String(item.priceCents / 100),
       costCents: String((item.costCents ?? 0) / 100),
-      variations: item.variations?.join(", ") || "",
     });
+    setVariations(item.variations || []);
+    setChipInput("");
     setImages(item.images || []);
     setLogOpen(true);
   }
@@ -203,7 +208,7 @@ export default function InventoryPage() {
       costCents: Math.round(Number(form.costCents) * 100) || 0,
       images,
       imageUrl: images[0] || null,
-      variations: form.variations ? form.variations.split(",").map(v => v.trim()).filter(Boolean) : [],
+      variations,
     };
     if (!data.itemName) { toast({ title: "Item name required", variant: "destructive" }); return; }
     if (editItem) updateItem.mutate(data);
@@ -331,8 +336,37 @@ export default function InventoryPage() {
               <Input type="number" min="0" step="0.01" placeholder="0.00" value={form.costCents} onChange={e => setForm(f => ({ ...f, costCents: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label>Variations <span className="text-muted-foreground text-xs">(comma-separated, e.g. Small, Medium, Large)</span></Label>
-              <Input placeholder="Red, Blue, Green" value={form.variations} onChange={e => setForm(f => ({ ...f, variations: e.target.value }))} />
+              <Label>Variations</Label>
+              <div className="space-y-2">
+                {variations.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {variations.map((v, i) => (
+                      <span key={i} className="flex items-center gap-1 bg-primary/10 text-primary text-sm px-2.5 py-1 rounded-full">
+                        {v}
+                        <button type="button" onClick={() => setVariations(vs => vs.filter((_, j) => j !== i))} className="ml-0.5 hover:text-destructive transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <Input
+                  placeholder="Type a variation and press Enter (e.g. Small, Red)"
+                  value={chipInput}
+                  onChange={e => setChipInput(e.target.value)}
+                  onKeyDown={e => {
+                    if ((e.key === "Enter" || e.key === ",") && chipInput.trim()) {
+                      e.preventDefault();
+                      const val = chipInput.trim().replace(/,$/, "");
+                      if (val && !variations.includes(val)) setVariations(vs => [...vs, val]);
+                      setChipInput("");
+                    } else if (e.key === "Backspace" && chipInput === "" && variations.length > 0) {
+                      setVariations(vs => vs.slice(0, -1));
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Press Enter or comma to add each option</p>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Photos <span className="text-muted-foreground text-xs">(up to 5)</span></Label>
@@ -418,15 +452,19 @@ export default function InventoryPage() {
                         ))}
                       </div>
                     )}
-                    {item.assignments?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {item.assignments.map(a => (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      <span className="flex items-center gap-1 text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                        <Package className="w-3 h-3" /> Inventory
+                      </span>
+                      {item.assignments?.map(a => {
+                        const evTitle = allEventsRaw.find((e: any) => e.id === a.eventId)?.title;
+                        return (
                           <span key={a.id} className="flex items-center gap-1 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                            <MapPin className="w-3 h-3" /> Event #{a.eventId} · {a.quantityAssigned}
+                            <MapPin className="w-3 h-3" /> {evTitle || `Event #${a.eventId}`} · {a.quantityAssigned}
                           </span>
-                        ))}
-                      </div>
-                    )}
+                        );
+                      })}
+                    </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { openEdit(item); setViewOpen(false); }}>
