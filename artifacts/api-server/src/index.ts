@@ -26,23 +26,6 @@ const httpServer = createServer(app);
 (async () => {
   await registerRoutes(httpServer, app);
 
-  // Daily at 02:00 AM — generate market day reports for events that ended yesterday
-  cron.schedule("0 2 * * *", async () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    logger.info("market-report-cron: checking for events that ended yesterday");
-    try {
-      const endedEvents = await storage.getEventsEndingOn(yesterday);
-      for (const event of endedEvents) {
-        logger.info({ eventId: event.id, title: event.title }, "market-report-cron: generating reports");
-        const result = await generateReportsForEvent(event.id);
-        logger.info({ eventId: event.id, ...result }, "market-report-cron: done");
-      }
-    } catch (err) {
-      logger.error({ err }, "market-report-cron: unexpected error");
-    }
-  });
-
   // Hourly — after-market report automation: generate reports for vendors who flagged
   // after_market_report = true on assignments for events that ended in the last 25 hours.
   cron.schedule("30 * * * *", async () => {
