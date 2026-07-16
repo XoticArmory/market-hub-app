@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, ShoppingCart, Package, Loader2, Plus, TrendingUp, DollarSign } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Package, Loader2, Plus, TrendingUp, DollarSign, Calendar } from "lucide-react";
 
 interface EventSummaryItem {
   catalogItemId: number;
@@ -37,9 +37,13 @@ function formatPrice(cents: number) {
 export default function InventoryEventPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const eid = Number(eventId);
+
+  // Date filter from ?date=YYYY-MM-DD (set when navigating from a multi-day event)
+  const dateParam = new URLSearchParams(search).get("date") ?? "";
 
   const [logSaleOpen, setLogSaleOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<EventSummaryItem | null>(null);
@@ -49,15 +53,19 @@ export default function InventoryEventPage() {
     queryKey: [`/api/events/${eid}`],
   });
 
+  const summaryUrl = dateParam
+    ? `/api/vendor/inventory/event-summary/${eid}?date=${dateParam}`
+    : `/api/vendor/inventory/event-summary/${eid}`;
+
   const { data: summary = [], isLoading } = useQuery<EventSummaryItem[]>({
-    queryKey: [`/api/vendor/inventory/event-summary/${eid}`],
+    queryKey: [summaryUrl],
     enabled: !isNaN(eid),
   });
 
   const logSale = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/vendor/inventory/sales", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/vendor/inventory/event-summary/${eid}`] });
+      queryClient.invalidateQueries({ queryKey: [summaryUrl] });
       toast({ title: "Sale logged!" });
       setLogSaleOpen(false);
       setSelectedItem(null);
@@ -80,9 +88,16 @@ export default function InventoryEventPage() {
         </Button>
         <div>
           <h1 className="text-xl font-bold">{event?.title || "Event Inventory"}</h1>
-          {event?.date && (
+          {dateParam ? (
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-primary" />
+              <p className="text-sm font-medium text-primary">
+                {new Date(dateParam).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+              </p>
+            </div>
+          ) : event?.date ? (
             <p className="text-sm text-muted-foreground">{new Date(event.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
-          )}
+          ) : null}
         </div>
       </div>
 

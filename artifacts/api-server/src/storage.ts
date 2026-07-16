@@ -133,7 +133,7 @@ export interface IStorage {
   // Inventory Sales
   logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale>;
   getInventorySales(vendorId: string, eventId?: number): Promise<(VendorInventorySale & { itemName: string })[]>;
-  getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]>;
+  getEventInventorySummary(vendorId: string, eventId: number, forDate?: Date): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]>;
   getPendingAfterMarketReportAssignments(): Promise<{ vendorId: string; eventId: number }[]>;
   markAfterMarketReportGenerated(vendorId: string, eventId: number): Promise<void>;
 
@@ -946,7 +946,11 @@ export class DatabaseStorage implements IStorage {
     return rows.rows;
   }
 
-  async getEventInventorySummary(vendorId: string, eventId: number): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]> {
+  async getEventInventorySummary(vendorId: string, eventId: number, forDate?: Date): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]> {
+    const dateFilter = forDate
+      ? `AND vis.sold_at >= $3::date AND vis.sold_at < ($3::date + INTERVAL '1 day')`
+      : "";
+    const params: any[] = [vendorId, eventId, ...(forDate ? [forDate] : [])];
     const rows = await pool.query<any>(`
       SELECT
         vca.catalog_item_id AS "catalogItemId",
@@ -960,10 +964,13 @@ export class DatabaseStorage implements IStorage {
         vca.after_market_report AS "afterMarketReport"
       FROM vendor_catalog_assignments vca
       JOIN vendor_catalog vc ON vc.id = vca.catalog_item_id
-      LEFT JOIN vendor_inventory_sales vis ON vis.catalog_item_id = vca.catalog_item_id AND vis.event_id = vca.event_id AND vis.vendor_id = vca.vendor_id
+      LEFT JOIN vendor_inventory_sales vis ON vis.catalog_item_id = vca.catalog_item_id
+        AND vis.event_id = vca.event_id
+        AND vis.vendor_id = vca.vendor_id
+        ${dateFilter}
       WHERE vca.vendor_id = $1 AND vca.event_id = $2
       GROUP BY vca.catalog_item_id, vc.item_name, vca.quantity_assigned, vc.price_cents, vc.cost_cents, vca.after_market_report
-    `, [vendorId, eventId]);
+    `, params);
     return rows.rows;
   }
 

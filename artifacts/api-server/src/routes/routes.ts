@@ -1715,7 +1715,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = req.user.claims.sub;
       if (!(await requirePro(req, res))) return;
       const eventId = Number(req.params.eventId);
-      const summary = await storage.getEventInventorySummary(userId, eventId);
+      const forDate = req.query.date ? new Date(req.query.date as string) : undefined;
+      const summary = await storage.getEventInventorySummary(userId, eventId, forDate);
       res.json(summary);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -1726,7 +1727,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = req.user.claims.sub;
       if (!(await requirePro(req, res))) return;
       const eventId = Number(req.params.eventId);
-      const summary = await storage.getEventInventorySummary(userId, eventId);
+      const forDate = req.query.date ? new Date(req.query.date as string) : undefined;
+      const summary = await storage.getEventInventorySummary(userId, eventId, forDate);
       res.json(summary);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
