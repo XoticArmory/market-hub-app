@@ -852,16 +852,52 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVendorCatalogItem(vendorId: string, data: InsertVendorCatalog): Promise<VendorCatalogItem> {
-    const [item] = await db.insert(vendorCatalog).values({ vendorId, ...data }).returning();
-    return item;
+    const { itemName, quantity, priceCents, costCents, imageUrl, images, variations } = data as any;
+    const result = await pool.query<VendorCatalogItem>(
+      `INSERT INTO vendor_catalog
+         (vendor_id, item_name, quantity, price_cents, cost_cents, image_url, images, variations)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::text[], $8::text[])
+       RETURNING *`,
+      [
+        vendorId,
+        itemName,
+        Number(quantity) || 0,
+        Number(priceCents) || 0,
+        Number(costCents) || 0,
+        imageUrl || null,
+        Array.isArray(images) ? images : [],
+        Array.isArray(variations) ? variations : [],
+      ]
+    );
+    return result.rows[0];
   }
 
   async updateVendorCatalogItem(id: number, data: Partial<InsertVendorCatalog>): Promise<VendorCatalogItem> {
-    const [item] = await db.update(vendorCatalog)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(vendorCatalog.id, id))
-      .returning();
-    return item;
+    const { itemName, quantity, priceCents, costCents, imageUrl, images, variations } = data as any;
+    const result = await pool.query<VendorCatalogItem>(
+      `UPDATE vendor_catalog SET
+         item_name    = COALESCE($2, item_name),
+         quantity     = COALESCE($3, quantity),
+         price_cents  = COALESCE($4, price_cents),
+         cost_cents   = COALESCE($5, cost_cents),
+         image_url    = $6,
+         images       = $7::text[],
+         variations   = $8::text[],
+         updated_at   = now()
+       WHERE id = $1
+       RETURNING *`,
+      [
+        id,
+        itemName,
+        quantity !== undefined ? Number(quantity) : null,
+        priceCents !== undefined ? Number(priceCents) : null,
+        costCents !== undefined ? Number(costCents) : null,
+        imageUrl !== undefined ? (imageUrl || null) : undefined,
+        Array.isArray(images) ? images : [],
+        Array.isArray(variations) ? variations : [],
+      ]
+    );
+    return result.rows[0];
   }
 
   async deleteVendorCatalogItem(id: number): Promise<void> {
