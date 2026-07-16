@@ -2431,7 +2431,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const profile = await storage.getUserProfile(userId);
       if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
       const eventsWithAssignments = await storage.getEventsWithCatalogAssignments(userId);
-      res.json(eventsWithAssignments);
+      const eventIds = eventsWithAssignments.map(e => e.id);
+      const extraDates = eventIds.length > 0 ? await storage.getBulkEventDates(eventIds) : [];
+      const extraDatesMap = new Map<number, typeof extraDates>();
+      for (const d of extraDates) {
+        if (!extraDatesMap.has(d.eventId)) extraDatesMap.set(d.eventId, []);
+        extraDatesMap.get(d.eventId)!.push(d);
+      }
+      res.json(eventsWithAssignments.map(e => ({
+        ...e,
+        extraDates: extraDatesMap.get(e.id) ?? [],
+      })));
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

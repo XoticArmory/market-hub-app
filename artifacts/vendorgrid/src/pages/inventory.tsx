@@ -30,10 +30,16 @@ interface CatalogItem {
   assignments: { id: number; eventId: number; quantityAssigned: number }[];
 }
 
+interface ExtraDate {
+  id: number;
+  date: string;
+}
+
 interface EventOption {
   id: number;
   title: string;
   date: string | null;
+  extraDates?: ExtraDate[];
 }
 
 interface AllocateRow {
@@ -75,7 +81,11 @@ export default function InventoryPage() {
 
   // Batch allocate state
   const [batchEventId, setBatchEventId] = useState("");
+  const [batchEventDay, setBatchEventDay] = useState("");
   const [allocateRows, setAllocateRows] = useState<AllocateRow[]>([]);
+
+  // Manage Events state — track which event is expanded to show its dates
+  const [manageExpandedId, setManageExpandedId] = useState<number | null>(null);
 
   const { data: catalog = [] } = useQuery<CatalogItem[]>({
     queryKey: ["/api/vendor/catalog"],
@@ -92,7 +102,12 @@ export default function InventoryPage() {
     enabled: hasActivePro === true,
   });
 
-  const allEvents: EventOption[] = allEventsRaw.map((e: any) => ({ id: e.id, title: e.title, date: e.date }));
+  const allEvents: EventOption[] = allEventsRaw.map((e: any) => ({
+    id: e.id,
+    title: e.title,
+    date: e.date,
+    extraDates: (e.extraDates ?? []).map((d: any) => ({ id: d.id, date: d.date })),
+  }));
 
   const uploadImage = async (file: File): Promise<string | null> => {
     const fd = new FormData();
@@ -184,6 +199,7 @@ export default function InventoryPage() {
 
   function openAllocate() {
     setBatchEventId("");
+    setBatchEventDay("");
     setAllocateRows(catalog.map(item => ({
       catalogItemId: item.id,
       itemName: item.itemName,
@@ -498,7 +514,7 @@ export default function InventoryPage() {
       </Dialog>
 
       {/* ALLOCATE TO EVENT DIALOG — batch mode */}
-      <Dialog open={allocateOpen} onOpenChange={open => { if (!open) { setAllocateOpen(false); setBatchEventId(""); setAllocateRows([]); } }}>
+      <Dialog open={allocateOpen} onOpenChange={open => { if (!open) { setAllocateOpen(false); setBatchEventId(""); setBatchEventDay(""); setAllocateRows([]); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Allocate to Event</DialogTitle>
@@ -506,7 +522,10 @@ export default function InventoryPage() {
           <div className="space-y-4">
             <div className="space-y-1">
               <Label>Event *</Label>
-              <Select value={batchEventId} onValueChange={setBatchEventId}>
+              <Select
+                value={batchEventId}
+                onValueChange={v => { setBatchEventId(v); setBatchEventDay(""); }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Choose an event" />
                 </SelectTrigger>
@@ -521,51 +540,111 @@ export default function InventoryPage() {
               </Select>
             </div>
 
-            {allocateRows.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Package className="w-8 h-8 mx-auto mb-2" />
-                <p className="text-sm">No catalog items yet. Log items first.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Enter quantity for each item to bring. Leave blank to skip.</p>
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                  {allocateRows.map((row, idx) => (
-                    <div key={row.catalogItemId} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{row.itemName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatPrice(catalog.find(c => c.id === row.catalogItemId)?.priceCents ?? 0)} · {catalog.find(c => c.id === row.catalogItemId)?.quantity ?? 0} in stock
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="Qty"
-                          className="w-20 h-8 text-sm"
-                          value={row.qty}
-                          onChange={e => setAllocateRows(rows => rows.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))}
-                        />
-                        <div className="flex items-center gap-1" title="After Market Report">
-                          <Checkbox
-                            checked={row.afterMarketReport}
-                            onCheckedChange={checked => setAllocateRows(rows => rows.map((r, i) => i === idx ? { ...r, afterMarketReport: !!checked } : r))}
+            {(() => {
+              const selectedEv = allEvents.find(e => String(e.id) === batchEventId);
+              const allDays = selectedEv
+                ? [
+                    ...(selectedEv.date ? [{ key: "main", date: selectedEv.date }] : []),
+                    ...(selectedEv.extraDates ?? []).map(d => ({ key: String(d.id), date: d.date })),
+                  ]
+                : [];
+              const isMultiDay = allDays.length > 1;
+
+              if (batchEventId && isMultiDay) {
+                return (
+                  <div className="space-y-1">
+                    <Label>Which day are you attending? *</Label>
+                    <Select value={batchEventDay} onValueChange={setBatchEventDay}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a date" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allDays.map(d => {
+                          const label = new Date(d.date).toLocaleDateString("en-US", {
+                            weekday: "short", year: "numeric", month: "short", day: "numeric",
+                          });
+                          return <SelectItem key={d.key} value={d.date}>{label}</SelectItem>;
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {(() => {
+              const selectedEv = allEvents.find(e => String(e.id) === batchEventId);
+              const allDays = selectedEv
+                ? [
+                    ...(selectedEv.date ? [{ key: "main", date: selectedEv.date }] : []),
+                    ...(selectedEv.extraDates ?? []).map(d => ({ key: String(d.id), date: d.date })),
+                  ]
+                : [];
+              const isMultiDay = allDays.length > 1;
+              const dayReady = !batchEventId || !isMultiDay || !!batchEventDay;
+
+              if (!dayReady) return null;
+
+              if (allocateRows.length === 0) {
+                return (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Package className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-sm">No catalog items yet. Log items first.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Enter quantity for each item to bring. Leave blank to skip.</p>
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {allocateRows.map((row, idx) => (
+                      <div key={row.catalogItemId} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{row.itemName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatPrice(catalog.find(c => c.id === row.catalogItemId)?.priceCents ?? 0)} · {catalog.find(c => c.id === row.catalogItemId)?.quantity ?? 0} in stock
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="Qty"
+                            className="w-20 h-8 text-sm"
+                            value={row.qty}
+                            onChange={e => setAllocateRows(rows => rows.map((r, i) => i === idx ? { ...r, qty: e.target.value } : r))}
                           />
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">AMR</span>
+                          <div className="flex items-center gap-1" title="After Market Report">
+                            <Checkbox
+                              checked={row.afterMarketReport}
+                              onCheckedChange={checked => setAllocateRows(rows => rows.map((r, i) => i === idx ? { ...r, afterMarketReport: !!checked } : r))}
+                            />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">AMR</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">AMR = After Market Report — auto-generate a sales CSV after the event ends.</p>
                 </div>
-                <p className="text-xs text-muted-foreground">AMR = After Market Report — auto-generate a sales CSV after the event ends.</p>
-              </div>
-            )}
+              );
+            })()}
           </div>
           <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => { setAllocateOpen(false); setBatchEventId(""); setAllocateRows([]); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAllocateOpen(false); setBatchEventId(""); setBatchEventDay(""); setAllocateRows([]); }}>Cancel</Button>
             <Button
-              disabled={!batchEventId || !batchHasAny || allocateBatch.isPending}
+              disabled={!batchEventId || !batchHasAny || allocateBatch.isPending || (() => {
+                const selectedEv = allEvents.find(e => String(e.id) === batchEventId);
+                const allDays = selectedEv
+                  ? [
+                      ...(selectedEv.date ? [1] : []),
+                      ...(selectedEv.extraDates ?? []),
+                    ]
+                  : [];
+                return allDays.length > 1 && !batchEventDay;
+              })()}
               onClick={() => allocateBatch.mutate({ eventId: Number(batchEventId), rows: allocateRows })}
             >
               {allocateBatch.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -576,7 +655,7 @@ export default function InventoryPage() {
       </Dialog>
 
       {/* MANAGE EVENTS DIALOG */}
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+      <Dialog open={manageOpen} onOpenChange={open => { setManageOpen(open); if (!open) setManageExpandedId(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Manage Events</DialogTitle>
@@ -589,30 +668,77 @@ export default function InventoryPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {eventsWithAssignments.map(ev => (
-                <div key={ev.id} className="flex items-center gap-2 p-3 rounded-xl border hover:bg-muted/20 transition-colors">
-                  <button
-                    className="flex-1 text-left"
-                    onClick={() => { setManageOpen(false); setLocation(`/inventory/events/${ev.id}`); }}
-                  >
-                    <p className="font-medium">{ev.title}</p>
-                    {ev.date && <p className="text-xs text-muted-foreground">{new Date(ev.date).toLocaleDateString()}</p>}
-                  </button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 text-orange-600 border-orange-200 hover:bg-orange-50 hover:border-orange-400"
-                    onClick={() => {
-                      setEndEventTarget(ev);
-                      setEndEventStep("confirm");
-                      setEndEventResult(null);
-                    }}
-                  >
-                    <Trophy className="w-3.5 h-3.5 mr-1" />
-                    End Event
-                  </Button>
-                </div>
-              ))}
+              {eventsWithAssignments.map((ev: EventOption) => {
+                const allDays = [
+                  ...(ev.date ? [{ key: "main", date: ev.date }] : []),
+                  ...(ev.extraDates ?? []).map(d => ({ key: String(d.id), date: d.date })),
+                ];
+                const isMultiDay = allDays.length > 1;
+                const isExpanded = manageExpandedId === ev.id;
+
+                return (
+                  <div key={ev.id} className="rounded-xl border overflow-hidden">
+                    <div className="flex items-center gap-2 p-3 hover:bg-muted/20 transition-colors">
+                      <button
+                        className="flex-1 text-left"
+                        onClick={() => {
+                          if (isMultiDay) {
+                            setManageExpandedId(isExpanded ? null : ev.id);
+                          } else {
+                            setManageOpen(false);
+                            setManageExpandedId(null);
+                            setLocation(`/inventory/events/${ev.id}`);
+                          }
+                        }}
+                      >
+                        <p className="font-medium">{ev.title}</p>
+                        {isMultiDay ? (
+                          <p className="text-xs text-muted-foreground">{allDays.length} days — tap to select a date</p>
+                        ) : ev.date ? (
+                          <p className="text-xs text-muted-foreground">{new Date(ev.date).toLocaleDateString()}</p>
+                        ) : null}
+                      </button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 text-orange-600 border-orange-200 hover:bg-orange-50 hover:border-orange-400"
+                        onClick={() => {
+                          setEndEventTarget(ev);
+                          setEndEventStep("confirm");
+                          setEndEventResult(null);
+                        }}
+                      >
+                        <Trophy className="w-3.5 h-3.5 mr-1" />
+                        End Event
+                      </Button>
+                    </div>
+
+                    {isMultiDay && isExpanded && (
+                      <div className="border-t bg-muted/30 divide-y">
+                        {allDays.map(d => {
+                          const label = new Date(d.date).toLocaleDateString("en-US", {
+                            weekday: "short", year: "numeric", month: "short", day: "numeric",
+                          });
+                          return (
+                            <button
+                              key={d.key}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors flex items-center gap-2"
+                              onClick={() => {
+                                setManageOpen(false);
+                                setManageExpandedId(null);
+                                setLocation(`/inventory/events/${ev.id}?date=${d.date.slice(0, 10)}`);
+                              }}
+                            >
+                              <CalendarCheck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </DialogContent>
