@@ -2545,6 +2545,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Vendor: end event — generate report for self + deduct sold inventory from catalog quantities
+  app.post("/api/vendor/event/:eventId/end", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const eventId = Number(req.params.eventId);
+      if (isNaN(eventId)) return res.status(400).json({ message: "Invalid event ID" });
+
+      const profile = await storage.getUserProfile(userId);
+      if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required" });
+
+      const { generateReport } = req.body;
+
+      let reportResult = { generated: 0, skipped: 0 };
+      if (generateReport) {
+        reportResult = await generateReportsForEvent(eventId, userId);
+      }
+
+      const itemsUpdated = await storage.deductSoldInventoryFromCatalog(userId, eventId);
+
+      res.json({ ...reportResult, itemsUpdated });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to end event" });
+    }
+  });
+
   // Serve the React frontend for all non-API routes in production
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);

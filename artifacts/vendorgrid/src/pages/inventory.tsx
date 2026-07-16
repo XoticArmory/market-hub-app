@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Package, PlusCircle, Eye, CalendarCheck, Map, BarChart3,
-  Upload, X, ImageIcon, Loader2, Trash2, Tag, MapPin
+  Upload, X, ImageIcon, Loader2, Trash2, Tag, MapPin,
+  Trophy, CheckCircle2, FileDown
 } from "lucide-react";
 
 interface CatalogItem {
@@ -60,6 +61,9 @@ export default function InventoryPage() {
   const [allocateOpen, setAllocateOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [editItem, setEditItem] = useState<CatalogItem | null>(null);
+  const [endEventTarget, setEndEventTarget] = useState<EventOption | null>(null);
+  const [endEventStep, setEndEventStep] = useState<"confirm" | "done">("confirm");
+  const [endEventResult, setEndEventResult] = useState<{ generated: number; itemsUpdated: number } | null>(null);
 
   const [form, setForm] = useState({ itemName: "", quantity: "", priceCents: "", costCents: "" });
   const [variations, setVariations] = useState<string[]>([]);
@@ -139,6 +143,18 @@ export default function InventoryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
       toast({ title: "Item deleted" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const endEvent = useMutation({
+    mutationFn: ({ eventId, generateReport }: { eventId: number; generateReport: boolean }) =>
+      apiRequest("POST", `/api/vendor/event/${eventId}/end`, { generateReport }),
+    onSuccess: (data: any) => {
+      setEndEventResult({ generated: data.generated ?? 0, itemsUpdated: data.itemsUpdated ?? 0 });
+      setEndEventStep("done");
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/cogs/events"] });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -574,19 +590,97 @@ export default function InventoryPage() {
           ) : (
             <div className="space-y-2">
               {eventsWithAssignments.map(ev => (
-                <button
-                  key={ev.id}
-                  className="w-full text-left p-3 rounded-xl border hover:bg-muted/40 transition-colors flex items-center justify-between"
-                  onClick={() => { setManageOpen(false); setLocation(`/inventory/events/${ev.id}`); }}
-                >
-                  <div>
+                <div key={ev.id} className="flex items-center gap-2 p-3 rounded-xl border hover:bg-muted/20 transition-colors">
+                  <button
+                    className="flex-1 text-left"
+                    onClick={() => { setManageOpen(false); setLocation(`/inventory/events/${ev.id}`); }}
+                  >
                     <p className="font-medium">{ev.title}</p>
                     {ev.date && <p className="text-xs text-muted-foreground">{new Date(ev.date).toLocaleDateString()}</p>}
-                  </div>
-                  <Map className="w-4 h-4 text-muted-foreground" />
-                </button>
+                  </button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 text-orange-600 border-orange-200 hover:bg-orange-50 hover:border-orange-400"
+                    onClick={() => {
+                      setEndEventTarget(ev);
+                      setEndEventStep("confirm");
+                      setEndEventResult(null);
+                    }}
+                  >
+                    <Trophy className="w-3.5 h-3.5 mr-1" />
+                    End Event
+                  </Button>
+                </div>
               ))}
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* END EVENT DIALOG */}
+      <Dialog open={!!endEventTarget} onOpenChange={(open) => { if (!open) setEndEventTarget(null); }}>
+        <DialogContent className="max-w-sm text-center">
+          {endEventStep === "confirm" ? (
+            <>
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Trophy className="w-8 h-8 text-orange-500" />
+                </div>
+                <h2 className="text-xl font-bold">Great market day! 🎉</h2>
+                <p className="text-muted-foreground text-sm">
+                  Congrats on wrapping up <span className="font-medium text-foreground">{endEventTarget?.title}</span>!
+                  Your sold quantities will be deducted from your catalog stock.
+                </p>
+                <p className="text-sm font-medium mt-1">Generate a sales report?</p>
+                <p className="text-xs text-muted-foreground">
+                  A CSV summary will be saved to your file folder with revenue, profit, and per-item breakdown.
+                </p>
+              </div>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={endEvent.isPending}
+                  onClick={() => endEvent.mutate({ eventId: endEventTarget!.id, generateReport: false })}
+                >
+                  {endEvent.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  Skip Report
+                </Button>
+                <Button
+                  className="flex-1 bg-orange-500 hover:bg-orange-600"
+                  disabled={endEvent.isPending}
+                  onClick={() => endEvent.mutate({ eventId: endEventTarget!.id, generateReport: true })}
+                >
+                  {endEvent.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}
+                  Yes, Generate Report
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle2 className="w-8 h-8 text-green-500" />
+                </div>
+                <h2 className="text-xl font-bold">All done!</h2>
+                {endEventResult && (
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    {endEventResult.itemsUpdated > 0 && (
+                      <p>✓ Updated stock for <span className="font-medium text-foreground">{endEventResult.itemsUpdated} item{endEventResult.itemsUpdated !== 1 ? "s" : ""}</span></p>
+                    )}
+                    {endEventResult.generated > 0 ? (
+                      <p>✓ Sales report saved to your <span className="font-medium text-foreground">Files</span> folder</p>
+                    ) : (
+                      <p className="text-xs">No report generated (no sales logged or report already exists)</p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button className="w-full" onClick={() => setEndEventTarget(null)}>Done</Button>
+              </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>

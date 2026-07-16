@@ -183,6 +183,7 @@ export interface IStorage {
   getEventsEndingOn(date: Date): Promise<Event[]>;
   getProVendorsWithAssignmentsAtEvent(eventId: number): Promise<string[]>;
   hasExistingReport(userId: string, eventId: number): Promise<boolean>;
+  deductSoldInventoryFromCatalog(vendorId: string, eventId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1410,6 +1411,23 @@ export class DatabaseStorage implements IStorage {
       .from(userFiles)
       .where(and(eq(userFiles.userId, userId), eq(userFiles.storagePath, storagePath)));
     return !!existing;
+  }
+
+  async deductSoldInventoryFromCatalog(vendorId: string, eventId: number): Promise<number> {
+    const result = await pool.query<{ id: number }>(
+      `UPDATE vendor_catalog vc
+       SET quantity = GREATEST(0, vc.quantity - sold.qty)
+       FROM (
+         SELECT catalog_item_id, SUM(quantity_sold)::int AS qty
+         FROM vendor_inventory_sales
+         WHERE vendor_id = $1 AND event_id = $2
+         GROUP BY catalog_item_id
+       ) AS sold
+       WHERE vc.id = sold.catalog_item_id AND vc.vendor_id = $1
+       RETURNING vc.id`,
+      [vendorId, eventId]
+    );
+    return result.rowCount ?? 0;
   }
 }
 
