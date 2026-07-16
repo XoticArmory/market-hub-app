@@ -92,7 +92,10 @@ export default function InventoryEventPage() {
             <div className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-primary" />
               <p className="text-sm font-medium text-primary">
-                {new Date(dateParam).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                {(() => {
+                  const [y, m, d] = dateParam.split("-").map(Number);
+                  return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+                })()}
               </p>
             </div>
           ) : event?.date ? (
