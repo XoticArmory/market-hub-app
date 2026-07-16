@@ -4,7 +4,7 @@ import { logger } from "./lib/logger";
 import { registerRoutes } from "./routes/routes";
 import { pool } from "./db";
 import cron from "node-cron";
-import { generateReportsForEvent } from "./services/market-report";
+import { generateReportsForEvent, generateReportsForEventDay } from "./services/market-report";
 import { storage } from "./storage";
 
 const rawPort = process.env["PORT"];
@@ -25,6 +25,38 @@ const httpServer = createServer(app);
 
 (async () => {
   await registerRoutes(httpServer, app);
+
+  // Daily at 02:00 — multi-day event day rollover:
+  // For every event day (main date + event_dates rows) that expired yesterday,
+  // generate a per-day report for each vendor, deduct that day's sold inventory
+  // from catalog stock, and update assignment quantities so the next day starts fresh.
+  cron.schedule("0 2 * * *", async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    logger.info({ date: yesterday.toISOString().slice(0, 10) }, "day-rollover-cron: processing expired event days");
+    try {
+      const eventDays = await storage.getEventDaysEndingOn(yesterday);
+      if (eventDays.length === 0) {
+        logger.info("day-rollover-cron: no event days ended yesterday");
+        return;
+      }
+      for (const { eventId, date } of eventDays) {
+        try {
+          const vendorIds = await storage.getProVendorsWithAssignmentsAtEvent(eventId);
+          logger.info({ eventId, date: date.toISOString().slice(0, 10), vendorCount: vendorIds.length }, "day-rollover-cron: processing event day");
+          for (const vendorId of vendorIds) {
+            const reportResult = await generateReportsForEventDay(eventId, date, vendorId);
+            const itemsUpdated = await storage.deductSoldInventoryForDay(vendorId, eventId, date);
+            logger.info({ vendorId, eventId, date: date.toISOString().slice(0, 10), ...reportResult, itemsUpdated }, "day-rollover-cron: vendor processed");
+          }
+        } catch (err) {
+          logger.error({ eventId, err }, "day-rollover-cron: error processing event day");
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "day-rollover-cron: unexpected top-level error");
+    }
+  });
 
   // Hourly — after-market report automation: generate reports for vendors who flagged
   // after_market_report = true on assignments for events that ended in the last 25 hours.

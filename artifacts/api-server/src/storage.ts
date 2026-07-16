@@ -165,8 +165,11 @@ export interface IStorage {
   deleteItemCogs(vendorId: string, catalogItemId: number, category: string): Promise<void>;
   getEventOverhead(vendorId: string, eventId: number): Promise<VendorEventOverhead | undefined>;
   upsertEventOverhead(vendorId: string, eventId: number, data: { boothRentalCents: number; travelCents: number; lodgingCents: number }): Promise<VendorEventOverhead>;
-  getCogsSummaryForEvent(vendorId: string, eventId: number): Promise<any>;
+  getCogsSummaryForEvent(vendorId: string, eventId: number, forDate?: Date): Promise<any>;
   getCatalogInventorySummary(vendorId: string): Promise<any>;
+  getEventDaysEndingOn(date: Date): Promise<{ eventId: number; date: Date }[]>;
+  hasExistingDayReport(userId: string, eventId: number, dateSlug: string): Promise<boolean>;
+  deductSoldInventoryForDay(vendorId: string, eventId: number, forDate: Date): Promise<number>;
 
   // Documents
   getDocuments(): Promise<Document[]>;
@@ -1186,7 +1189,7 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async getCogsSummaryForEvent(vendorId: string, eventId: number): Promise<any> {
+  async getCogsSummaryForEvent(vendorId: string, eventId: number, forDate?: Date): Promise<any> {
     // Get all catalog assignments for this vendor at this event
     const assignments = await db.select({
       catalogItemId: vendorCatalogAssignments.catalogItemId,
@@ -1214,12 +1217,19 @@ export class DatabaseStorage implements IStorage {
     // Fall back to legacy vendorInventory table if no sales rows exist for backwards compatibility
     let salesMap = new Map<number, number>();
     if (catalogItemIds.length > 0) {
+      const dateClause = forDate
+        ? `AND sold_at >= $4::date AND sold_at < ($4::date + INTERVAL '1 day')`
+        : "";
+      const params: any[] = forDate
+        ? [vendorId, eventId, catalogItemIds, forDate]
+        : [vendorId, eventId, catalogItemIds];
       const salesResult = await pool.query<{ catalog_item_id: number; quantity_sold: number }>(
         `SELECT catalog_item_id, COALESCE(SUM(quantity_sold), 0)::int AS quantity_sold
          FROM vendor_inventory_sales
          WHERE vendor_id = $1 AND event_id = $2 AND catalog_item_id = ANY($3::int[])
+         ${dateClause}
          GROUP BY catalog_item_id`,
-        [vendorId, eventId, catalogItemIds]
+        params
       );
       for (const row of salesResult.rows) {
         salesMap.set(row.catalog_item_id, row.quantity_sold);
@@ -1428,6 +1438,70 @@ export class DatabaseStorage implements IStorage {
       [vendorId, eventId]
     );
     return result.rowCount ?? 0;
+  }
+
+  // Deduct only that day's sales from catalog stock AND update assignment quantities
+  // so the next event day starts fresh with remaining inventory.
+  async deductSoldInventoryForDay(vendorId: string, eventId: number, forDate: Date): Promise<number> {
+    const catalogResult = await pool.query<{ id: number }>(
+      `UPDATE vendor_catalog vc
+       SET quantity = GREATEST(0, vc.quantity - sold.qty)
+       FROM (
+         SELECT catalog_item_id, SUM(quantity_sold)::int AS qty
+         FROM vendor_inventory_sales
+         WHERE vendor_id = $1 AND event_id = $2
+           AND sold_at >= $3::date AND sold_at < ($3::date + INTERVAL '1 day')
+         GROUP BY catalog_item_id
+       ) AS sold
+       WHERE vc.id = sold.catalog_item_id AND vc.vendor_id = $1
+       RETURNING vc.id`,
+      [vendorId, eventId, forDate]
+    );
+
+    // Update assignment quantities so the next day reflects remaining stock
+    await pool.query(
+      `UPDATE vendor_catalog_assignments vca
+       SET quantity_assigned = GREATEST(0, vca.quantity_assigned - sold.qty)
+       FROM (
+         SELECT catalog_item_id, SUM(quantity_sold)::int AS qty
+         FROM vendor_inventory_sales
+         WHERE vendor_id = $1 AND event_id = $2
+           AND sold_at >= $3::date AND sold_at < ($3::date + INTERVAL '1 day')
+         GROUP BY catalog_item_id
+       ) AS sold
+       WHERE vca.catalog_item_id = sold.catalog_item_id
+         AND vca.event_id = $2 AND vca.vendor_id = $1`,
+      [vendorId, eventId, forDate]
+    );
+
+    return catalogResult.rowCount ?? 0;
+  }
+
+  // Returns all event days (main event date + additional event_dates) that fell on the given calendar date.
+  async getEventDaysEndingOn(date: Date): Promise<{ eventId: number; date: Date }[]> {
+    const result = await pool.query<{ event_id: number; day_date: Date }>(
+      `SELECT e.id AS event_id, e.date AS day_date
+       FROM events e
+       WHERE e.canceled_at IS NULL
+         AND e.date >= $1::date AND e.date < ($1::date + INTERVAL '1 day')
+       UNION ALL
+       SELECT ed.event_id, ed.date AS day_date
+       FROM event_dates ed
+       JOIN events e ON e.id = ed.event_id
+       WHERE e.canceled_at IS NULL
+         AND ed.date >= $1::date AND ed.date < ($1::date + INTERVAL '1 day')`,
+      [date]
+    );
+    return result.rows.map(r => ({ eventId: r.event_id, date: new Date(r.day_date) }));
+  }
+
+  async hasExistingDayReport(userId: string, eventId: number, dateSlug: string): Promise<boolean> {
+    const storagePath = `user-files/${userId}/market-report-${eventId}-${dateSlug}.csv`;
+    const [existing] = await db
+      .select({ id: userFiles.id })
+      .from(userFiles)
+      .where(and(eq(userFiles.userId, userId), eq(userFiles.storagePath, storagePath)));
+    return !!existing;
   }
 }
 

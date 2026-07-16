@@ -78,6 +78,95 @@ function buildMarketReportCsv(eventTitle: string, eventDate: Date, summary: any)
   return [header, ...itemRows, ...summaryRows].join("\n");
 }
 
+function toDateSlug(date: Date): string {
+  return date.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+// Per-day report for one specific calendar date of a multi-day event.
+// Filters sales to that date only. Saves as market-report-{eventId}-{YYYY-MM-DD}.csv.
+export async function generateReportsForEventDay(
+  eventId: number,
+  forDate: Date,
+  targetVendorId?: string
+): Promise<{ generated: number; skipped: number }> {
+  const supabase = getStorageClient();
+  if (!supabase) {
+    logger.warn("market-report-day: Supabase storage client not configured — skipping");
+    return { generated: 0, skipped: 0 };
+  }
+
+  const event = await storage.getEvent(eventId);
+  if (!event) {
+    logger.warn({ eventId }, "market-report-day: event not found");
+    return { generated: 0, skipped: 0 };
+  }
+
+  const dateSlug = toDateSlug(forDate);
+  const vendorIds = targetVendorId
+    ? [targetVendorId]
+    : await storage.getProVendorsWithAssignmentsAtEvent(eventId);
+
+  let generated = 0;
+  let skipped = 0;
+
+  for (const vendorId of vendorIds) {
+    try {
+      const alreadyExists = await storage.hasExistingDayReport(vendorId, eventId, dateSlug);
+      if (alreadyExists) {
+        skipped++;
+        continue;
+      }
+
+      const summary = await storage.getCogsSummaryForEvent(vendorId, eventId, forDate);
+
+      if (!summary.items || summary.items.length === 0) {
+        logger.info({ vendorId, eventId, dateSlug }, "market-report-day: no sales for this day — skipping");
+        skipped++;
+        continue;
+      }
+
+      const csv = buildMarketReportCsv(event.title, forDate, summary);
+      const csvBuffer = Buffer.from(csv, "utf-8");
+
+      const storagePath = `user-files/${vendorId}/market-report-${eventId}-${dateSlug}.csv`;
+      const { error: uploadError } = await supabase.storage
+        .from(DOC_BUCKET)
+        .upload(storagePath, csvBuffer, { contentType: "text/csv", upsert: true });
+
+      if (uploadError) {
+        logger.error({ vendorId, eventId, dateSlug, err: uploadError.message }, "market-report-day: upload failed");
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage.from(DOC_BUCKET).getPublicUrl(storagePath);
+
+      const dateLabel = forDate.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      const title = `Market Report — ${event.title} — ${dateLabel}`;
+
+      await storage.createUserFile({
+        userId: vendorId,
+        title,
+        fileUrl: urlData.publicUrl,
+        fileName: `market-report-${eventId}-${dateSlug}.csv`,
+        fileSize: csvBuffer.length,
+        fileType: "text/csv",
+        storagePath,
+      });
+
+      generated++;
+      logger.info({ vendorId, eventId, dateSlug }, "market-report-day: report generated successfully");
+    } catch (err) {
+      logger.error({ vendorId, eventId, dateSlug, err }, "market-report-day: unexpected error for vendor");
+    }
+  }
+
+  return { generated, skipped };
+}
+
 export async function generateReportsForEvent(
   eventId: number,
   targetVendorId?: string
