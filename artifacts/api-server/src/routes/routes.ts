@@ -1082,7 +1082,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           eventId,
         });
       } else {
-        // Pro user: notify them to link their inventory
+        // Pro user: create a minimal vendor post so they appear on the event page immediately
+        const existingPost = await storage.getVendorPostForUser(eventId, reg.vendorId);
+        if (!existingPost) {
+          await storage.createVendorPost({
+            eventId,
+            vendorId: reg.vendorId,
+            itemsDescription: vendorDisplayName,
+            isVendorPro: true,
+            imageUrl: null,
+            imageUrls: [],
+          });
+        }
+        await storage.updateVendorSpacesUsed(eventId, 1);
         await storage.createNotification({
           userId: reg.vendorId,
           fromUserId: userId,

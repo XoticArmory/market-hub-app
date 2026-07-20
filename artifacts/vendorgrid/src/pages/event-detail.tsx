@@ -331,6 +331,7 @@ export default function EventDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
       qc.invalidateQueries({ queryKey: ["/api/events/:id", eventId] });
+      qc.invalidateQueries({ queryKey: [api.vendorPosts.listByEvent.path, eventId] });
       toast({ title: "Application approved!" });
     },
     onError: () => toast({ title: "Failed to approve.", variant: "destructive" }),
