@@ -582,6 +582,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { ...p, vendorName: vp?.businessName || u.name, vendorAvatar: u.avatar };
     }));
     const registrations = await storage.getVendorRegistrations(eventId);
+    // Derive spaces_used from actual approved/paid registrations to keep the counter accurate
+    const approvedCount = registrations.filter(r => r.status === 'approved' || r.status === 'paid').length;
     const isFeatured = isPro(creatorProfile);
     const creatorWebsiteUrl = isFeatured ? (creatorProfile?.websiteUrl || null) : null;
     const requesterId = req.user?.claims?.sub;
@@ -591,7 +593,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const canSeeCode = isRequesterAdmin || (requesterId === event.createdBy && (isPro(requesterProfile) || isRequesterAdmin));
     const { registrationCode: rawCode, ...eventWithoutCode } = event;
     const responseEvent = canSeeCode ? { ...event } : { ...eventWithoutCode };
-    res.json({ ...responseEvent, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
+    res.json({ ...responseEvent, vendorSpacesUsed: approvedCount, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
   });
 
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
@@ -936,7 +938,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         })
     );
 
-    res.json([...enriched, ...syntheticPosts]);
+    // Include vendors approved via intent/form registration who have no post and no catalog assignments
+    const catalogSyntheticVendorIds = new Set(allCatalogVendors.map(v => v.vendorId));
+    const allRegistrations = await storage.getVendorRegistrations(eventId);
+    const approvedWithNoPost = allRegistrations.filter(r =>
+      (r.status === 'approved' || r.status === 'paid') &&
+      !postVendorIds.has(r.vendorId) &&
+      !catalogSyntheticVendorIds.has(r.vendorId)
+    );
+    const registrationSyntheticPosts = await Promise.all(
+      approvedWithNoPost.map(async (r) => {
+        const u = await enrichUser(r.vendorId);
+        const vendorProfile = await storage.getUserProfile(r.vendorId);
+        const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+        return {
+          id: null as number | null,
+          vendorId: r.vendorId,
+          eventId,
+          itemsDescription: null as string | null,
+          imageUrl: null as string | null,
+          imageUrls: [] as string[],
+          isVendorPro: isProVendor,
+          isCatalogOnly: false,
+          createdAt: null as Date | null,
+          vendorName: vendorProfile?.businessName || u.name,
+          vendorAvatar: u.avatar,
+          vendorWebsiteUrl: isProVendor ? (vendorProfile?.websiteUrl || null) : null,
+          catalogAssignments: [] as any[],
+        };
+      })
+    );
+
+    res.json([...enriched, ...syntheticPosts, ...registrationSyntheticPosts]);
   });
 
   app.post(api.vendorPosts.create.path, isAuthenticated, async (req: any, res) => {
