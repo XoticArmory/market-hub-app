@@ -192,6 +192,76 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Bot-intercept for the real event URL — social crawlers hit /events/:id directly.
+  // The proxy routes /events/* to this Express server (higher-priority path than the
+  // frontend's "/" catch-all), so both bots and regular users come here.
+  app.get("/events/:id", async (req, res, next) => {
+    const ua = req.headers["user-agent"] || "";
+    const eventId = parseInt(req.params.id, 10);
+    if (isNaN(eventId)) return next();
+
+    if (BOT_RE.test(ua)) {
+      // Social crawler — serve event-specific OG meta page
+      try {
+        const event = await storage.getEvent(eventId);
+        if (!event) return next();
+        const host = getHost(req);
+        const canonicalUrl = `${host}/events/${eventId}`;
+        const image = event.bannerUrl || `${host}/og-image.png`;
+        const dateStr = event.date
+          ? new Date(event.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+          : "";
+        const description = esc([event.location, dateStr].filter(Boolean).join(" · "));
+        const title = esc(event.title);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=300");
+        return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${title} — VendorGrid</title>
+  <meta name="description" content="${description}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="${esc(canonicalUrl)}" />
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${description}" />
+  <meta property="og:image" content="${esc(image)}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="VendorGrid" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${title}" />
+  <meta name="twitter:description" content="${description}" />
+  <meta name="twitter:image" content="${esc(image)}" />
+  <meta http-equiv="refresh" content="0; url=${esc(canonicalUrl)}" />
+</head>
+<body>
+  <script>window.location.replace(${JSON.stringify(canonicalUrl)});</script>
+  <p>Redirecting to <a href="${esc(canonicalUrl)}">${title}</a>…</p>
+</body>
+</html>`);
+      } catch {
+        return next();
+      }
+    } else {
+      // Regular user — serve the frontend SPA so the React router can take over.
+      // In dev the source index.html is two levels up; in production the built one
+      // lives in artifacts/vendorgrid/dist/public relative to the monorepo root.
+      try {
+        const isDev = process.env.NODE_ENV !== "production";
+        const indexPath = isDev
+          ? path.resolve(process.cwd(), "..", "..", "artifacts", "vendorgrid", "index.html")
+          : path.resolve(process.cwd(), "artifacts", "vendorgrid", "dist", "public", "index.html");
+        const html = fs.readFileSync(indexPath, "utf-8");
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        return res.send(html);
+      } catch {
+        return next();
+      }
+    }
+  });
+
   await setupAuth(app);
   registerAuthRoutes(app);
 
