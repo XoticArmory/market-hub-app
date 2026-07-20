@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, ShoppingCart, Package, Loader2, Plus, TrendingUp, DollarSign, Calendar } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Package, Loader2, Plus, TrendingUp, DollarSign, Calendar, Pencil } from "lucide-react";
 
 interface EventSummaryItem {
   catalogItemId: number;
@@ -49,6 +49,21 @@ export default function InventoryEventPage() {
   const [selectedItem, setSelectedItem] = useState<EventSummaryItem | null>(null);
   const [saleQty, setSaleQty] = useState("");
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [editItem, setEditItem] = useState<EventSummaryItem | null>(null);
+  const [editForm, setEditForm] = useState({ itemName: "", price: "", quantityAssigned: "", totalSold: "" });
+
+  function openEdit(item: EventSummaryItem) {
+    setEditItem(item);
+    setEditForm({
+      itemName: item.itemName,
+      price: String(item.priceCents / 100),
+      quantityAssigned: String(item.quantityAssigned),
+      totalSold: String(item.totalSold),
+    });
+    setEditOpen(true);
+  }
+
   const { data: event } = useQuery<Event>({
     queryKey: [`/api/events/${eid}`],
   });
@@ -73,6 +88,38 @@ export default function InventoryEventPage() {
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  const editItemMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("PATCH", "/api/vendor/inventory/event-item", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [summaryUrl] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
+      toast({ title: "Item updated!" });
+      setEditOpen(false);
+      setEditItem(null);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  function handleSaveEdit() {
+    if (!editItem) return;
+    const newName = editForm.itemName.trim();
+    const newPrice = Math.round(Number(editForm.price) * 100);
+    const newQtyAssigned = Number(editForm.quantityAssigned);
+    const newTotalSold = Number(editForm.totalSold);
+    if (!newName) { toast({ title: "Item name required", variant: "destructive" }); return; }
+    if (newQtyAssigned < 0 || newTotalSold < 0) { toast({ title: "Quantities cannot be negative", variant: "destructive" }); return; }
+    if (newTotalSold > newQtyAssigned) { toast({ title: "Sold cannot exceed quantity brought", variant: "destructive" }); return; }
+    editItemMutation.mutate({
+      catalogItemId: editItem.catalogItemId,
+      eventId: eid,
+      itemName: newName,
+      priceCents: newPrice,
+      quantityAssigned: newQtyAssigned,
+      totalSold: newTotalSold,
+      ...(dateParam ? { date: dateParam } : {}),
+    });
+  }
 
   const totalRevenue = summary.reduce((s, item) => s + item.revenueCents, 0);
   const totalProfit = summary.reduce((s, item) => s + item.profitCents, 0);
@@ -207,20 +254,30 @@ export default function InventoryEventPage() {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-shrink-0"
-                      disabled={remaining <= 0}
-                      onClick={() => {
-                        setSelectedItem(item);
-                        setSaleQty("");
-                        setLogSaleOpen(true);
-                      }}
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Log Sale
-                    </Button>
+                    <div className="flex flex-col gap-1.5 flex-shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={remaining <= 0}
+                        onClick={() => {
+                          setSelectedItem(item);
+                          setSaleQty("");
+                          setLogSaleOpen(true);
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Log Sale
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={() => openEdit(item)}
+                      >
+                        <Pencil className="w-3.5 h-3.5 mr-1" />
+                        Edit
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -293,6 +350,71 @@ export default function InventoryEventPage() {
               {logSale.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               <ShoppingCart className="w-4 h-4 mr-2" />
               Log Sale
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT ITEM DIALOG */}
+      <Dialog open={editOpen} onOpenChange={open => { if (!open) { setEditOpen(false); setEditItem(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Item name</Label>
+              <Input
+                value={editForm.itemName}
+                onChange={e => setEditForm(f => ({ ...f, itemName: e.target.value }))}
+                placeholder="e.g. Handmade Candle"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Sell price ($)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editForm.price}
+                onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Quantity brought</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editForm.quantityAssigned}
+                  onChange={e => setEditForm(f => ({ ...f, quantityAssigned: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Quantity sold</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max={editForm.quantityAssigned}
+                  value={editForm.totalSold}
+                  onChange={e => setEditForm(f => ({ ...f, totalSold: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            {Number(editForm.quantityAssigned) > 0 && (
+              <div className="p-2 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+                Remaining: <span className="font-medium text-foreground">{Math.max(0, Number(editForm.quantityAssigned) - Number(editForm.totalSold))}</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => { setEditOpen(false); setEditItem(null); }}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={editItemMutation.isPending}>
+              {editItemMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1710,6 +1710,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  app.patch('/api/vendor/inventory/event-item', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      if (!(await requirePro(req, res))) return;
+      const { catalogItemId, eventId, itemName, priceCents, quantityAssigned, totalSold, date } = req.body;
+      if (!catalogItemId || !eventId) return res.status(400).json({ message: "catalogItemId and eventId required" });
+      const catalogItem = await storage.getCatalogItem(Number(catalogItemId));
+      if (!catalogItem || catalogItem.vendorId !== userId) return res.status(403).json({ message: "Catalog item not found or not owned by you" });
+      await storage.updateEventItem(
+        userId,
+        Number(catalogItemId),
+        Number(eventId),
+        {
+          ...(itemName !== undefined ? { itemName } : {}),
+          ...(priceCents !== undefined ? { priceCents: Number(priceCents) } : {}),
+          ...(quantityAssigned !== undefined ? { quantityAssigned: Number(quantityAssigned) } : {}),
+          ...(totalSold !== undefined ? { totalSold: Number(totalSold) } : {}),
+        },
+        date || undefined
+      );
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.get('/api/vendor/inventory/event-summary/:eventId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

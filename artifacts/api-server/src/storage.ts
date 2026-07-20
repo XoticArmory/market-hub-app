@@ -134,6 +134,7 @@ export interface IStorage {
   logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale>;
   getInventorySales(vendorId: string, eventId?: number): Promise<(VendorInventorySale & { itemName: string })[]>;
   getEventInventorySummary(vendorId: string, eventId: number, forDate?: Date): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]>;
+  updateEventItem(vendorId: string, catalogItemId: number, eventId: number, updates: { itemName?: string; priceCents?: number; quantityAssigned?: number; totalSold?: number }, forDate?: string): Promise<void>;
   getPendingAfterMarketReportAssignments(): Promise<{ vendorId: string; eventId: number }[]>;
   markAfterMarketReportGenerated(vendorId: string, eventId: number): Promise<void>;
 
@@ -925,6 +926,54 @@ export class DatabaseStorage implements IStorage {
       .values({ catalogItemId, eventId, vendorId, quantityAssigned, afterMarketReport: afterMarketReport ?? false })
       .returning();
     return assignment;
+  }
+
+  async updateEventItem(
+    vendorId: string,
+    catalogItemId: number,
+    eventId: number,
+    updates: { itemName?: string; priceCents?: number; quantityAssigned?: number; totalSold?: number },
+    forDate?: string
+  ): Promise<void> {
+    // 1. Update catalog name / price
+    if (updates.itemName !== undefined || updates.priceCents !== undefined) {
+      const catalogUpdates: any = {};
+      if (updates.itemName !== undefined) catalogUpdates.itemName = updates.itemName;
+      if (updates.priceCents !== undefined) catalogUpdates.priceCents = updates.priceCents;
+      await db.update(vendorCatalog)
+        .set(catalogUpdates)
+        .where(and(eq(vendorCatalog.id, catalogItemId), eq(vendorCatalog.vendorId, vendorId)));
+    }
+
+    // 2. Update quantity_assigned on the assignment row
+    if (updates.quantityAssigned !== undefined) {
+      await pool.query(
+        `UPDATE vendor_catalog_assignments SET quantity_assigned = $1 WHERE catalog_item_id = $2 AND event_id = $3 AND vendor_id = $4`,
+        [updates.quantityAssigned, catalogItemId, eventId, vendorId]
+      );
+    }
+
+    // 3. Replace sold quantity: delete existing sales then insert a single aggregate row
+    if (updates.totalSold !== undefined) {
+      if (forDate) {
+        await pool.query(
+          `DELETE FROM vendor_inventory_sales WHERE vendor_id = $1 AND catalog_item_id = $2 AND event_id = $3 AND sold_at >= $4::date AND sold_at < ($4::date + INTERVAL '1 day')`,
+          [vendorId, catalogItemId, eventId, forDate]
+        );
+      } else {
+        await pool.query(
+          `DELETE FROM vendor_inventory_sales WHERE vendor_id = $1 AND catalog_item_id = $2 AND event_id = $3`,
+          [vendorId, catalogItemId, eventId]
+        );
+      }
+      if (updates.totalSold > 0) {
+        const soldAt = forDate ? `${forDate}T12:00:00` : new Date().toISOString();
+        await pool.query(
+          `INSERT INTO vendor_inventory_sales (vendor_id, catalog_item_id, event_id, quantity_sold, sold_at) VALUES ($1, $2, $3, $4, $5)`,
+          [vendorId, catalogItemId, eventId, updates.totalSold, soldAt]
+        );
+      }
+    }
   }
 
   async logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale> {
