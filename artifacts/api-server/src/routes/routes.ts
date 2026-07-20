@@ -575,12 +575,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const eventIds = allEvents.map(e => e.id);
     const creatorIds = [...new Set(allEvents.map(e => e.createdBy))];
 
-    // 5 bulk queries total regardless of event count (was N*4 queries)
-    const [allExtraDates, allAttendance, allProfiles, allCreators] = await Promise.all([
+    // 6 bulk queries total regardless of event count (was N*4 queries)
+    const [allExtraDates, allAttendance, allProfiles, allCreators, approvedRegCounts] = await Promise.all([
       storage.getBulkEventDates(eventIds),
       storage.getBulkEventAttendance(eventIds),
       storage.getBulkUserProfiles(creatorIds),
       authStorage.getUsers(creatorIds),
+      storage.getBulkApprovedRegistrationCounts(eventIds),
     ]);
 
     let userAttendance: import('@workspace/db').EventAttendance[] = [];
@@ -617,6 +618,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         extraDates: extraDatesMap.get(e.id) ?? [],
         attendingCount: attendingCountMap.get(e.id) ?? 0,
         interestedCount: interestedCountMap.get(e.id) ?? 0,
+        vendorSpacesUsed: approvedRegCounts.get(e.id) ?? 0,
         userStatus: userAttendanceMap.get(e.id) ?? null,
         isFeatured,
       };

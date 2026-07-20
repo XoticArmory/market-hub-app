@@ -84,6 +84,7 @@ export interface IStorage {
   upsertEventMap(eventId: number, mapData: any): Promise<EventMap>;
 
   // Vendor Registrations
+  getBulkApprovedRegistrationCounts(eventIds: number[]): Promise<Map<number, number>>;
   getVendorRegistrations(eventId: number): Promise<VendorRegistration[]>;
   getVendorRegistrationById(id: number): Promise<VendorRegistration | undefined>;
   getVendorRegistrationForUser(eventId: number, vendorId: string): Promise<VendorRegistration | undefined>;
@@ -343,6 +344,21 @@ export class DatabaseStorage implements IStorage {
   async getBulkUserProfiles(userIds: string[]): Promise<UserProfile[]> {
     if (userIds.length === 0) return [];
     return await db.select().from(userProfiles).where(inArray(userProfiles.userId, userIds));
+  }
+
+  async getBulkApprovedRegistrationCounts(eventIds: number[]): Promise<Map<number, number>> {
+    if (eventIds.length === 0) return new Map();
+    const rows = await db
+      .select({ eventId: vendorRegistrations.eventId, count: sql<number>`cast(count(*) as int)` })
+      .from(vendorRegistrations)
+      .where(and(
+        inArray(vendorRegistrations.eventId, eventIds),
+        sql`status in ('approved', 'paid')`
+      ))
+      .groupBy(vendorRegistrations.eventId);
+    const map = new Map<number, number>();
+    for (const row of rows) map.set(row.eventId, row.count);
+    return map;
   }
 
   async getUserStatusForAllEvents(userId: string, eventIds: number[]): Promise<EventAttendance[]> {
