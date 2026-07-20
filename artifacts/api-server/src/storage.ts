@@ -131,7 +131,7 @@ export interface IStorage {
   getCatalogAssignmentsForEvent(eventId: number, vendorId: string): Promise<(VendorCatalogAssignment & { item: VendorCatalogItem })[]>;
 
   // Inventory Sales
-  logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale>;
+  logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number, forDate?: string): Promise<VendorInventorySale>;
   getInventorySales(vendorId: string, eventId?: number): Promise<(VendorInventorySale & { itemName: string })[]>;
   getEventInventorySummary(vendorId: string, eventId: number, forDate?: Date): Promise<{ catalogItemId: number; itemName: string; quantityAssigned: number; totalSold: number; priceCents: number; costCents: number; revenueCents: number; profitCents: number; afterMarketReport: boolean }[]>;
   updateEventItem(vendorId: string, catalogItemId: number, eventId: number, updates: { itemName?: string; priceCents?: number; quantityAssigned?: number; totalSold?: number }, forDate?: string): Promise<void>;
@@ -976,9 +976,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number): Promise<VendorInventorySale> {
+  async logInventorySale(vendorId: string, catalogItemId: number, eventId: number, quantitySold: number, forDate?: string): Promise<VendorInventorySale> {
+    const soldAt = forDate ? new Date(`${forDate}T12:00:00`) : new Date();
     const [sale] = await db.insert(vendorInventorySales)
-      .values({ vendorId, catalogItemId, eventId, quantitySold })
+      .values({ vendorId, catalogItemId, eventId, quantitySold, soldAt })
       .returning();
     return sale;
   }

@@ -1683,7 +1683,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = req.user.claims.sub;
       if (!(await requirePro(req, res))) return;
-      const { catalogItemId, eventId, quantitySold } = req.body;
+      const { catalogItemId, eventId, quantitySold, date } = req.body;
       if (!catalogItemId || !eventId || quantitySold === undefined) {
         return res.status(400).json({ message: "catalogItemId, eventId and quantitySold required" });
       }
@@ -1708,18 +1708,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const quantityAssigned: number = assignResult.rows[0].quantity_assigned;
 
-      // Verify remaining stock is sufficient
-      const soldResult = await pool.query<any>(
-        `SELECT COALESCE(SUM(quantity_sold),0)::int AS total FROM vendor_inventory_sales WHERE catalog_item_id = $1 AND event_id = $2 AND vendor_id = $3`,
-        [catId, evId, userId]
-      );
+      // Verify remaining stock is sufficient — scope to date when a day filter is active
+      let soldResult: any;
+      if (date) {
+        soldResult = await pool.query<any>(
+          `SELECT COALESCE(SUM(quantity_sold),0)::int AS total FROM vendor_inventory_sales WHERE catalog_item_id = $1 AND event_id = $2 AND vendor_id = $3 AND sold_at >= $4::date AND sold_at < ($4::date + INTERVAL '1 day')`,
+          [catId, evId, userId, date]
+        );
+      } else {
+        soldResult = await pool.query<any>(
+          `SELECT COALESCE(SUM(quantity_sold),0)::int AS total FROM vendor_inventory_sales WHERE catalog_item_id = $1 AND event_id = $2 AND vendor_id = $3`,
+          [catId, evId, userId]
+        );
+      }
       const alreadySold: number = soldResult.rows[0]?.total ?? 0;
       const remaining = quantityAssigned - alreadySold;
       if (qty > remaining) {
         return res.status(400).json({ message: `Only ${remaining} unit(s) remaining — cannot log ${qty}` });
       }
 
-      const sale = await storage.logInventorySale(userId, catId, evId, qty);
+      const sale = await storage.logInventorySale(userId, catId, evId, qty, date || undefined);
       res.json(sale);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

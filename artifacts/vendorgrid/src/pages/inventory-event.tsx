@@ -344,6 +344,7 @@ export default function InventoryEventPage() {
                   catalogItemId: selectedItem.catalogItemId,
                   eventId: eid,
                   quantitySold: Number(saleQty),
+                  ...(dateParam ? { date: dateParam } : {}),
                 });
               }}
             >
