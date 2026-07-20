@@ -25,6 +25,7 @@ app.use(
   }),
 );
 app.use(cors({ origin: true, credentials: true }));
+app.use((_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 app.use(
   express.json({
     // @ts-ignore
