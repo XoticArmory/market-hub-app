@@ -637,6 +637,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const eventId = Number(req.params.id);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'draft') {
+      const requesterId = req.user?.claims?.sub;
+      const requesterProfile = requesterId ? await storage.getUserProfile(requesterId) : null;
+      if (!requesterProfile?.isAdmin) return res.status(404).json({ message: "Event not found" });
+    }
     const creator = await enrichUser(event.createdBy);
     const creatorProfile = await storage.getUserProfile(event.createdBy);
     const attendance = await storage.getEventAttendance(eventId);

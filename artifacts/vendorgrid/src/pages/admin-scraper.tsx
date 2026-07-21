@@ -210,7 +210,7 @@ function EditDraftDialog({
 }
 
 export default function AdminScraperPage() {
-  const { data: profileData } = useRealProfile();
+  const { data: profileData, isLoading: profileLoading } = useRealProfile();
   const profile = profileData?.profile;
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -282,6 +282,14 @@ export default function AdminScraperPage() {
     },
     onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
   });
+
+  if (profileLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (!profile?.isAdmin) {
     window.location.href = "/";
