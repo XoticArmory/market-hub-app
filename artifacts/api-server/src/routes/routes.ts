@@ -776,6 +776,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!title || !date || !location) return res.status(400).json({ message: "title, date and location are required" });
     const parsedDate = new Date(date);
     if (isNaN(parsedDate.getTime())) return res.status(400).json({ message: "Invalid date" });
+    const normalizedTitle = String(title).trim().toLowerCase();
+    const incomingDay = parsedDate.toISOString().slice(0, 10);
+    const existingDrafts = await storage.getDraftEvents();
+    const duplicate = existingDrafts.find(d =>
+      d.title.trim().toLowerCase() === normalizedTitle &&
+      new Date(d.date).toISOString().slice(0, 10) === incomingDay
+    );
+    if (duplicate) return res.status(409).json({ message: "Already in drafts" });
     const event = await storage.createEvent({
       title: String(title),
       description: String(description || ''),

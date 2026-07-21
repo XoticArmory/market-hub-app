@@ -262,7 +262,14 @@ export default function AdminScraperPage() {
       setSavedIds(s => new Set([...s, ev.title]));
       toast({ title: "Draft created", description: `"${ev.title}" saved to Drafts tab.` });
     },
-    onError: (e: any) => toast({ title: "Failed to create draft", description: e.message, variant: "destructive" }),
+    onError: (e: any, ev: ScrapedEvent) => {
+      if (typeof e?.message === "string" && e.message.startsWith("409:")) {
+        setSavedIds(s => new Set([...s, ev.title]));
+        toast({ title: "Already saved", description: "This event is already in your Drafts." });
+      } else {
+        toast({ title: "Failed to create draft", description: e.message, variant: "destructive" });
+      }
+    },
   });
 
   const publishDraft = useMutation({
@@ -370,7 +377,14 @@ export default function AdminScraperPage() {
             <div className="space-y-3">
               <p className="text-sm font-semibold text-muted-foreground">{results.length} event{results.length === 1 ? "" : "s"} found</p>
               {results.map((ev, i) => {
-                const alreadySaved = savedIds.has(ev.title);
+                const normalizedTitle = ev.title.trim().toLowerCase();
+                const evDay = ev.date ? ev.date.slice(0, 10) : null;
+                const alreadySaved = savedIds.has(ev.title) ||
+                  drafts.some(d =>
+                    d.title.trim().toLowerCase() === normalizedTitle &&
+                    evDay !== null &&
+                    new Date(d.date).toISOString().slice(0, 10) === evDay
+                  );
                 return (
                   <Card key={i} className={`transition-all ${alreadySaved ? 'opacity-60' : ''}`} data-testid={`scraped-event-${i}`}>
                     <CardContent className="pt-5 pb-4">
@@ -422,7 +436,7 @@ export default function AdminScraperPage() {
                           data-testid={`button-create-draft-${i}`}
                         >
                           {alreadySaved ? (
-                            <><CheckCircle className="w-4 h-4 mr-1 text-green-600" />Saved</>
+                            <><CheckCircle className="w-4 h-4 mr-1 text-green-600" />Already saved</>
                           ) : createDraft.isPending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
