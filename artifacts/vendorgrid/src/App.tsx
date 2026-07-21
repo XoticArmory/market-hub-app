@@ -25,6 +25,7 @@ import AddEvent from "@/pages/add-event";
 import Chat from "@/pages/chat";
 import ProfilePage from "@/pages/profile";
 import AdminPage from "@/pages/admin";
+import AdminScraperPage from "@/pages/admin-scraper";
 import SetupPage from "@/pages/setup";
 import TourPage from "@/pages/tour";
 import AuthPage from "@/pages/auth";
@@ -419,6 +420,7 @@ function Router() {
       <Route path="/chat" component={Chat} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/admin" component={AdminPage} />
+      <Route path="/admin/scraper" component={AdminScraperPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/tour" component={TourPage} />
       <Route path="/setup" component={SetupPage} />

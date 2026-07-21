@@ -48,6 +48,8 @@ export const events = pgTable("events", {
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   canceledAt: timestamp("canceled_at"),
+  status: text("status").default("published"),
+  scrapedSource: text("scraped_source"),
 });
 
 export const eventDates = pgTable("event_dates", {

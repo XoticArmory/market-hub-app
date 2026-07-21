@@ -758,6 +758,177 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(updated);
   });
 
+  // ---- ADMIN: DRAFT EVENTS ----
+  app.get('/api/admin/draft-events', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const drafts = await storage.getDraftEvents();
+    res.json(drafts);
+  });
+
+  app.post('/api/admin/draft-events', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { title, description, location, areaCode, date, vendorSpaces, contactEmail, eventWebsiteUrl, scrapedSource } = req.body;
+    if (!title || !date || !location) return res.status(400).json({ message: "title, date and location are required" });
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) return res.status(400).json({ message: "Invalid date" });
+    const event = await storage.createEvent({
+      title: String(title),
+      description: String(description || ''),
+      location: String(location),
+      areaCode: areaCode ? String(areaCode) : null,
+      date: parsedDate,
+      vendorSpaces: Number(vendorSpaces) || 0,
+      contactEmail: contactEmail ? String(contactEmail) : null,
+      eventWebsiteUrl: eventWebsiteUrl ? String(eventWebsiteUrl) : null,
+      createdBy: req.user.claims.sub,
+      status: 'draft',
+      scrapedSource: scrapedSource ? String(scrapedSource) : null,
+    } as any);
+    res.json(event);
+  });
+
+  app.post('/api/admin/draft-events/:id/publish', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'draft') return res.status(400).json({ message: "Event is not a draft" });
+    const updated = await storage.publishDraftEvent(id);
+    res.json(updated);
+  });
+
+  app.delete('/api/admin/draft-events/:id', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'draft') return res.status(400).json({ message: "Only drafts can be hard-deleted" });
+    await storage.hardDeleteEvent(id);
+    res.json({ ok: true });
+  });
+
+  // ---- ADMIN: SCRAPER ----
+  app.post('/api/admin/scrape-events', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { zipCode } = req.body;
+    if (!zipCode || typeof zipCode !== 'string') return res.status(400).json({ message: "zipCode required" });
+    const clean = zipCode.trim().replace(/\D/g, '').slice(0, 10);
+    if (!clean) return res.status(400).json({ message: "Invalid zip code" });
+
+    const results: any[] = [];
+    const seen = new Set<string>();
+
+    // Helper: extract JSON-LD Event objects from raw HTML
+    function extractJsonLd(html: string): any[] {
+      const events: any[] = [];
+      const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+      let m;
+      while ((m = re.exec(html)) !== null) {
+        try {
+          const obj = JSON.parse(m[1]);
+          const items = Array.isArray(obj) ? obj : [obj];
+          for (const item of items) {
+            if (item['@type'] === 'Event' || item['@type'] === 'SocialEvent') events.push(item);
+            if (item['@graph']) {
+              for (const g of item['@graph']) {
+                if (g['@type'] === 'Event' || g['@type'] === 'SocialEvent') events.push(g);
+              }
+            }
+          }
+        } catch { /* ignore malformed JSON */ }
+      }
+      return events;
+    }
+
+    function normalizeEvent(ld: any, source: string) {
+      const name: string = ld.name || ld.headline || '';
+      if (!name) return null;
+      const key = name.toLowerCase().trim();
+      if (seen.has(key)) return null;
+      seen.add(key);
+
+      const startDate = ld.startDate ? new Date(ld.startDate) : null;
+      const loc = ld.location;
+      let location = '';
+      if (typeof loc === 'string') location = loc;
+      else if (loc?.name) location = [loc.name, loc?.address?.streetAddress, loc?.address?.addressLocality, loc?.address?.addressRegion].filter(Boolean).join(', ');
+      else if (loc?.address) location = [loc.address.streetAddress, loc.address.addressLocality, loc.address.addressRegion].filter(Boolean).join(', ');
+
+      const url = ld.url || ld['@id'] || '';
+      const description = ld.description || '';
+
+      return {
+        title: name,
+        date: startDate?.toISOString() ?? null,
+        location: location || 'See event page',
+        description: description.slice(0, 2000),
+        eventWebsiteUrl: typeof url === 'string' ? url : '',
+        areaCode: clean,
+        source,
+      };
+    }
+
+    const fetch = (await import('node-fetch')).default;
+    const HEADERS = {
+      'User-Agent': 'Mozilla/5.0 (compatible; VendorGrid/1.0; +https://vendorgrid.app)',
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+
+    // Source 1: Eventbrite zip search
+    try {
+      const ebUrl = `https://www.eventbrite.com/d/united-states--${encodeURIComponent(clean)}/vendor-market--craft-fair/`;
+      const ebResp = await Promise.race([
+        fetch(ebUrl, { headers: HEADERS }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ]) as any;
+      if (ebResp.ok) {
+        const html: string = await ebResp.text();
+        const ldEvents = extractJsonLd(html);
+        for (const ld of ldEvents) {
+          const norm = normalizeEvent(ld, 'Eventbrite');
+          if (norm) results.push(norm);
+        }
+      }
+    } catch { /* source failed, continue */ }
+
+    // Source 2: Eventbrite broader search (farmers market, pop-up)
+    try {
+      const ebUrl2 = `https://www.eventbrite.com/d/united-states--${encodeURIComponent(clean)}/pop-up-market--farmers-market/`;
+      const ebResp2 = await Promise.race([
+        fetch(ebUrl2, { headers: HEADERS }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ]) as any;
+      if (ebResp2.ok) {
+        const html2: string = await ebResp2.text();
+        const ldEvents2 = extractJsonLd(html2);
+        for (const ld of ldEvents2) {
+          const norm = normalizeEvent(ld, 'Eventbrite');
+          if (norm) results.push(norm);
+        }
+      }
+    } catch { /* source failed, continue */ }
+
+    // Source 3: Meetup search (public, no auth required for basic HTML)
+    try {
+      const muUrl = `https://www.meetup.com/find/events/?location=${encodeURIComponent(clean)}&keywords=vendor+market+craft`;
+      const muResp = await Promise.race([
+        fetch(muUrl, { headers: HEADERS }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ]) as any;
+      if (muResp.ok) {
+        const html3: string = await muResp.text();
+        const ldEvents3 = extractJsonLd(html3);
+        for (const ld of ldEvents3) {
+          const norm = normalizeEvent(ld, 'Meetup');
+          if (norm) results.push(norm);
+        }
+      }
+    } catch { /* source failed, continue */ }
+
+    res.json({ results, zipCode: clean });
+  });
+
   app.patch('/api/events/:id/banner', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const eventId = Number(req.params.id);

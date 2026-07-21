@@ -33,7 +33,10 @@ export interface IStorage {
   getEvents(areaCode?: string): Promise<Event[]>;
   getEvent(id: number): Promise<Event | undefined>;
   getEventsByOwner(ownerId: string): Promise<Event[]>;
-  createEvent(event: InsertEvent & { createdBy: string }): Promise<Event>;
+  createEvent(event: InsertEvent & { createdBy: string; status?: string; scrapedSource?: string }): Promise<Event>;
+  getDraftEvents(): Promise<Event[]>;
+  publishDraftEvent(id: number): Promise<Event>;
+  hardDeleteEvent(id: number): Promise<void>;
   deleteEvent(id: number): Promise<void>;
   cancelEvent(id: number): Promise<void>;
   updateEvent(id: number, data: Partial<InsertEvent>): Promise<Event>;
@@ -243,12 +246,32 @@ export class DatabaseStorage implements IStorage {
 
     const notCanceled = or(isNull(events.canceledAt), gte(events.canceledAt, threeDaysAgo));
     const hasActiveDate = inArray(events.id, activeIds);
-    const filters = and(notCanceled!, hasActiveDate);
+    const notDraft = sql`(${events.status} IS NULL OR ${events.status} != 'draft')`;
+    const filters = and(notCanceled!, hasActiveDate, notDraft);
 
     if (areaCode) {
       return await db.select().from(events).where(and(eq(events.areaCode, areaCode), filters!)).orderBy(desc(events.createdAt));
     }
     return await db.select().from(events).where(filters!).orderBy(desc(events.createdAt));
+  }
+
+  async getDraftEvents(): Promise<Event[]> {
+    return await db.select().from(events)
+      .where(eq(events.status, 'draft'))
+      .orderBy(desc(events.createdAt));
+  }
+
+  async publishDraftEvent(id: number): Promise<Event> {
+    const [e] = await db.update(events)
+      .set({ status: 'published' })
+      .where(eq(events.id, id))
+      .returning();
+    return e;
+  }
+
+  async hardDeleteEvent(id: number): Promise<void> {
+    await pool.query("DELETE FROM event_dates WHERE event_id = $1", [id]);
+    await pool.query("DELETE FROM events WHERE id = $1", [id]);
   }
 
   async getEvent(id: number): Promise<Event | undefined> {

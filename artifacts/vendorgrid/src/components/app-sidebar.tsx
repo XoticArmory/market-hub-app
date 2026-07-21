@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, BarChart3, FolderOpen, Lock, Package } from "lucide-react";
+import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, BarChart3, FolderOpen, Lock, Package, Search } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -176,6 +176,15 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={location === "/admin"} className={`mb-1 transition-all duration-200 ${location === "/admin" ? 'bg-amber-500 text-white' : 'hover:bg-amber-500/10 hover:text-amber-600'}`}>
                         <Link href="/admin" className="flex items-center gap-3 px-3 py-2.5 rounded-lg" data-testid="link-admin">
                           <ShieldCheck className="w-5 h-5" /><span className="font-medium">Admin Panel</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
+                  {isAdmin && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={location === "/admin/scraper"} className={`mb-1 transition-all duration-200 ${location === "/admin/scraper" ? 'bg-amber-500 text-white' : 'hover:bg-amber-500/10 hover:text-amber-600'}`}>
+                        <Link href="/admin/scraper" className="flex items-center gap-3 px-3 py-2.5 rounded-lg" data-testid="link-admin-scraper">
+                          <Search className="w-5 h-5" /><span className="font-medium">Event Scraper</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
