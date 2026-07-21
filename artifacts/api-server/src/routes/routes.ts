@@ -823,10 +823,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ---- ADMIN: SCRAPER ----
   app.post('/api/admin/scrape-events', isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
-    const { zipCode } = req.body;
+    const { zipCode, radius: radiusParam } = req.body;
     if (!zipCode || typeof zipCode !== 'string') return res.status(400).json({ message: "zipCode required" });
     const clean = zipCode.trim().replace(/\D/g, '').slice(0, 10);
     if (!clean) return res.status(400).json({ message: "Invalid zip code" });
+    const radius = Math.min(Math.max(parseInt(radiusParam) || 25, 5), 100);
 
     const fetch = (await import('node-fetch')).default;
     const HEADERS = {
@@ -835,9 +836,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       'Accept-Language': 'en-US,en;q=0.9',
     };
 
-    // Step 1: Resolve zip → city / state for better search queries
+    // Step 1: Resolve zip → city / state / coordinates for better search queries
     let cityName = '';
     let stateAbbr = '';
+    let lat = 0;
+    let lon = 0;
     try {
       const geoResp = await Promise.race([
         fetch(`https://api.zippopotam.us/us/${clean}`, { headers: HEADERS }),
@@ -845,8 +848,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ]) as any;
       if (geoResp.ok) {
         const geo = await geoResp.json() as any;
-        cityName = geo.places?.[0]?.['place name'] || '';
-        stateAbbr = geo.places?.[0]?.['state abbreviation'] || '';
+        const place = geo.places?.[0];
+        cityName = place?.['place name'] || '';
+        stateAbbr = place?.['state abbreviation'] || '';
+        lat = parseFloat(place?.['latitude'] || '0');
+        lon = parseFloat(place?.['longitude'] || '0');
       }
     } catch { /* ignore */ }
 
@@ -989,10 +995,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       })(),
 
-      // Meetup – vendor/craft keyword search (JSON-LD)
+      // Meetup – vendor/craft keyword search with radius (JSON-LD)
       (async () => {
         try {
-          const url = `https://www.meetup.com/find/events/?location=${encodeURIComponent(locationQuery || clean)}&keywords=vendor+market+craft+fair`;
+          const locParam = encodeURIComponent(locationQuery || clean);
+          const url = `https://www.meetup.com/find/events/?location=${locParam}&radius=${radius}&keywords=vendor+market+craft+fair`;
           const resp = await Promise.race([
             fetch(url, { headers: HEADERS }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
@@ -1003,27 +1010,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         } catch { /* ignore */ }
       })(),
 
-      // DuckDuckGo – vendor calls (any site, prioritizes vendor-seeking language)
+      // DuckDuckGo – general vendor-call posts any site
       duckduckgoSearch(
-        `"looking for vendors" OR "vendor application" OR "call for vendors" craft fair artisan market ${locationQuery}`,
+        `vendor market fair "looking for vendors" OR "vendor application" OR "call for vendors" ${locationQuery}`,
         'Web'
       ),
 
-      // DuckDuckGo – Facebook groups & events seeking vendors in the area
+      // Facebook – vendor as primary keyword (market/fair posts)
       duckduckgoSearch(
-        `site:facebook.com "looking for vendors" OR "vendor application" OR "vendors wanted" ${locationQuery} market craft`,
+        `site:facebook.com vendor market ${locationQuery}`,
         'Facebook'
       ),
 
-      // DuckDuckGo – VendorMaps listings near this location
+      // Facebook – vendor fair/craft posts
+      duckduckgoSearch(
+        `site:facebook.com vendor fair craft artisan ${locationQuery}`,
+        'Facebook'
+      ),
+
+      // Facebook – vendor applications and booth space posts
+      duckduckgoSearch(
+        `site:facebook.com vendor "booth" OR "apply" OR "application" OR "looking for" ${locationQuery}`,
+        'Facebook'
+      ),
+
+      // Facebook Groups – vendor market posts in local groups
+      duckduckgoSearch(
+        `site:facebook.com/groups vendor market ${locationQuery}`,
+        'Facebook Groups'
+      ),
+
+      // VendorMaps listings near this location
       duckduckgoSearch(
         `site:vendormaps.net ${locationQuery} vendor market event`,
         'VendorMaps'
       ),
 
-      // DuckDuckGo – Eventbrite vendor applications
+      // Eventbrite vendor applications
       duckduckgoSearch(
-        `site:eventbrite.com "vendor" "application" OR "apply" craft market fair ${locationQuery}`,
+        `site:eventbrite.com vendor "application" OR "apply" OR "booth" craft market fair ${locationQuery}`,
         'Eventbrite'
       ),
     ]);
@@ -1031,7 +1056,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Vendor-seeking events surface first; within each group preserve discovery order
     results.sort((a, b) => (b.isSeekingVendors ? 1 : 0) - (a.isSeekingVendors ? 1 : 0));
 
-    res.json({ results, zipCode: clean, locationLabel });
+    res.json({ results, zipCode: clean, locationLabel, radius });
   });
 
   app.patch('/api/events/:id/banner', isAuthenticated, async (req: any, res) => {

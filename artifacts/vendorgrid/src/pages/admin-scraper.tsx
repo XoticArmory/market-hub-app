@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Loader2, Plus, Trash2, Globe, CalendarDays, MapPin, CheckCircle, ShieldCheck, FileText, ExternalLink, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -217,6 +218,7 @@ export default function AdminScraperPage() {
   const { toast } = useToast();
 
   const [zipCode, setZipCode] = useState("");
+  const [radius, setRadius] = useState("25");
   const [results, setResults] = useState<ScrapedEvent[]>([]);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [editDraft, setEditDraft] = useState<DraftEvent | null>(null);
@@ -225,25 +227,25 @@ export default function AdminScraperPage() {
   const { data: drafts = [], isLoading: loadingDrafts } = useDraftEvents();
 
   const scrape = useMutation({
-    mutationFn: async (zip: string) => {
+    mutationFn: async ({ zip, radiusMi }: { zip: string; radiusMi: string }) => {
       const res = await fetch("/api/admin/scrape-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ zipCode: zip }),
+        body: JSON.stringify({ zipCode: zip, radius: parseInt(radiusMi) }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
-      return res.json() as Promise<{ results: ScrapedEvent[]; zipCode: string; locationLabel: string }>;
+      return res.json() as Promise<{ results: ScrapedEvent[]; zipCode: string; locationLabel: string; radius: number }>;
     },
     onSuccess: (data) => {
       setResults(data.results);
       setSavedIds(new Set());
       if (data.results.length === 0) {
-        toast({ title: "No events found", description: `No vendor markets or events found near ${data.locationLabel || data.zipCode}. Try a nearby zip code.` });
+        toast({ title: "No events found", description: `No vendor events found within ${data.radius} mi of ${data.locationLabel || data.zipCode}. Try a wider radius.` });
       } else {
         const seekingCount = data.results.filter(r => r.isSeekingVendors).length;
         const seekingNote = seekingCount > 0 ? ` · ${seekingCount} seeking vendors` : '';
-        toast({ title: `Found ${data.results.length} event${data.results.length === 1 ? "" : "s"}${seekingNote}`, description: data.locationLabel ? `Near ${data.locationLabel}` : undefined });
+        toast({ title: `Found ${data.results.length} event${data.results.length === 1 ? "" : "s"}${seekingNote}`, description: data.locationLabel ? `Within ${data.radius} mi of ${data.locationLabel}` : undefined });
       }
     },
     onError: (e: any) => toast({ title: "Scrape failed", description: e.message, variant: "destructive" }),
@@ -337,24 +339,36 @@ export default function AdminScraperPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Search className="w-5 h-5 text-primary" />
-                Search by Zip Code
+                Search for Vendor Events
               </CardTitle>
               <CardDescription>
-                Searches Eventbrite and Meetup for craft fairs, vendor markets, and pop-up events near the zip code. Results are extracted from structured event data embedded in each site's HTML.
+                Searches Eventbrite, Meetup, Facebook, VendorMaps, and the wider web for vendor markets and craft fairs within the selected radius. Facebook results use "vendor" as the primary keyword.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 <Input
                   placeholder="e.g. 59101"
                   value={zipCode}
                   onChange={e => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  onKeyDown={e => { if (e.key === 'Enter' && zipCode.length >= 4) scrape.mutate(zipCode); }}
-                  className="rounded-xl h-12 text-base max-w-xs font-mono"
+                  onKeyDown={e => { if (e.key === 'Enter' && zipCode.length >= 4) scrape.mutate({ zip: zipCode, radiusMi: radius }); }}
+                  className="rounded-xl h-12 text-base w-36 font-mono"
                   data-testid="input-scraper-zip"
                 />
+                <Select value={radius} onValueChange={setRadius}>
+                  <SelectTrigger className="rounded-xl h-12 w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 mi radius</SelectItem>
+                    <SelectItem value="10">10 mi radius</SelectItem>
+                    <SelectItem value="25">25 mi radius</SelectItem>
+                    <SelectItem value="50">50 mi radius</SelectItem>
+                    <SelectItem value="100">100 mi radius</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
-                  onClick={() => scrape.mutate(zipCode)}
+                  onClick={() => scrape.mutate({ zip: zipCode, radiusMi: radius })}
                   disabled={zipCode.length < 4 || scrape.isPending}
                   className="rounded-xl h-12 px-6"
                   data-testid="button-scraper-search"
