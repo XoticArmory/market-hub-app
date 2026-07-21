@@ -828,10 +828,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const clean = zipCode.trim().replace(/\D/g, '').slice(0, 10);
     if (!clean) return res.status(400).json({ message: "Invalid zip code" });
 
+    const fetch = (await import('node-fetch')).default;
+    const HEADERS = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+
+    // Step 1: Resolve zip → city / state for better search queries
+    let cityName = '';
+    let stateAbbr = '';
+    try {
+      const geoResp = await Promise.race([
+        fetch(`https://api.zippopotam.us/us/${clean}`, { headers: HEADERS }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+      ]) as any;
+      if (geoResp.ok) {
+        const geo = await geoResp.json() as any;
+        cityName = geo.places?.[0]?.['place name'] || '';
+        stateAbbr = geo.places?.[0]?.['state abbreviation'] || '';
+      }
+    } catch { /* ignore */ }
+
+    const locationLabel = cityName ? `${cityName}, ${stateAbbr}` : clean;
+    const locationQuery = cityName ? `${cityName} ${stateAbbr}` : clean;
+
     const results: any[] = [];
     const seen = new Set<string>();
 
-    // Helper: extract JSON-LD Event objects from raw HTML
+    // Keywords that indicate an event is actively recruiting vendors
+    const VENDOR_SEEKING_KEYWORDS = [
+      'looking for vendors', 'seeking vendors', 'vendor application',
+      'vendor spot', 'booth space', 'vendor registration', 'call for vendors',
+      'accepting vendor', 'vendor inquiry', 'become a vendor', 'apply to vend',
+      'vendors wanted', 'vendor opportunities', 'vendor booth', 'want to be a vendor',
+      'vendor sign up', 'vendor signup', 'we are looking for', 'now accepting',
+      'vendor fair', 'accepting applications', 'vendor space available',
+      'artisan wanted', 'crafter wanted', 'market vendor', 'sell at our',
+    ];
+
+    function detectSeekingVendors(text: string): boolean {
+      const lower = text.toLowerCase();
+      return VENDOR_SEEKING_KEYWORDS.some(kw => lower.includes(kw));
+    }
+
+    function addResult(ev: any) {
+      if (!ev) return;
+      const key = (ev.title || '').toLowerCase().trim();
+      if (!key || key.length < 4) return;
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push(ev);
+    }
+
+    // Extract JSON-LD Event objects from raw HTML
     function extractJsonLd(html: string): any[] {
       const events: any[] = [];
       const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -853,93 +903,135 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return events;
     }
 
-    function normalizeEvent(ld: any, source: string) {
+    function normalizeJsonLdEvent(ld: any, source: string) {
       const name: string = ld.name || ld.headline || '';
       if (!name) return null;
-      const key = name.toLowerCase().trim();
-      if (seen.has(key)) return null;
-      seen.add(key);
-
       const startDate = ld.startDate ? new Date(ld.startDate) : null;
       const loc = ld.location;
       let location = '';
       if (typeof loc === 'string') location = loc;
       else if (loc?.name) location = [loc.name, loc?.address?.streetAddress, loc?.address?.addressLocality, loc?.address?.addressRegion].filter(Boolean).join(', ');
       else if (loc?.address) location = [loc.address.streetAddress, loc.address.addressLocality, loc.address.addressRegion].filter(Boolean).join(', ');
-
       const url = ld.url || ld['@id'] || '';
       const description = ld.description || '';
-
       return {
         title: name,
         date: startDate?.toISOString() ?? null,
-        location: location || 'See event page',
+        location: location || locationLabel || 'See event page',
         description: description.slice(0, 2000),
         eventWebsiteUrl: typeof url === 'string' ? url : '',
         areaCode: clean,
         source,
+        isSeekingVendors: detectSeekingVendors(name + ' ' + description),
       };
     }
 
-    const fetch = (await import('node-fetch')).default;
-    const HEADERS = {
-      'User-Agent': 'Mozilla/5.0 (compatible; VendorGrid/1.0; +https://vendorgrid.app)',
-      'Accept': 'text/html,application/xhtml+xml',
-      'Accept-Language': 'en-US,en;q=0.9',
-    };
-
-    // Source 1: Eventbrite zip search
-    try {
-      const ebUrl = `https://www.eventbrite.com/d/united-states--${encodeURIComponent(clean)}/vendor-market--craft-fair/`;
-      const ebResp = await Promise.race([
-        fetch(ebUrl, { headers: HEADERS }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
-      ]) as any;
-      if (ebResp.ok) {
-        const html: string = await ebResp.text();
-        const ldEvents = extractJsonLd(html);
-        for (const ld of ldEvents) {
-          const norm = normalizeEvent(ld, 'Eventbrite');
-          if (norm) results.push(norm);
-        }
+    // Parse DuckDuckGo HTML search result page into event-like objects
+    function parseDdgHtml(html: string, source: string): any[] {
+      const parsed: any[] = [];
+      const parts = html.split('<div class="result ');
+      for (const part of parts.slice(1)) {
+        try {
+          const tm = part.match(/<a[^>]+class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
+          const sm = part.match(/<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/is);
+          if (!tm) continue;
+          const url = tm[1].startsWith('//') ? 'https:' + tm[1] : tm[1];
+          const title = tm[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').trim();
+          const snippet = sm ? sm[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").trim() : '';
+          if (!title || title.length < 5) continue;
+          parsed.push({
+            title,
+            date: null,
+            location: locationLabel || 'See event page',
+            description: snippet.slice(0, 2000),
+            eventWebsiteUrl: url,
+            areaCode: clean,
+            source,
+            isSeekingVendors: detectSeekingVendors(title + ' ' + snippet),
+          });
+        } catch { /* skip bad result */ }
       }
-    } catch { /* source failed, continue */ }
+      return parsed;
+    }
 
-    // Source 2: Eventbrite broader search (farmers market, pop-up)
-    try {
-      const ebUrl2 = `https://www.eventbrite.com/d/united-states--${encodeURIComponent(clean)}/pop-up-market--farmers-market/`;
-      const ebResp2 = await Promise.race([
-        fetch(ebUrl2, { headers: HEADERS }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
-      ]) as any;
-      if (ebResp2.ok) {
-        const html2: string = await ebResp2.text();
-        const ldEvents2 = extractJsonLd(html2);
-        for (const ld of ldEvents2) {
-          const norm = normalizeEvent(ld, 'Eventbrite');
-          if (norm) results.push(norm);
+    async function duckduckgoSearch(query: string, source: string): Promise<void> {
+      try {
+        const resp = await Promise.race([
+          fetch('https://html.duckduckgo.com/html/', {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `q=${encodeURIComponent(query)}&kl=us-en`,
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
+        ]) as any;
+        if (!resp.ok) return;
+        const html: string = await resp.text();
+        for (const ev of parseDdgHtml(html, source)) addResult(ev);
+      } catch { /* ignore */ }
+    }
+
+    // Run all sources in parallel
+    await Promise.allSettled([
+
+      // Eventbrite – craft/vendor market category pages (JSON-LD)
+      (async () => {
+        for (const slug of ['vendor-market--craft-fair', 'pop-up-market--farmers-market', 'arts--crafts']) {
+          try {
+            const url = `https://www.eventbrite.com/d/united-states--${encodeURIComponent(clean)}/${slug}/`;
+            const resp = await Promise.race([
+              fetch(url, { headers: HEADERS }),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+            ]) as any;
+            if (resp.ok) {
+              for (const ld of extractJsonLd(await resp.text())) addResult(normalizeJsonLdEvent(ld, 'Eventbrite'));
+            }
+          } catch { /* ignore */ }
         }
-      }
-    } catch { /* source failed, continue */ }
+      })(),
 
-    // Source 3: Meetup search (public, no auth required for basic HTML)
-    try {
-      const muUrl = `https://www.meetup.com/find/events/?location=${encodeURIComponent(clean)}&keywords=vendor+market+craft`;
-      const muResp = await Promise.race([
-        fetch(muUrl, { headers: HEADERS }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
-      ]) as any;
-      if (muResp.ok) {
-        const html3: string = await muResp.text();
-        const ldEvents3 = extractJsonLd(html3);
-        for (const ld of ldEvents3) {
-          const norm = normalizeEvent(ld, 'Meetup');
-          if (norm) results.push(norm);
-        }
-      }
-    } catch { /* source failed, continue */ }
+      // Meetup – vendor/craft keyword search (JSON-LD)
+      (async () => {
+        try {
+          const url = `https://www.meetup.com/find/events/?location=${encodeURIComponent(locationQuery || clean)}&keywords=vendor+market+craft+fair`;
+          const resp = await Promise.race([
+            fetch(url, { headers: HEADERS }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+          ]) as any;
+          if (resp.ok) {
+            for (const ld of extractJsonLd(await resp.text())) addResult(normalizeJsonLdEvent(ld, 'Meetup'));
+          }
+        } catch { /* ignore */ }
+      })(),
 
-    res.json({ results, zipCode: clean });
+      // DuckDuckGo – vendor calls (any site, prioritizes vendor-seeking language)
+      duckduckgoSearch(
+        `"looking for vendors" OR "vendor application" OR "call for vendors" craft fair artisan market ${locationQuery}`,
+        'Web'
+      ),
+
+      // DuckDuckGo – Facebook groups & events seeking vendors in the area
+      duckduckgoSearch(
+        `site:facebook.com "looking for vendors" OR "vendor application" OR "vendors wanted" ${locationQuery} market craft`,
+        'Facebook'
+      ),
+
+      // DuckDuckGo – VendorMaps listings near this location
+      duckduckgoSearch(
+        `site:vendormaps.net ${locationQuery} vendor market event`,
+        'VendorMaps'
+      ),
+
+      // DuckDuckGo – Eventbrite vendor applications
+      duckduckgoSearch(
+        `site:eventbrite.com "vendor" "application" OR "apply" craft market fair ${locationQuery}`,
+        'Eventbrite'
+      ),
+    ]);
+
+    // Vendor-seeking events surface first; within each group preserve discovery order
+    results.sort((a, b) => (b.isSeekingVendors ? 1 : 0) - (a.isSeekingVendors ? 1 : 0));
+
+    res.json({ results, zipCode: clean, locationLabel });
   });
 
   app.patch('/api/events/:id/banner', isAuthenticated, async (req: any, res) => {

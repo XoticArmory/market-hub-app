@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Loader2, Plus, Trash2, Globe, CalendarDays, MapPin, CheckCircle, ShieldCheck, FileText, ExternalLink } from "lucide-react";
+import { Search, Loader2, Plus, Trash2, Globe, CalendarDays, MapPin, CheckCircle, ShieldCheck, FileText, ExternalLink, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -21,6 +21,7 @@ interface ScrapedEvent {
   eventWebsiteUrl: string;
   areaCode: string;
   source: string;
+  isSeekingVendors: boolean;
 }
 
 interface DraftEvent {
@@ -232,15 +233,17 @@ export default function AdminScraperPage() {
         body: JSON.stringify({ zipCode: zip }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
-      return res.json() as Promise<{ results: ScrapedEvent[]; zipCode: string }>;
+      return res.json() as Promise<{ results: ScrapedEvent[]; zipCode: string; locationLabel: string }>;
     },
     onSuccess: (data) => {
       setResults(data.results);
       setSavedIds(new Set());
       if (data.results.length === 0) {
-        toast({ title: "No events found", description: "Try a nearby zip code or a different area." });
+        toast({ title: "No events found", description: `No vendor markets or events found near ${data.locationLabel || data.zipCode}. Try a nearby zip code.` });
       } else {
-        toast({ title: `Found ${data.results.length} event${data.results.length === 1 ? "" : "s"}` });
+        const seekingCount = data.results.filter(r => r.isSeekingVendors).length;
+        const seekingNote = seekingCount > 0 ? ` · ${seekingCount} seeking vendors` : '';
+        toast({ title: `Found ${data.results.length} event${data.results.length === 1 ? "" : "s"}${seekingNote}`, description: data.locationLabel ? `Near ${data.locationLabel}` : undefined });
       }
     },
     onError: (e: any) => toast({ title: "Scrape failed", description: e.message, variant: "destructive" }),
@@ -375,7 +378,14 @@ export default function AdminScraperPage() {
 
           {results.length > 0 && (
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-muted-foreground">{results.length} event{results.length === 1 ? "" : "s"} found</p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-semibold text-muted-foreground">{results.length} event{results.length === 1 ? "" : "s"} found</p>
+                {results.filter(r => r.isSeekingVendors).length > 0 && (
+                  <Badge className="text-xs bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-400">
+                    <Users className="w-3 h-3 mr-1" />{results.filter(r => r.isSeekingVendors).length} seeking vendors
+                  </Badge>
+                )}
+              </div>
               {results.map((ev, i) => {
                 const normalizedTitle = ev.title.trim().toLowerCase();
                 const evDay = ev.date ? ev.date.slice(0, 10) : null;
@@ -393,6 +403,11 @@ export default function AdminScraperPage() {
                           <div className="flex items-center gap-2 flex-wrap mb-1.5">
                             <span className="font-bold text-foreground text-base leading-snug">{ev.title}</span>
                             <Badge variant="outline" className="text-xs shrink-0">{ev.source}</Badge>
+                            {ev.isSeekingVendors && (
+                              <Badge className="text-xs bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">
+                                <Users className="w-3 h-3 mr-1" />Seeking Vendors
+                              </Badge>
+                            )}
                             {alreadySaved && (
                               <Badge className="text-xs bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 shrink-0">
                                 <CheckCircle className="w-3 h-3 mr-1" />Saved
