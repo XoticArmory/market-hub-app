@@ -993,9 +993,169 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch { /* ignore */ }
     }
 
-    // Run all sources in parallel
+    // Exa AI semantic search – returns structured results reliably (requires EXA_API_KEY env var)
+    async function exaSearch(query: string): Promise<void> {
+      const apiKey = process.env.EXA_API_KEY;
+      if (!apiKey) return;
+      try {
+        const resp = await Promise.race([
+          fetch('https://api.exa.ai/search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+            },
+            body: JSON.stringify({
+              query,
+              numResults: 10,
+              contents: { text: { maxCharacters: 600 } },
+            }),
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
+        ]) as any;
+        if (!resp.ok) return;
+        const data: any = await resp.json();
+        for (const item of data.results || []) {
+          const title: string = item.title || '';
+          if (!title) continue;
+          const description: string = (item.text || item.summary || '').slice(0, 2000);
+          addResult({
+            title,
+            date: item.publishedDate ? new Date(item.publishedDate).toISOString() : null,
+            location: locationLabel || 'See event page',
+            description,
+            eventWebsiteUrl: item.url || '',
+            areaCode: clean,
+            source: 'Exa',
+            isSeekingVendors: detectSeekingVendors(title + ' ' + description),
+          });
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Firecrawl web search – returns structured search results (requires FIRECRAWL_API_KEY env var)
+    async function firecrawlSearch(query: string): Promise<void> {
+      const apiKey = process.env.FIRECRAWL_API_KEY;
+      if (!apiKey) return;
+      try {
+        const resp = await Promise.race([
+          fetch('https://api.firecrawl.dev/v1/search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({ query, limit: 8 }),
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
+        ]) as any;
+        if (!resp.ok) return;
+        const data: any = await resp.json();
+        const items: any[] = data?.data?.web || data?.data || [];
+        for (const item of items) {
+          const title: string = item.title || item.metadata?.title || '';
+          if (!title) continue;
+          const description: string = (item.description || item.metadata?.description || '').slice(0, 2000);
+          addResult({
+            title,
+            date: null,
+            location: locationLabel || 'See event page',
+            description,
+            eventWebsiteUrl: item.url || '',
+            areaCode: clean,
+            source: 'Firecrawl',
+            isSeekingVendors: detectSeekingVendors(title + ' ' + description),
+          });
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Bing web search – HTML scraping with cite-tag URL extraction
+    async function bingSearch(query: string, source: string): Promise<void> {
+      try {
+        const resp = await Promise.race([
+          fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=10&setlang=en`, {
+            headers: { ...HEADERS, Accept: 'text/html' },
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
+        ]) as any;
+        if (!resp.ok) return;
+        const html: string = await resp.text();
+        // Each organic result block starts with <li class="b_algo" or <div class="b_algo"
+        const blockRe = /(?:<li|<div)[^>]+\bb_algo\b[^>]*>([\s\S]*?)(?=(?:<li|<div)[^>]+\bb_algo\b|<\/ol>|<\/div>\s*<div[^>]+id="b_results")/g;
+        const legacyBlocks = html.split(/<h2>/);
+        // Primary: try b_algo blocks
+        let found = false;
+        let bm: RegExpExecArray | null;
+        while ((bm = blockRe.exec(html)) !== null) {
+          const block = bm[1];
+          const titleM = block.match(/<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+          const snippetM = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+          if (!titleM) continue;
+          const url = titleM[1];
+          if (url.includes('bing.com') || url.includes('microsoft.com')) continue;
+          const title = titleM[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
+          const snippet = snippetM ? snippetM[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim() : '';
+          if (!title || title.length < 5) continue;
+          found = true;
+          addResult({
+            title,
+            date: null,
+            location: locationLabel || 'See event page',
+            description: snippet.slice(0, 2000),
+            eventWebsiteUrl: url,
+            areaCode: clean,
+            source,
+            isSeekingVendors: detectSeekingVendors(title + ' ' + snippet),
+          });
+        }
+        // Fallback: cite-tag + preceding h2 link approach (works with different Bing layouts)
+        if (!found) {
+          const citeRe = /<cite[^>]*>(.*?)<\/cite>/gi;
+          const linkRe = /<a[^>]+href="(https?:\/\/(?!(?:www\.)?bing\.[^/]+\/)[^"]+)"[^>]*>([^<]{5,120})<\/a>/gi;
+          const externalLinks: Array<{url: string; title: string}> = [];
+          let lm: RegExpExecArray | null;
+          while ((lm = linkRe.exec(html)) !== null) {
+            const url = lm[1];
+            const title = lm[2].replace(/<[^>]+>/g, '').trim();
+            if (title && title.length >= 5) externalLinks.push({ url, title });
+          }
+          for (const { url, title } of externalLinks.slice(0, 8)) {
+            addResult({
+              title,
+              date: null,
+              location: locationLabel || 'See event page',
+              description: '',
+              eventWebsiteUrl: url,
+              areaCode: clean,
+              source,
+              isSeekingVendors: detectSeekingVendors(title),
+            });
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Run all sources in parallel – API-based sources first (highest quality), then HTML fallbacks
     await Promise.allSettled([
 
+      // ── API-based sources (activated when env vars are set) ──────────────────
+      // Exa AI – semantic search for vendor/craft markets near this location
+      exaSearch(
+        `vendor market craft fair artisan market "looking for vendors" OR "vendor application" OR "booth space" ${locationQuery}`
+      ),
+
+      // Exa AI – second query targeting vendor-seeking posts specifically
+      exaSearch(
+        `"call for vendors" OR "accepting vendors" OR "apply to vend" craft market fair ${locationQuery}`
+      ),
+
+      // Firecrawl – web search for vendor markets in the area
+      firecrawlSearch(
+        `vendor craft market fair "looking for vendors" OR "vendor application" OR "booth space" ${locationQuery}`
+      ),
+
+      // ── HTML-scrape sources (always attempted, no key required) ──────────────
       // Eventbrite – craft/vendor market category pages (JSON-LD)
       (async () => {
         for (const slug of ['vendor-market--craft-fair', 'pop-up-market--farmers-market', 'arts--crafts']) {
@@ -1027,6 +1187,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         } catch { /* ignore */ }
       })(),
 
+      // Bing – general vendor market search
+      bingSearch(
+        `vendor market craft fair "looking for vendors" OR "vendor application" OR "booth space" ${locationQuery}`,
+        'Web'
+      ),
+
+      // Bing – vendor application sites specifically
+      bingSearch(
+        `vendor market application "${locationQuery}" OR "${stateAbbr}" site:eventbrite.com OR site:facebook.com OR site:vendormaps.net`,
+        'Web'
+      ),
+
       // DuckDuckGo – general vendor-call posts any site
       duckduckgoSearch(
         `vendor market fair "looking for vendors" OR "vendor application" OR "call for vendors" ${locationQuery}`,
@@ -1042,12 +1214,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Facebook – vendor fair/craft posts
       duckduckgoSearch(
         `site:facebook.com vendor fair craft artisan ${locationQuery}`,
-        'Facebook'
-      ),
-
-      // Facebook – vendor applications and booth space posts
-      duckduckgoSearch(
-        `site:facebook.com vendor "booth" OR "apply" OR "application" OR "looking for" ${locationQuery}`,
         'Facebook'
       ),
 

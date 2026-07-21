@@ -342,7 +342,8 @@ export default function AdminScraperPage() {
                 Search for Vendor Events
               </CardTitle>
               <CardDescription>
-                Searches Eventbrite, Meetup, Facebook, VendorMaps, and the wider web for vendor markets and craft fairs within the selected radius. Facebook results use "vendor" as the primary keyword.
+                Searches Eventbrite, Meetup, Facebook, VendorMaps, and the wider web for vendor markets and craft fairs within the selected radius.
+                {" "}For higher-quality results, set the <code className="text-xs bg-muted px-1 py-0.5 rounded">EXA_API_KEY</code> or <code className="text-xs bg-muted px-1 py-0.5 rounded">FIRECRAWL_API_KEY</code> environment variable — those sources return structured results reliably.
               </CardDescription>
             </CardHeader>
             <CardContent>
