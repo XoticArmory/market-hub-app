@@ -810,6 +810,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(updated);
   });
 
+  app.patch('/api/admin/draft-events/:id', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'draft') return res.status(400).json({ message: "Only draft events can be edited here" });
+    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'vendorSpaces', 'contactEmail', 'eventWebsiteUrl', 'scrapedSource'];
+    const data: Record<string, any> = {};
+    for (const key of allowed) {
+      if (key in req.body) data[key] = req.body[key];
+    }
+    if (data.date) data.date = new Date(data.date);
+    if (data.vendorSpaces !== undefined) data.vendorSpaces = Number(data.vendorSpaces);
+    const updated = await storage.updateEvent(id, data);
+    res.json(updated);
+  });
+
   app.delete('/api/admin/draft-events/:id', isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
     const id = Number(req.params.id);

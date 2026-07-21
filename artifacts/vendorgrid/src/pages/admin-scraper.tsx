@@ -68,7 +68,7 @@ function EditDraftDialog({
 
   const updateDraft = useMutation({
     mutationFn: async (data: Partial<DraftEvent>) =>
-      apiRequest("PATCH", `/api/events/${draft?.id}`, data),
+      apiRequest("PATCH", `/api/admin/draft-events/${draft?.id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/draft-events"] });
       toast({ title: "Draft updated" });
