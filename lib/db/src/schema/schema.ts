@@ -36,6 +36,7 @@ export const events = pgTable("events", {
   location: text("location").notNull(),
   areaCode: text("area_code"),
   date: timestamp("date").notNull(),
+  endTime: timestamp("end_time"),
   vendorSpaces: integer("vendor_spaces").default(0),
   vendorSpacesUsed: integer("vendor_spaces_used").default(0),
   spotPrice: integer("spot_price_cents").default(0),
@@ -56,6 +57,7 @@ export const eventDates = pgTable("event_dates", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id").notNull().references(() => events.id),
   date: timestamp("date").notNull(),
+  endTime: timestamp("end_time"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

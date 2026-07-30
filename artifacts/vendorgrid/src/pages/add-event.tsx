@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell, Image as ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ImageUpload } from "@/components/image-upload";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -49,8 +50,10 @@ export default function AddEvent() {
   const profile = profileData?.profile;
   const { mutate: createEvent, isPending } = useCreateEvent();
   const [, setLocation] = useLocation();
-  const [extraDates, setExtraDates] = useState<string[]>([]);
+  const [extraDates, setExtraDates] = useState<{ date: string; endTime: string }[]>([]);
   const [newDate, setNewDate] = useState("");
+  const [newEndTime, setNewEndTime] = useState("");
+  const [bannerUrl, setBannerUrl] = useState("");
   const [notifyMessage, setNotifyMessage] = useState("");
 
   const isEventOwnerPro = profile?.isAdmin === true || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
@@ -79,7 +82,9 @@ export default function AddEvent() {
     createEvent({
       ...data,
       date: new Date(data.date),
+      endTime: (data as any).endTime || undefined,
       spotPrice: Math.round((data.spotPrice || 0) * 100),
+      bannerUrl: bannerUrl || undefined,
       extraDates,
       notifyMessage: notifyMessage.trim() || undefined,
     }, {
@@ -88,9 +93,10 @@ export default function AddEvent() {
   };
 
   const addExtraDate = () => {
-    if (newDate && !extraDates.includes(newDate)) {
-      setExtraDates([...extraDates, newDate]);
+    if (newDate) {
+      setExtraDates([...extraDates, { date: newDate, endTime: newEndTime }]);
       setNewDate("");
+      setNewEndTime("");
     }
   };
 
@@ -140,20 +146,31 @@ export default function AddEvent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField control={form.control} name="date" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-base font-semibold flex items-center gap-2"><CalendarDays className="w-4 h-4 text-primary" />Primary Date & Time</FormLabel>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2"><CalendarDays className="w-4 h-4 text-primary" />Start Date & Time</FormLabel>
                   <FormControl><Input data-testid="input-event-date" type="datetime-local" className="h-14 rounded-xl text-base" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
 
-              <FormField control={form.control} name="location" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-base font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" />Location</FormLabel>
-                  <FormControl><Input data-testid="input-event-location" placeholder="e.g. City Central Park" className="h-14 rounded-xl text-base" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              <div>
+                <label className="text-base font-semibold flex items-center gap-2 mb-2"><CalendarDays className="w-4 h-4 text-muted-foreground" />End Time <span className="text-muted-foreground font-normal text-sm">(Optional)</span></label>
+                <Input
+                  data-testid="input-event-end-time"
+                  type="datetime-local"
+                  value={(form.watch as any)("endTime") || ""}
+                  onChange={e => (form.setValue as any)("endTime", e.target.value)}
+                  className="h-14 rounded-xl text-base"
+                />
+              </div>
             </div>
+
+            <FormField control={form.control} name="location" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" />Location</FormLabel>
+                <FormControl><Input data-testid="input-event-location" placeholder="e.g. City Central Park" className="h-14 rounded-xl text-base" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField control={form.control} name="areaCode" render={({ field }) => (
@@ -384,28 +401,64 @@ export default function AddEvent() {
             {/* Extra Dates */}
             <div className="space-y-3">
               <label className="text-base font-semibold flex items-center gap-2"><CalendarDays className="w-4 h-4 text-primary" />Additional Dates (Optional)</label>
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex flex-col gap-2 mb-2">
                 {extraDates.map((d, i) => (
-                  <Badge key={i} variant="secondary" className="gap-1 text-sm py-1.5 px-3">
-                    {new Date(d).toLocaleString()}
-                    <button type="button" onClick={() => setExtraDates(extraDates.filter((_, j) => j !== i))} className="ml-1">
-                      <X className="w-3 h-3" />
+                  <div key={i} className="flex items-center gap-2 bg-muted/50 rounded-xl px-3 py-2">
+                    <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium">{new Date(d.date).toLocaleString()}</span>
+                    {d.endTime && (
+                      <>
+                        <span className="text-xs text-muted-foreground">→</span>
+                        <span className="text-sm text-muted-foreground">{new Date(d.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </>
+                    )}
+                    <button type="button" onClick={() => setExtraDates(extraDates.filter((_, j) => j !== i))} className="ml-auto text-muted-foreground hover:text-foreground">
+                      <X className="w-4 h-4" />
                     </button>
-                  </Badge>
+                  </div>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <Input
-                  data-testid="input-extra-date"
-                  type="datetime-local"
-                  value={newDate}
-                  onChange={e => setNewDate(e.target.value)}
-                  className="h-12 rounded-xl flex-1"
-                />
-                <Button type="button" variant="outline" onClick={addExtraDate} disabled={!newDate} className="rounded-xl h-12" data-testid="button-add-date">
-                  <Plus className="w-4 h-4 mr-1" /> Add
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
+                <p className="text-xs text-muted-foreground font-medium">Add another day</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Start date &amp; time</label>
+                    <Input
+                      data-testid="input-extra-date"
+                      type="datetime-local"
+                      value={newDate}
+                      onChange={e => setNewDate(e.target.value)}
+                      className="h-11 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">End time <span className="opacity-60">(Optional)</span></label>
+                    <Input
+                      data-testid="input-extra-end-time"
+                      type="datetime-local"
+                      value={newEndTime}
+                      onChange={e => setNewEndTime(e.target.value)}
+                      className="h-11 rounded-xl"
+                    />
+                  </div>
+                </div>
+                <Button type="button" variant="outline" onClick={addExtraDate} disabled={!newDate} className="rounded-xl h-10 w-full sm:w-auto" data-testid="button-add-date">
+                  <Plus className="w-4 h-4 mr-1" /> Add Date
                 </Button>
               </div>
+            </div>
+
+            {/* Event Banner */}
+            <div className="space-y-3">
+              <label className="text-base font-semibold flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary" />Event Banner <span className="text-muted-foreground font-normal text-sm">(Optional)</span>
+              </label>
+              <p className="text-xs text-muted-foreground -mt-1">Upload a banner image for your event card. You can also change this later from the event page.</p>
+              <ImageUpload
+                value={bannerUrl}
+                onChange={setBannerUrl}
+                data-testid="input-event-banner"
+              />
             </div>
 
             <FormField control={form.control} name="description" render={({ field }) => (

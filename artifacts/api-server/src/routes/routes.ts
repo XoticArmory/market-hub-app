@@ -682,11 +682,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(403).json({ message: "Pro subscription required to create events." });
       }
       const input = api.events.create.input.parse(req.body);
-      const { extraDates, notifyMessage, ...eventData } = input;
-      const created = await storage.createEvent({ ...eventData, date: new Date(eventData.date as any), createdBy: userId });
+      const { extraDates, notifyMessage, endTime, ...eventData } = input;
+      const created = await storage.createEvent({
+        ...eventData,
+        date: new Date(eventData.date as any),
+        endTime: endTime ? new Date(endTime) : null,
+        createdBy: userId,
+      });
       if (extraDates && extraDates.length > 0) {
         for (const d of extraDates) {
-          await storage.createEventDate({ eventId: created.id, date: new Date(d) });
+          await storage.createEventDate({
+            eventId: created.id,
+            date: new Date(d.date),
+            endTime: d.endTime ? new Date(d.endTime) : null,
+          });
         }
       }
       // Send new-event notifications to opted-in users in the event's area code

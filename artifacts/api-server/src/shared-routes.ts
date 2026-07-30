@@ -19,7 +19,8 @@ const createEventInput = z.object({
   contactEmail: z.string().optional().nullable(),
   eventWebsiteUrl: z.string().optional().nullable(),
   canceledAt: z.coerce.date().optional().nullable(),
-  extraDates: z.array(z.string()).optional(),
+  endTime: z.string().optional().nullable(),
+  extraDates: z.array(z.object({ date: z.string(), endTime: z.string().optional().nullable() })).optional(),
   notifyMessage: z.string().max(160).optional(),
 });
 

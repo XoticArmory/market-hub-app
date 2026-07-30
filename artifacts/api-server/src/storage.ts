@@ -345,7 +345,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(eventDates).where(inArray(eventDates.eventId, eventIds)).orderBy(eventDates.date);
   }
 
-  async createEventDate(data: { eventId: number; date: Date }): Promise<EventDate> {
+  async createEventDate(data: { eventId: number; date: Date; endTime?: Date | null }): Promise<EventDate> {
     const [d] = await db.insert(eventDates).values(data).returning();
     return d;
   }
