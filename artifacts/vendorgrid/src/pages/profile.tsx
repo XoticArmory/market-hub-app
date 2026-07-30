@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePortalSession } from "@/hooks/use-stripe";
 import { useNotifications, useMarkAllRead } from "@/hooks/use-notifications";
 import { useSendNotification } from "@/hooks/use-notifications";
-import { useOwnerAnalytics } from "@/hooks/use-analytics";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -18,7 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, BarChart3, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle } from "lucide-react";
+import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useEvents } from "@/hooks/use-events";
 import { format } from "date-fns";
@@ -37,7 +36,7 @@ function tierToProfileType(_tier?: string | null, status?: string | null): strin
   return "general";
 }
 
-function VendorAnalyticsTab({ userId }: { userId: string }) {
+function _VendorAnalyticsTab_REMOVED({ userId }: { userId: string }) {
   const { toast } = useToast();
 
   // Inventory tracker state
@@ -979,7 +978,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    const validTabs = ["profile", "events", "notifications", "analytics", "map", "billing", "vendor-analytics", "payments"];
+    const validTabs = ["profile", "events", "notifications", "map", "billing", "payments"];
     if (tab && validTabs.includes(tab)) setActiveTab(tab);
   }, [location]);
 
@@ -990,8 +989,6 @@ export default function ProfilePage() {
   const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const isVendorPro = isEventOwnerPro;
   const hasActivePro = isAdmin || (profile?.subscriptionStatus === "active" && (profile?.subscriptionTier !== "free" && profile?.subscriptionTier !== null));
-
-  const { data: analytics } = useOwnerAnalytics(isEventOwnerPro ? userId : undefined);
 
   const [form, setForm] = useState({
     profileType: profile?.profileType || "general",
@@ -1174,9 +1171,6 @@ export default function ProfilePage() {
                   <span className="ml-1.5 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{unreadCount}</span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="analytics" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-analytics">
-                <BarChart3 className="w-4 h-4 mr-1.5" />Analytics
-              </TabsTrigger>
               <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Events</TabsTrigger>
               <TabsTrigger value="map" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-map">
                 <Map className="w-4 h-4 mr-1.5" />Map
@@ -1185,11 +1179,6 @@ export default function ProfilePage() {
                 <DollarSign className="w-4 h-4 mr-1.5" />Payments
               </TabsTrigger>
             </>
-          )}
-          {isVendorPro && (
-            <TabsTrigger value="vendor-analytics" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-vendor-analytics">
-              <TrendingUp className="w-4 h-4 mr-1.5" />Analytics
-            </TabsTrigger>
           )}
         </TabsList>
 
@@ -1590,68 +1579,6 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* EVENT OWNER ANALYTICS */}
-        {isEventOwnerPro && (
-          <TabsContent value="analytics" className="mt-0 space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: "Total Events", value: analytics?.totalEvents ?? 0 },
-                { label: "Unique Vendors", value: analytics?.vendors?.length ?? 0 },
-                { label: "Avg Attending", value: analytics?.avgAttending ?? 0 },
-                { label: "Avg Interested", value: analytics?.avgInterested ?? 0 },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm">
-                  <p className="text-sm text-muted-foreground">{label}</p>
-                  <p className="text-3xl font-bold text-foreground mt-1">{value}</p>
-                </div>
-              ))}
-            </div>
-            {analytics?.repeatVendors?.length > 0 && (
-              <Card>
-                <CardHeader><CardTitle>Repeat Vendors</CardTitle><CardDescription>Vendors who've appeared at 2 or more of your events.</CardDescription></CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {analytics.repeatVendors.map((v: any) => (
-                      <div key={v.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl">
-                        <span className="font-medium">{v.name}</span>
-                        <Badge variant="secondary">{v.eventCount} events</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {analytics?.vendors?.length > 0 && (
-              <Card>
-                <CardHeader><CardTitle>All Vendors Across Your Events</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {analytics.vendors.map((v: any) => (
-                      <div key={v.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl">
-                        <span className="font-medium">{v.name}</span>
-                        <Badge variant="outline">{v.eventCount} event{v.eventCount !== 1 ? 's' : ''}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {(!analytics || analytics.vendors?.length === 0) && (
-              <div className="text-center py-12 bg-card rounded-2xl border border-dashed">
-                <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p className="text-muted-foreground">No vendor data yet. Vendors will appear as they sign up to your events.</p>
-              </div>
-            )}
-          </TabsContent>
-        )}
-
-        {/* VENDOR ANALYTICS (Vendor Pro + Admin) */}
-        {isVendorPro && (
-          <TabsContent value="vendor-analytics" className="mt-0">
-            {userId && <VendorAnalyticsTab userId={userId} />}
-          </TabsContent>
-        )}
 
         {/* EVENT MAP (Event Owner Pro only) */}
         {isEventOwnerPro && (
