@@ -340,6 +340,13 @@ export default function InventoryPage() {
           color="bg-pink-500/10 text-pink-600"
           onClick={() => setLocation("/inventory/analytics")}
         />
+        <ActionCard
+          icon={<BarChart3 className="w-6 h-6" />}
+          title="COGS & Profit Tracker"
+          description="Track cost of goods and calculate profit margins"
+          color="bg-amber-500/10 text-amber-600"
+          onClick={() => setLocation("/cogs")}
+        />
       </div>
 
       {/* LOG ITEMS DIALOG */}
