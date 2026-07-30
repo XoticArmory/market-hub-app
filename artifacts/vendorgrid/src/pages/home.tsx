@@ -562,6 +562,13 @@ export default function Home() {
                               <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-primary/70" /><span className="line-clamp-2">{event.location}</span>
                             </div>
                             <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                              <Calendar className="w-4 h-4 shrink-0 text-primary/70" />
+                              <span>
+                                {format(getNextDate(event), 'h:mm a')}
+                                {(event as any).endTime && <> – {format(new Date((event as any).endTime), 'h:mm a')}</>}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
                               <Users className="w-4 h-4 shrink-0 text-primary/70" />
                               <span>{event.attendingCount || 0} attending · {event.interestedCount || 0} interested</span>
                             </div>

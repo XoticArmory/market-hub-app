@@ -655,7 +655,13 @@ export default function EventDetail() {
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><Clock className="w-5 h-5" /></div>
-              <div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Time</p><p className="font-medium text-foreground">{format(new Date(event.date), 'h:mm a')}</p></div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Time</p>
+                <p className="font-medium text-foreground">
+                  {format(new Date(event.date), 'h:mm a')}
+                  {(event as any).endTime && <> – {format(new Date((event as any).endTime), 'h:mm a')}</>}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><MapPin className="w-5 h-5" /></div>
@@ -763,7 +769,10 @@ export default function EventDetail() {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Additional Dates</p>
               <div className="flex flex-wrap gap-2">
                 {(event.extraDates || []).map((d: any) => (
-                  <Badge key={d.id} variant="secondary" className="text-sm">{format(new Date(d.date), 'MMM d, yyyy h:mm a')}</Badge>
+                  <Badge key={d.id} variant="secondary" className="text-sm">
+                    {format(new Date(d.date), 'MMM d, yyyy h:mm a')}
+                    {d.endTime && <> – {format(new Date(d.endTime), 'h:mm a')}</>}
+                  </Badge>
                 ))}
               </div>
             </div>
