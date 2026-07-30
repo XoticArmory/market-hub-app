@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, ShoppingCart, Package, Loader2, Plus, TrendingUp, DollarSign, Calendar, Pencil } from "lucide-react";
+import { ArrowLeft, Package, Loader2, TrendingUp, DollarSign, Calendar, Pencil, Minus, Plus, Check } from "lucide-react";
 
 interface EventSummaryItem {
   catalogItemId: number;
@@ -45,9 +45,37 @@ export default function InventoryEventPage() {
   // Date filter from ?date=YYYY-MM-DD (set when navigating from a multi-day event)
   const dateParam = new URLSearchParams(search).get("date") ?? "";
 
-  const [logSaleOpen, setLogSaleOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<EventSummaryItem | null>(null);
-  const [saleQty, setSaleQty] = useState("");
+  // pending tally: catalogItemId -> qty staged but not yet submitted
+  const [pendingSales, setPendingSales] = useState<Record<number, number>>({});
+  // track which items are currently submitting
+  const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
+
+  function increment(item: EventSummaryItem) {
+    const remaining = item.quantityAssigned - item.totalSold - (pendingSales[item.catalogItemId] ?? 0);
+    if (remaining <= 0) return;
+    setPendingSales(p => ({ ...p, [item.catalogItemId]: (p[item.catalogItemId] ?? 0) + 1 }));
+  }
+
+  function decrement(id: number) {
+    setPendingSales(p => {
+      const next = (p[id] ?? 0) - 1;
+      if (next <= 0) { const { [id]: _, ...rest } = p; return rest; }
+      return { ...p, [id]: next };
+    });
+  }
+
+  function confirmSale(item: EventSummaryItem) {
+    const qty = pendingSales[item.catalogItemId] ?? 0;
+    if (qty <= 0) return;
+    setSubmitting(s => ({ ...s, [item.catalogItemId]: true }));
+    logSale.mutate(
+      { catalogItemId: item.catalogItemId, eventId: eid, quantitySold: qty, ...(dateParam ? { date: dateParam } : {}) },
+      {
+        onSettled: () => setSubmitting(s => ({ ...s, [item.catalogItemId]: false })),
+        onSuccess: () => setPendingSales(p => { const { [item.catalogItemId]: _, ...rest } = p; return rest; }),
+      }
+    );
+  }
 
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<EventSummaryItem | null>(null);
@@ -79,12 +107,9 @@ export default function InventoryEventPage() {
 
   const logSale = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/vendor/inventory/sales", data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: [summaryUrl] });
-      toast({ title: "Sale logged!" });
-      setLogSaleOpen(false);
-      setSelectedItem(null);
-      setSaleQty("");
+      toast({ title: `+${variables.quantitySold} sold` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -254,24 +279,50 @@ export default function InventoryEventPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1.5 flex-shrink-0">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={remaining <= 0}
-                        onClick={() => {
-                          setSelectedItem(item);
-                          setSaleQty("");
-                          setLogSaleOpen(true);
-                        }}
-                      >
-                        <Plus className="w-4 h-4 mr-1" />
-                        Log Sale
-                      </Button>
+                    <div className="flex flex-col gap-2 flex-shrink-0 items-end">
+                      {/* Sold clicker */}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          disabled={(pendingSales[item.catalogItemId] ?? 0) <= 0}
+                          onClick={() => decrement(item.catalogItemId)}
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </Button>
+                        <span className="w-7 text-center text-sm font-semibold tabular-nums">
+                          {pendingSales[item.catalogItemId] ?? 0}
+                        </span>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8"
+                          disabled={remaining - (pendingSales[item.catalogItemId] ?? 0) <= 0}
+                          onClick={() => increment(item)}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          className="h-8 w-8 bg-emerald-600 hover:bg-emerald-700"
+                          disabled={(pendingSales[item.catalogItemId] ?? 0) <= 0 || submitting[item.catalogItemId]}
+                          onClick={() => confirmSale(item)}
+                        >
+                          {submitting[item.catalogItemId]
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Check className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {(pendingSales[item.catalogItemId] ?? 0) > 0
+                          ? `+${pendingSales[item.catalogItemId]} pending — tap ✓`
+                          : remaining > 0 ? "Tap + to tally sales" : "Sold out"}
+                      </p>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground h-7 px-2"
                         onClick={() => openEdit(item)}
                       >
                         <Pencil className="w-3.5 h-3.5 mr-1" />
@@ -285,76 +336,6 @@ export default function InventoryEventPage() {
           })}
         </div>
       )}
-
-      <Dialog open={logSaleOpen} onOpenChange={open => { if (!open) { setLogSaleOpen(false); setSelectedItem(null); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Log Sale — {selectedItem?.itemName}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Brought</span>
-                <span className="font-medium">{selectedItem?.quantityAssigned}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Already sold</span>
-                <span className="font-medium">{selectedItem?.totalSold}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Remaining</span>
-                <span className="font-medium">{(selectedItem?.quantityAssigned ?? 0) - (selectedItem?.totalSold ?? 0)}</span>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Quantity sold this session</Label>
-              <Input
-                type="number"
-                min="1"
-                max={selectedItem ? selectedItem.quantityAssigned - selectedItem.totalSold : undefined}
-                placeholder="0"
-                value={saleQty}
-                onChange={e => setSaleQty(e.target.value)}
-              />
-            </div>
-            {saleQty && Number(saleQty) > 0 && (
-              <div className="p-2 rounded-lg bg-primary/5 text-sm space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Revenue</span>
-                  <span className="font-medium text-primary">{formatPrice(Number(saleQty) * (selectedItem?.priceCents ?? 0))}</span>
-                </div>
-                {(selectedItem?.costCents ?? 0) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Profit</span>
-                    <span className="font-medium text-emerald-600">
-                      {formatPrice(Number(saleQty) * ((selectedItem?.priceCents ?? 0) - (selectedItem?.costCents ?? 0)))}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => { setLogSaleOpen(false); setSelectedItem(null); }}>Cancel</Button>
-            <Button
-              disabled={!saleQty || Number(saleQty) <= 0 || logSale.isPending}
-              onClick={() => {
-                if (!selectedItem) return;
-                logSale.mutate({
-                  catalogItemId: selectedItem.catalogItemId,
-                  eventId: eid,
-                  quantitySold: Number(saleQty),
-                  ...(dateParam ? { date: dateParam } : {}),
-                });
-              }}
-            >
-              {logSale.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              <ShoppingCart className="w-4 h-4 mr-2" />
-              Log Sale
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* EDIT ITEM DIALOG */}
       <Dialog open={editOpen} onOpenChange={open => { if (!open) { setEditOpen(false); setEditItem(null); } }}>
