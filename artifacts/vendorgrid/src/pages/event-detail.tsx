@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace, useDeclareVendingIntent } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store, Navigation } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store, Navigation, Phone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -257,6 +257,8 @@ export default function EventDetail() {
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [intentDialogOpen, setIntentDialogOpen] = useState(false);
   const [emailCopyOpen, setEmailCopyOpen] = useState(false);
+  const [phoneCopyOpen, setPhoneCopyOpen] = useState(false);
+  const [phoneCopied, setPhoneCopied] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
   const [addPhotoUrl, setAddPhotoUrl] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<any>(null);
@@ -518,6 +520,7 @@ export default function EventDetail() {
   const isExternalReg = regType === 'external' && !!regUrl;
   const isFormReg = regType === 'form' && !!regUrl;
   const isEmailReg = regType === 'email' && !!regUrl;
+  const isPhoneReg = regType === 'phone' && !!regUrl;
   const spotPrice = event?.spotPrice || 0;
   const spotPriceDollars = (spotPrice / 100).toFixed(2);
   const platformFee = isVendorPro ? 0 : Math.round(spotPrice * 0.005);
@@ -885,6 +888,15 @@ export default function EventDetail() {
                     data-testid="button-vendor-email-register"
                   >
                     <Mail className="w-4 h-4" />Register via Email
+                  </Button>
+                ) : isPhoneReg ? (
+                  <Button
+                    size="default"
+                    className="rounded-xl gap-2"
+                    onClick={() => setPhoneCopyOpen(true)}
+                    data-testid="button-vendor-phone-register"
+                  >
+                    <Phone className="w-4 h-4" />Register via Phone
                   </Button>
                 ) : (
                   <Button
@@ -1809,6 +1821,61 @@ export default function EventDetail() {
             >
               <Copy className="w-4 h-4" />{emailCopied ? "Copied!" : "Copy Email Address"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Phone Registration Dialog */}
+      <Dialog open={phoneCopyOpen} onOpenChange={(o) => { setPhoneCopyOpen(o); if (!o) setPhoneCopied(false); }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display flex items-center gap-2">
+              <Phone className="w-5 h-5 text-primary" />Register via Phone
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-1">
+            <p className="text-sm text-muted-foreground">
+              This event accepts vendor applications by phone. Call or text the number below to apply for a space.
+            </p>
+            <div className="flex items-center gap-2 bg-muted rounded-xl px-4 py-3">
+              <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="flex-1 text-sm font-medium select-all" data-testid="text-owner-phone">{regUrl}</span>
+              <button
+                type="button"
+                data-testid="button-copy-phone"
+                className="shrink-0 p-1.5 rounded-lg hover:bg-background transition-colors"
+                onClick={() => {
+                  if (regUrl) {
+                    navigator.clipboard.writeText(regUrl).then(() => {
+                      setPhoneCopied(true);
+                      setTimeout(() => setPhoneCopied(false), 2500);
+                    });
+                  }
+                }}
+              >
+                {phoneCopied ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+              </button>
+            </div>
+            {phoneCopied && (
+              <p className="text-xs text-green-600 text-center font-medium">Phone number copied!</p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 rounded-xl gap-2"
+                onClick={() => { if (regUrl) window.location.href = `tel:${regUrl.replace(/\s/g, '')}`; }}
+                data-testid="button-call-phone"
+              >
+                <Phone className="w-4 h-4" />Call
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl gap-2"
+                onClick={() => { if (regUrl) window.location.href = `sms:${regUrl.replace(/\s/g, '')}`; }}
+                data-testid="button-text-phone"
+              >
+                <Copy className="w-4 h-4" />Text
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

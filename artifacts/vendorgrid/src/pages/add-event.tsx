@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell, Image as ImageIcon } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell, Image as ImageIcon, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/image-upload";
 
@@ -25,7 +25,7 @@ const formSchema = z.object({
   contactEmail: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
   eventWebsiteUrl: z.string().optional(),
   registrationCode: z.string().optional(),
-  vendorRegistrationType: z.enum(["vendorgrid", "external", "form", "email"]).optional(),
+  vendorRegistrationType: z.enum(["vendorgrid", "external", "form", "email", "phone"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.vendorRegistrationType === "external" && !data.vendorRegistrationUrl?.trim()) {
@@ -39,6 +39,12 @@ const formSchema = z.object({
   }
   if (data.vendorRegistrationType === "email" && data.vendorRegistrationUrl?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.vendorRegistrationUrl.trim())) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter a valid email address", path: ["vendorRegistrationUrl"] });
+  }
+  if (data.vendorRegistrationType === "phone" && !data.vendorRegistrationUrl?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter a phone number vendors can call or text", path: ["vendorRegistrationUrl"] });
+  }
+  if (data.vendorRegistrationType === "phone" && data.vendorRegistrationUrl?.trim() && !/^[\d\s\-\+\(\)\.ext]+$/i.test(data.vendorRegistrationUrl.trim())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please enter a valid phone number", path: ["vendorRegistrationUrl"] });
   }
 });
 
@@ -298,6 +304,21 @@ export default function AddEvent() {
                         <p className="text-xs text-muted-foreground mt-0.5">Vendors email you directly to apply for a space</p>
                       </div>
                     </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-register-phone"
+                      onClick={() => { field.onChange("phone"); form.setValue("vendorRegistrationUrl", ""); }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "phone" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "phone" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Register via phone</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors call or text you to claim a spot</p>
+                      </div>
+                    </button>
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -370,6 +391,27 @@ export default function AddEvent() {
                     />
                   </FormControl>
                   <p className="text-xs text-muted-foreground">Vendors will be shown this email to contact you directly. It will be displayed as a copy-to-clipboard prompt.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
+            {isEventOwnerPro && registrationType === "phone" && (
+              <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-semibold flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-primary" />Contact Phone Number
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      data-testid="input-registration-phone"
+                      type="tel"
+                      placeholder="(555) 867-5309"
+                      className="h-14 rounded-xl text-base"
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Vendors will be shown this number to call or text you directly to claim a spot.</p>
                   <FormMessage />
                 </FormItem>
               )} />
