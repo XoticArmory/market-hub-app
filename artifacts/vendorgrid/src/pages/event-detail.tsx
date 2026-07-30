@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace, useDeclareVendingIntent } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store, Navigation, Phone } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store, Navigation, Phone, Globe, LayoutGrid } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -181,26 +181,118 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
               </div>
               <FormField control={form.control} name="vendorRegistrationType" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Registration Type</FormLabel>
-                  <FormControl>
-                    <select {...field} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background" data-testid="select-edit-regtype">
-                      <option value="">None</option>
-                      <option value="vendorgrid">VendorGrid</option>
-                      <option value="external">External URL</option>
-                      <option value="form">Form URL</option>
-                      <option value="email">Register via Email</option>
-                    </select>
-                  </FormControl>
+                  <FormLabel>How should vendors register?</FormLabel>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                    <button
+                      type="button"
+                      data-testid="option-edit-register-vendorgrid"
+                      onClick={() => { field.onChange("vendorgrid"); form.setValue("vendorRegistrationUrl", ""); }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "vendorgrid" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "vendorgrid" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <LayoutGrid className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Register through VendorGrid</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors sign up directly on this platform</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-edit-register-external"
+                      onClick={() => field.onChange("external")}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "external" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "external" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <Globe className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Link to market website</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Send vendors to your own registration page</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-edit-register-form"
+                      onClick={() => field.onChange("form")}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "form" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "form" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <ClipboardList className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Application form + approval</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors apply via your form and await your approval</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-edit-register-email"
+                      onClick={() => { field.onChange("email"); form.setValue("vendorRegistrationUrl", ""); }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "email" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "email" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Register via email</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors email you directly to apply for a space</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="option-edit-register-phone"
+                      onClick={() => { field.onChange("phone"); form.setValue("vendorRegistrationUrl", ""); }}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${field.value === "phone" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 bg-background"}`}
+                    >
+                      <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${field.value === "phone" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Register via phone</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Vendors call or text you to claim a spot</p>
+                      </div>
+                    </button>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Registration URL</FormLabel>
-                  <FormControl><Input {...field} placeholder="https://..." data-testid="input-edit-regurl" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              {form.watch("vendorRegistrationType") === "email" && (
+                <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-primary" />Contact Email for Applications</FormLabel>
+                    <FormControl><Input {...field} type="email" placeholder="you@yourmarket.com" data-testid="input-edit-regurl" /></FormControl>
+                    <p className="text-xs text-muted-foreground">Vendors will be shown this email to contact you directly.</p>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+              {form.watch("vendorRegistrationType") === "phone" && (
+                <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-primary" />Contact Phone Number</FormLabel>
+                    <FormControl><Input {...field} type="tel" placeholder="(555) 867-5309" data-testid="input-edit-regurl" /></FormControl>
+                    <p className="text-xs text-muted-foreground">Vendors will be shown this number to call or text you directly.</p>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+              {(form.watch("vendorRegistrationType") === "external" || form.watch("vendorRegistrationType") === "form") && (
+                <FormField control={form.control} name="vendorRegistrationUrl" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      {form.watch("vendorRegistrationType") === "form" ? <ClipboardList className="w-3.5 h-3.5 text-primary" /> : <Globe className="w-3.5 h-3.5 text-primary" />}
+                      {form.watch("vendorRegistrationType") === "form" ? "Application Form URL" : "Market Website / Registration URL"}
+                    </FormLabel>
+                    <FormControl><Input {...field} placeholder={form.watch("vendorRegistrationType") === "form" ? "https://forms.google.com/..." : "https://yourmarket.com/register"} data-testid="input-edit-regurl" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
               <FormField control={form.control} name="registrationCode" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Registration Code</FormLabel>
