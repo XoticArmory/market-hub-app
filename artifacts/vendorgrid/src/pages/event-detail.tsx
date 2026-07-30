@@ -44,6 +44,7 @@ const editEventSchema = z.object({
   location: z.string().min(3, "Location required"),
   areaCode: z.string().optional(),
   date: z.string().min(1, "Date required"),
+  endTime: z.string().optional(),
   vendorSpaces: z.coerce.number().min(0),
   spotPrice: z.coerce.number().min(0),
   vendorRegistrationType: z.string().optional(),
@@ -69,6 +70,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
       location: event?.location || "",
       areaCode: event?.areaCode || "",
       date: event?.date ? new Date(event.date).toISOString().slice(0, 16) : "",
+      endTime: event?.endTime ? new Date(event.endTime).toISOString().slice(0, 16) : "",
       vendorSpaces: event?.vendorSpaces || 0,
       spotPrice: event?.spotPrice ? event.spotPrice / 100 : 0,
       vendorRegistrationType: event?.vendorRegistrationType || "",
@@ -86,6 +88,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
       location: vals.location,
       areaCode: vals.areaCode || null,
       date: vals.date,
+      endTime: vals.endTime || null,
       vendorSpaces: vals.vendorSpaces,
       spotPrice: Math.round((vals.spotPrice || 0) * 100),
       vendorRegistrationType: vals.vendorRegistrationType || null,
@@ -144,13 +147,22 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
                   </FormItem>
                 )} />
               </div>
-              <FormField control={form.control} name="date" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date &amp; Time</FormLabel>
-                  <FormControl><Input type="datetime-local" {...field} data-testid="input-edit-date" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="date" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Date &amp; Time</FormLabel>
+                    <FormControl><Input type="datetime-local" {...field} data-testid="input-edit-date" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="endTime" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End Time <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl><Input type="datetime-local" {...field} data-testid="input-edit-endtime" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="vendorSpaces" render={({ field }) => (
                   <FormItem>

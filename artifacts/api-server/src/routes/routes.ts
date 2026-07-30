@@ -745,12 +745,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isAdmin = profile?.isAdmin === true;
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
     if (!isPro(profile) && !isAdmin) return res.status(403).json({ message: "Pro subscription required to edit events." });
-    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'vendorSpaces', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail'];
+    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'endTime', 'vendorSpaces', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail'];
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (key in req.body) data[key] = req.body[key];
     }
     if (data.date) data.date = new Date(data.date);
+    if ('endTime' in data) data.endTime = data.endTime ? new Date(data.endTime) : null;
     if (data.vendorSpaces !== undefined) data.vendorSpaces = Number(data.vendorSpaces);
     if (data.spotPrice !== undefined) data.spotPrice = Number(data.spotPrice);
     const updated = await storage.updateEvent(eventId, data);
