@@ -185,7 +185,7 @@ export const vendorCatalog = pgTable("vendor_catalog", {
 
 export const vendorCatalogAssignments = pgTable("vendor_catalog_assignments", {
   id: serial("id").primaryKey(),
-  catalogItemId: integer("catalog_item_id").notNull().references(() => vendorCatalog.id),
+  catalogItemId: integer("catalog_item_id").notNull().references(() => vendorCatalog.id, { onDelete: "cascade" }),
   eventId: integer("event_id").notNull().references(() => events.id),
   vendorId: varchar("vendor_id").notNull().references(() => users.id),
   quantityAssigned: integer("quantity_assigned").notNull().default(0),
@@ -197,7 +197,7 @@ export const vendorCatalogAssignments = pgTable("vendor_catalog_assignments", {
 export const vendorInventorySales = pgTable("vendor_inventory_sales", {
   id: serial("id").primaryKey(),
   vendorId: varchar("vendor_id").notNull().references(() => users.id),
-  catalogItemId: integer("catalog_item_id").notNull().references(() => vendorCatalog.id),
+  catalogItemId: integer("catalog_item_id").notNull().references(() => vendorCatalog.id, { onDelete: "cascade" }),
   eventId: integer("event_id").notNull().references(() => events.id),
   quantitySold: integer("quantity_sold").notNull().default(0),
   soldAt: timestamp("sold_at").defaultNow(),
