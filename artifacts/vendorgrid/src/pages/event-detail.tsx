@@ -949,69 +949,75 @@ export default function EventDetail() {
                 {userStatus === "interested" ? "Interested" : "Mark Interested"}
               </Button>
 
-              {/* Vendor Registration — Vendor Pro only, next to Mark Interested */}
-              {isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && !myPost && (
-                isVendorGridReg ? (
-                  vendorSpacesLeft > 0 ? (
-                    <Button
-                      size="default"
-                      className="rounded-xl gap-2"
-                      onClick={() => setRegisterDialogOpen(true)}
-                      data-testid="button-vendor-registration"
-                    >
-                      <ShieldCheck className="w-4 h-4" />Vendor Registration
-                    </Button>
-                  ) : (
-                    <Button size="default" variant="outline" disabled className="rounded-xl gap-2 opacity-60" data-testid="button-no-spaces-left">
-                      <ShieldCheck className="w-4 h-4" />No Spaces Left
-                    </Button>
-                  )
-                ) : isExternalReg ? (
+              {/* Apply button — direct-registration types, available to ALL users (free, pro, logged-out) */}
+              {!isOwner && !event.canceledAt && (isExternalReg || isFormReg || isEmailReg || isPhoneReg) && (
+                isExternalReg ? (
                   <Button
                     size="default"
                     className="rounded-xl gap-2"
-                    onClick={() => window.open(regUrl!, '_blank')}
-                    data-testid="button-vendor-registration-external"
+                    onClick={() => window.open(regUrl!, '_blank', 'noopener,noreferrer')}
+                    data-testid="button-apply-external"
                   >
-                    <ExternalLink className="w-4 h-4" />Vendor Registration
+                    <ExternalLink className="w-4 h-4" />Apply
                   </Button>
                 ) : isFormReg ? (
                   <Button
                     size="default"
                     className="rounded-xl gap-2"
-                    onClick={() => setApplyDialogOpen(true)}
-                    data-testid="button-vendor-apply"
+                    onClick={() => window.open(regUrl!, '_blank', 'noopener,noreferrer')}
+                    data-testid="button-apply-form"
                   >
-                    <ClipboardList className="w-4 h-4" />Apply for a Space
+                    <ClipboardList className="w-4 h-4" />Apply
                   </Button>
                 ) : isEmailReg ? (
                   <Button
                     size="default"
                     className="rounded-xl gap-2"
                     onClick={() => setEmailCopyOpen(true)}
-                    data-testid="button-vendor-email-register"
+                    data-testid="button-apply-email"
                   >
-                    <Mail className="w-4 h-4" />Register via Email
+                    <Mail className="w-4 h-4" />Apply
                   </Button>
                 ) : isPhoneReg ? (
                   <Button
                     size="default"
                     className="rounded-xl gap-2"
                     onClick={() => setPhoneCopyOpen(true)}
-                    data-testid="button-vendor-phone-register"
+                    data-testid="button-apply-phone"
                   >
-                    <Phone className="w-4 h-4" />Register via Phone
+                    <Phone className="w-4 h-4" />Apply
                   </Button>
-                ) : (
+                ) : null
+              )}
+
+              {/* Vendor Registration — VendorGrid-managed, Vendor Pro only */}
+              {isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && !myPost && isVendorGridReg && (
+                vendorSpacesLeft > 0 ? (
                   <Button
                     size="default"
                     className="rounded-xl gap-2"
-                    onClick={() => setIsDialogOpen(true)}
+                    onClick={() => setRegisterDialogOpen(true)}
                     data-testid="button-vendor-registration"
                   >
-                    <Package className="w-4 h-4" />Vendor Registration
+                    <ShieldCheck className="w-4 h-4" />Vendor Registration
+                  </Button>
+                ) : (
+                  <Button size="default" variant="outline" disabled className="rounded-xl gap-2 opacity-60" data-testid="button-no-spaces-left">
+                    <ShieldCheck className="w-4 h-4" />No Spaces Left
                   </Button>
                 )
+              )}
+
+              {/* Fallback: no registration type set, Pro users only */}
+              {isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && !myPost && !isVendorGridReg && !isExternalReg && !isFormReg && !isEmailReg && !isPhoneReg && (
+                <Button
+                  size="default"
+                  className="rounded-xl gap-2"
+                  onClick={() => setIsDialogOpen(true)}
+                  data-testid="button-vendor-registration-fallback"
+                >
+                  <Package className="w-4 h-4" />Vendor Registration
+                </Button>
               )}
 
               {/* I'm Vending Here — all authenticated non-owners, when not already registered */}
