@@ -938,6 +938,30 @@ export default function EventDetail() {
                 <span>{(event as any).contactEmail}</span>
               </a>
             )}
+            {/* Email registration contact — shown when contactEmail isn't already the same address */}
+            {regType === 'email' && regUrl && regUrl !== (event as any).contactEmail && (
+              <a
+                href={`mailto:${regUrl}`}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                title={`Apply via email: ${regUrl}`}
+                data-testid="link-reg-email-detail"
+              >
+                <Mail className="w-4 h-4 text-primary" />
+                <span>{regUrl}</span>
+              </a>
+            )}
+            {/* Phone registration contact */}
+            {regType === 'phone' && regUrl && (
+              <a
+                href={`tel:${regUrl.replace(/\s/g, '')}`}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                title={`Apply via phone: ${regUrl}`}
+                data-testid="link-reg-phone-detail"
+              >
+                <Phone className="w-4 h-4 text-primary" />
+                <span>{regUrl}</span>
+              </a>
+            )}
           </div>
 
           {isAuthenticated ? (

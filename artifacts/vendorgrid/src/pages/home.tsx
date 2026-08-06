@@ -512,33 +512,70 @@ export default function Home() {
                           <Link href={`/events/${event.id}`} className="flex-1 min-w-0">
                             <h3 className="text-xl font-display font-bold text-foreground group-hover:text-primary transition-colors">{event.title}</h3>
                           </Link>
-                          {(event as any).contactEmail && (
-                            <a
-                              href={`mailto:${(event as any).contactEmail}`}
-                              className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                              title={`Email organizer: ${(event as any).contactEmail}`}
-                              data-testid={`link-event-email-${event.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Mail className="w-3.5 h-3.5" />
-                            </a>
-                          )}
-                          {((event as any).eventWebsiteUrl || (event as any).vendorRegistrationUrl || (event as any).creatorWebsiteUrl) && (
-                            <a
-                              href={normalizeUrl((event as any).eventWebsiteUrl || (event as any).vendorRegistrationUrl || (event as any).creatorWebsiteUrl)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                              title={
-                                (event as any).eventWebsiteUrl ? "Visit event website" :
-                                (event as any).vendorRegistrationUrl ? "Visit market website / registration" :
-                                "Visit organizer's website"
-                              }
-                              data-testid={`link-event-website-${event.id}`}
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          )}
+                          {(() => {
+                            const cardRegType = (event as any).vendorRegistrationType as string | undefined;
+                            const cardRegUrl = (event as any).vendorRegistrationUrl as string | undefined;
+                            const cardContactEmail = (event as any).contactEmail as string | undefined;
+                            // Website URL to use in the ExternalLink icon (never use email/phone reg URLs as links)
+                            const websiteUrl = (event as any).eventWebsiteUrl ||
+                              (cardRegType !== 'email' && cardRegType !== 'phone' ? cardRegUrl : undefined) ||
+                              (event as any).creatorWebsiteUrl;
+                            return (<>
+                              {/* General contact email icon */}
+                              {cardContactEmail && (
+                                <a
+                                  href={`mailto:${cardContactEmail}`}
+                                  className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title={`Email organizer: ${cardContactEmail}`}
+                                  data-testid={`link-event-email-${event.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Mail className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              {/* Email registration icon — only shown when contactEmail isn't already visible */}
+                              {!cardContactEmail && cardRegType === 'email' && cardRegUrl && (
+                                <a
+                                  href={`mailto:${cardRegUrl}`}
+                                  className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title={`Apply via email: ${cardRegUrl}`}
+                                  data-testid={`link-event-reg-email-${event.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Mail className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              {/* Phone registration icon */}
+                              {cardRegType === 'phone' && cardRegUrl && (
+                                <a
+                                  href={`tel:${cardRegUrl.replace(/\s/g, '')}`}
+                                  className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title={`Apply via phone: ${cardRegUrl}`}
+                                  data-testid={`link-event-reg-phone-${event.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Phone className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              {/* Website / external registration link */}
+                              {websiteUrl && (
+                                <a
+                                  href={normalizeUrl(websiteUrl)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title={
+                                    (event as any).eventWebsiteUrl ? "Visit event website" :
+                                    cardRegUrl && cardRegType !== 'email' && cardRegType !== 'phone' ? "Visit market website / registration" :
+                                    "Visit organizer's website"
+                                  }
+                                  data-testid={`link-event-website-${event.id}`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </>);
+                          })()}
                           {event.location && (
                             <a
                               href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(event.location)}`}
