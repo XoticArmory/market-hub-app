@@ -236,6 +236,15 @@ export const vendorEventOverhead = pgTable("vendor_event_overhead", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (t) => [unique("vendor_event_overhead_unique").on(t.vendorId, t.eventId)]);
 
+export const directMessages = pgTable("direct_messages", {
+  id: serial("id").primaryKey(),
+  senderId: varchar("sender_id").notNull().references(() => users.id),
+  recipientId: varchar("recipient_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const promoCodes = pgTable("promo_codes", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -354,6 +363,10 @@ export const documents = pgTable("documents", {
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true, senderId: true, createdAt: true });
+export type DirectMessage = typeof directMessages.$inferSelect;
+export type InsertDirectMessage = z.infer<typeof insertDirectMessageSchema>;
 
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;

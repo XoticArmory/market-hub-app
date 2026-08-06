@@ -1811,6 +1811,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // ---- DIRECT MESSAGES ----
+  app.get('/api/dm/unread-count', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const count = await storage.getDmUnreadCount(userId);
+    res.json({ count });
+  });
+
+  app.get('/api/dm', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const inbox = await storage.getDmInbox(userId);
+    res.json(inbox);
+  });
+
+  app.get('/api/dm/thread/:otherId', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { otherId } = req.params;
+    const thread = await storage.getDmThread(userId, otherId);
+    res.json(thread);
+  });
+
+  app.post('/api/dm', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { recipientId, content } = req.body;
+    if (!recipientId || !content?.trim()) {
+      return res.status(400).json({ message: "recipientId and content are required." });
+    }
+    if (recipientId === userId) {
+      return res.status(400).json({ message: "Cannot send a message to yourself." });
+    }
+    const msg = await storage.sendDirectMessage(userId, recipientId, content.trim());
+    res.status(201).json(msg);
+  });
+
+  app.post('/api/dm/thread/:otherId/read', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const { otherId } = req.params;
+    await storage.markDmThreadRead(userId, otherId);
+    res.json({ success: true });
+  });
+
+  app.get('/api/users/search', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json([]);
+    const results = await storage.searchUsers(q, userId);
+    res.json(results);
+  });
+
   // ---- EVENT MAPS ----
   app.get(api.eventMap.get.path, async (req, res) => {
     const eventId = Number(req.params.id);

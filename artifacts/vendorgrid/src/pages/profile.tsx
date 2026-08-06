@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle } from "lucide-react";
+import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle, MessageSquare, MessageCircle, Search, ArrowLeft } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useEvents } from "@/hooks/use-events";
 import { format } from "date-fns";
@@ -1110,10 +1110,95 @@ export default function ProfilePage() {
     });
   }
 
+  // ---- DM state ----
+  const [dmComposeOpen, setDmComposeOpen] = useState(false);
+  const [dmSearchQ, setDmSearchQ] = useState("");
+  const [dmRecipient, setDmRecipient] = useState<{ id: string; name: string; businessName: string | null } | null>(null);
+  const [dmComposeContent, setDmComposeContent] = useState("");
+  const [dmThreadOpen, setDmThreadOpen] = useState(false);
+  const [dmThreadOther, setDmThreadOther] = useState<{ id: string; name: string } | null>(null);
+  const [dmReplyContent, setDmReplyContent] = useState("");
+
+  const { data: dmInbox = [], refetch: refetchInbox } = useQuery<any[]>({
+    queryKey: ["/api/dm"],
+    enabled: isAuthenticated,
+  });
+
+  const { data: dmSearchResults = [], isFetching: isSearching } = useQuery<any[]>({
+    queryKey: ["/api/users/search", dmSearchQ],
+    queryFn: async () => {
+      if (dmSearchQ.trim().length < 2) return [];
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(dmSearchQ)}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: dmSearchQ.trim().length >= 2,
+  });
+
+  const { data: dmThreadMessages = [], refetch: refetchThread } = useQuery<any[]>({
+    queryKey: ["/api/dm/thread", dmThreadOther?.id],
+    queryFn: async () => {
+      if (!dmThreadOther?.id) return [];
+      const res = await fetch(`/api/dm/thread/${dmThreadOther.id}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: dmThreadOpen && !!dmThreadOther?.id,
+    refetchInterval: dmThreadOpen ? 5000 : false,
+  });
+
+  const sendDm = useMutation({
+    mutationFn: async ({ recipientId, content }: { recipientId: string; content: string }) => {
+      const res = await apiRequest("POST", "/api/dm", { recipientId, content });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dm"] });
+      setDmComposeOpen(false);
+      setDmRecipient(null);
+      setDmSearchQ("");
+      setDmComposeContent("");
+      toast({ title: "Message sent!" });
+    },
+    onError: (e: any) => toast({ title: "Send failed", description: e.message, variant: "destructive" }),
+  });
+
+  const replyDm = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", "/api/dm", { recipientId: dmThreadOther!.id, content });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dm"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dm/thread", dmThreadOther?.id] });
+      refetchThread();
+      refetchInbox();
+      setDmReplyContent("");
+    },
+    onError: (e: any) => toast({ title: "Send failed", description: e.message, variant: "destructive" }),
+  });
+
+  const markThreadRead = useMutation({
+    mutationFn: async (otherId: string) => {
+      const res = await apiRequest("POST", `/api/dm/thread/${otherId}/read`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dm"] });
+    },
+  });
+
+  const openThread = (otherId: string, otherName: string) => {
+    setDmThreadOther({ id: otherId, name: otherName });
+    setDmReplyContent("");
+    setDmThreadOpen(true);
+    markThreadRead.mutate(otherId);
+  };
+
   const myEvents = events?.filter(e => e.createdBy === user?.id) || [];
   const attendingEventIds = (profileData?.attendance || []).filter((a: any) => a.status === "attending").map((a: any) => a.eventId);
   const attendingEvents = events?.filter(e => attendingEventIds.includes(e.id)) || [];
-  const unreadCount = (notifications || []).filter((n: any) => !n.read).length;
+  const alertUnreadCount = (notifications || []).filter((n: any) => !n.read).length;
+  const dmUnreadCount = (dmInbox as any[]).reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0);
+  const unreadCount = alertUnreadCount + dmUnreadCount;
 
   if (!isAuthenticated) {
     return (
@@ -1163,14 +1248,14 @@ export default function ProfilePage() {
         <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap gap-1">
           <TabsTrigger value="profile" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Profile</TabsTrigger>
           <TabsTrigger value="billing" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Billing</TabsTrigger>
+          <TabsTrigger value="notifications" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm relative" data-testid="tab-notifications">
+            Messages
+            {unreadCount > 0 && (
+              <span className="ml-1.5 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{unreadCount}</span>
+            )}
+          </TabsTrigger>
           {isEventOwnerPro && (
             <>
-              <TabsTrigger value="notifications" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm relative" data-testid="tab-notifications">
-                Notifications
-                {unreadCount > 0 && (
-                  <span className="ml-1.5 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{unreadCount}</span>
-                )}
-              </TabsTrigger>
               <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Events</TabsTrigger>
               <TabsTrigger value="map" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-map">
                 <Map className="w-4 h-4 mr-1.5" />Map
@@ -1543,10 +1628,65 @@ export default function ProfilePage() {
             </Card>
           )}
 
+          {/* Direct Messages */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2"><MessageSquare className="w-5 h-5 text-primary" />Direct Messages</CardTitle>
+                <CardDescription>Send a private message to any user on VendorGrid.</CardDescription>
+              </div>
+              <Button size="sm" className="rounded-xl" onClick={() => { setDmRecipient(null); setDmSearchQ(""); setDmComposeContent(""); setDmComposeOpen(true); }}>
+                <MessageCircle className="w-4 h-4 mr-1.5" />New Message
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {(dmInbox as any[]).length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">No messages yet. Send your first message!</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(dmInbox as any[]).map((conv: any) => (
+                    <button
+                      key={conv.otherId}
+                      className={`w-full text-left p-4 rounded-xl border transition-all hover:bg-muted/50 ${conv.unreadCount > 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/20 border-border/30'}`}
+                      onClick={() => openThread(conv.otherId, conv.otherBusinessName || conv.otherName)}
+                      data-testid={`dm-conv-${conv.otherId}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-semibold text-sm text-foreground truncate">
+                              {conv.otherBusinessName || conv.otherName}
+                            </p>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {conv.unreadCount > 0 && (
+                                <span className="bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{conv.unreadCount}</span>
+                              )}
+                              <span className="text-xs text-muted-foreground">{format(new Date(conv.lastAt), 'MMM d')}</span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {conv.lastSenderId === userId ? "You: " : ""}{conv.lastContent}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* My Alerts */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div><CardTitle>My Alerts</CardTitle><CardDescription>In-app alerts from event owners and the platform.</CardDescription></div>
-              {unreadCount > 0 && (
+              {alertUnreadCount > 0 && (
                 <Button size="sm" variant="outline" className="rounded-xl" onClick={() => markAllRead()}>Mark all read</Button>
               )}
             </CardHeader>
@@ -1579,6 +1719,140 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* DM Compose Dialog */}
+        <Dialog open={dmComposeOpen} onOpenChange={(o) => { setDmComposeOpen(o); if (!o) { setDmRecipient(null); setDmSearchQ(""); setDmComposeContent(""); } }}>
+          <DialogContent className="rounded-2xl max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><MessageCircle className="w-5 h-5 text-primary" />New Message</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              {!dmRecipient ? (
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Search for a user</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Name or business name…"
+                      value={dmSearchQ}
+                      onChange={e => setDmSearchQ(e.target.value)}
+                      className="rounded-xl pl-9"
+                      autoFocus
+                    />
+                  </div>
+                  {isSearching && <p className="text-xs text-muted-foreground mt-2">Searching…</p>}
+                  {!isSearching && dmSearchQ.length >= 2 && (dmSearchResults as any[]).length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-2">No users found.</p>
+                  )}
+                  {(dmSearchResults as any[]).length > 0 && (
+                    <div className="mt-2 space-y-1 max-h-56 overflow-y-auto">
+                      {(dmSearchResults as any[]).map((u: any) => (
+                        <button
+                          key={u.id}
+                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-muted/60 transition-colors flex items-center gap-3"
+                          onClick={() => { setDmRecipient(u); setDmSearchQ(""); }}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <User className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{u.businessName || u.name}</p>
+                            {u.businessName && <p className="text-xs text-muted-foreground">{u.name}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/40 border border-border/40">
+                    <button onClick={() => setDmRecipient(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <User className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <p className="text-sm font-semibold">{dmRecipient.businessName || dmRecipient.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold mb-2 block">Message</label>
+                    <Textarea
+                      placeholder="Write your message…"
+                      value={dmComposeContent}
+                      onChange={e => setDmComposeContent(e.target.value)}
+                      className="rounded-xl resize-none"
+                      rows={4}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    className="w-full rounded-xl"
+                    disabled={!dmComposeContent.trim() || sendDm.isPending}
+                    onClick={() => sendDm.mutate({ recipientId: dmRecipient.id, content: dmComposeContent })}
+                  >
+                    {sendDm.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</> : <><Send className="w-4 h-4 mr-2" />Send Message</>}
+                  </Button>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* DM Thread Dialog */}
+        <Dialog open={dmThreadOpen} onOpenChange={(o) => { setDmThreadOpen(o); if (!o) setDmReplyContent(""); }}>
+          <DialogContent className="rounded-2xl max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                {dmThreadOther?.name || "Conversation"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 pt-2">
+              <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
+                {(dmThreadMessages as any[]).length === 0 && (
+                  <p className="text-center text-sm text-muted-foreground py-6">No messages yet.</p>
+                )}
+                {(dmThreadMessages as any[]).map((msg: any) => {
+                  const isMine = msg.senderId === userId;
+                  return (
+                    <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${isMine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted border border-border/40 rounded-bl-sm'}`}>
+                        <p>{msg.content}</p>
+                        <p className={`text-xs mt-1 ${isMine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                          {format(new Date(msg.createdAt), 'MMM d, h:mm a')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2 pt-2 border-t border-border/40">
+                <Textarea
+                  placeholder="Reply…"
+                  value={dmReplyContent}
+                  onChange={e => setDmReplyContent(e.target.value)}
+                  className="rounded-xl resize-none text-sm"
+                  rows={2}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && dmReplyContent.trim()) {
+                      e.preventDefault();
+                      replyDm.mutate(dmReplyContent);
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  className="rounded-xl self-end px-4"
+                  disabled={!dmReplyContent.trim() || replyDm.isPending}
+                  onClick={() => replyDm.mutate(dmReplyContent)}
+                >
+                  {replyDm.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* EVENT MAP (Event Owner Pro only) */}
         {isEventOwnerPro && (

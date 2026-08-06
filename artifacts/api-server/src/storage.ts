@@ -5,7 +5,7 @@ import {
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, vendorInventorySales, roadmapItems,
   promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
-  vendorItemCogs, vendorEventOverhead, documents, userFiles,
+  vendorItemCogs, vendorEventOverhead, documents, userFiles, directMessages,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -18,6 +18,7 @@ import {
   type VendorItemCogs, type VendorEventOverhead,
   type Document, type InsertDocument,
   type UserFile, type InsertUserFile,
+  type DirectMessage,
 } from "@workspace/db";
 import { users } from "@workspace/db";
 
@@ -175,6 +176,14 @@ export interface IStorage {
   getEventDaysEndingOn(date: Date): Promise<{ eventId: number; date: Date }[]>;
   hasExistingDayReport(userId: string, eventId: number, dateSlug: string): Promise<boolean>;
   deductSoldInventoryForDay(vendorId: string, eventId: number, forDate: Date): Promise<number>;
+
+  // Direct Messages
+  sendDirectMessage(senderId: string, recipientId: string, content: string): Promise<DirectMessage>;
+  getDmInbox(userId: string): Promise<any[]>;
+  getDmThread(userId: string, otherId: string): Promise<any[]>;
+  markDmThreadRead(userId: string, senderId: string): Promise<void>;
+  getDmUnreadCount(userId: string): Promise<number>;
+  searchUsers(query: string, excludeUserId: string): Promise<{ id: string; name: string; businessName: string | null }[]>;
 
   // Documents
   getDocuments(): Promise<Document[]>;
@@ -1208,6 +1217,108 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.email, email.toLowerCase().trim()));
     return u;
+  }
+
+  // ---- Direct Messages ----
+  async sendDirectMessage(senderId: string, recipientId: string, content: string): Promise<DirectMessage> {
+    const [msg] = await db.insert(directMessages).values({ senderId, recipientId, content }).returning();
+    return msg;
+  }
+
+  async getDmInbox(userId: string): Promise<any[]> {
+    const result = await pool.query(`
+      WITH ranked AS (
+        SELECT
+          dm.*,
+          CASE WHEN dm.sender_id = $1 THEN dm.recipient_id ELSE dm.sender_id END AS other_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY CASE WHEN dm.sender_id = $1 THEN dm.recipient_id ELSE dm.sender_id END
+            ORDER BY dm.created_at DESC
+          ) AS rn
+        FROM direct_messages dm
+        WHERE dm.sender_id = $1 OR dm.recipient_id = $1
+      )
+      SELECT
+        r.other_id,
+        r.content AS last_content,
+        r.sender_id AS last_sender_id,
+        r.created_at AS last_at,
+        COALESCE((
+          SELECT COUNT(*)::int FROM direct_messages d2
+          WHERE d2.recipient_id = $1 AND d2.sender_id = r.other_id AND d2.read = false
+        ), 0) AS unread_count,
+        TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS other_name,
+        up.business_name AS other_business_name
+      FROM ranked r
+      LEFT JOIN users u ON u.id = r.other_id
+      LEFT JOIN user_profiles up ON up.user_id = r.other_id
+      WHERE r.rn = 1
+      ORDER BY r.last_at DESC
+    `, [userId]);
+    return result.rows.map(r => ({
+      otherId: r.other_id,
+      lastContent: r.last_content,
+      lastSenderId: r.last_sender_id,
+      lastAt: r.last_at,
+      unreadCount: r.unread_count,
+      otherName: r.other_name || "Unknown User",
+      otherBusinessName: r.other_business_name,
+    }));
+  }
+
+  async getDmThread(userId: string, otherId: string): Promise<any[]> {
+    const result = await pool.query(`
+      SELECT dm.*,
+        TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS sender_name
+      FROM direct_messages dm
+      LEFT JOIN users u ON u.id = dm.sender_id
+      WHERE (dm.sender_id = $1 AND dm.recipient_id = $2)
+         OR (dm.sender_id = $2 AND dm.recipient_id = $1)
+      ORDER BY dm.created_at ASC
+    `, [userId, otherId]);
+    return result.rows.map(r => ({
+      id: r.id,
+      senderId: r.sender_id,
+      recipientId: r.recipient_id,
+      content: r.content,
+      read: r.read,
+      createdAt: r.created_at,
+      senderName: r.sender_name || "Unknown",
+    }));
+  }
+
+  async markDmThreadRead(userId: string, senderId: string): Promise<void> {
+    await pool.query(
+      "UPDATE direct_messages SET read = true WHERE recipient_id = $1 AND sender_id = $2 AND read = false",
+      [userId, senderId]
+    );
+  }
+
+  async getDmUnreadCount(userId: string): Promise<number> {
+    const result = await pool.query<{ count: string }>(
+      "SELECT COUNT(*)::int AS count FROM direct_messages WHERE recipient_id = $1 AND read = false",
+      [userId]
+    );
+    return Number(result.rows[0]?.count || 0);
+  }
+
+  async searchUsers(query: string, excludeUserId: string): Promise<{ id: string; name: string; businessName: string | null }[]> {
+    const q = `%${query.toLowerCase()}%`;
+    const result = await pool.query<{ id: string; name: string; business_name: string | null }>(`
+      SELECT u.id,
+             TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS name,
+             p.business_name
+      FROM users u
+      LEFT JOIN user_profiles p ON p.user_id = u.id
+      WHERE u.id != $2
+        AND (
+          LOWER(COALESCE(p.business_name, '')) LIKE $1
+          OR LOWER(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, ''))) LIKE $1
+        )
+      ORDER BY p.business_name NULLS LAST, u.first_name
+      LIMIT 10
+    `, [q, excludeUserId]);
+    return result.rows.map(r => ({ id: r.id, name: r.name, businessName: r.business_name }));
   }
 
   async searchProUsers(query: string): Promise<{ id: string; name: string; businessName: string | null; zip: string | null }[]> {

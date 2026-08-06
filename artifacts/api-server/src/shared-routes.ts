@@ -73,6 +73,16 @@ export const api = {
     markAllRead: { method: 'POST' as const, path: '/api/notifications/read-all' as const, responses: { 200: z.any() } },
     unreadCount: { method: 'GET' as const, path: '/api/notifications/unread-count' as const, responses: { 200: z.any() } },
   },
+  dm: {
+    send: { method: 'POST' as const, path: '/api/dm' as const, input: z.object({ recipientId: z.string(), content: z.string() }), responses: { 201: z.any() } },
+    inbox: { method: 'GET' as const, path: '/api/dm' as const, responses: { 200: z.array(z.any()) } },
+    thread: { method: 'GET' as const, path: '/api/dm/thread/:userId' as const, responses: { 200: z.array(z.any()) } },
+    markThreadRead: { method: 'POST' as const, path: '/api/dm/thread/:userId/read' as const, responses: { 200: z.any() } },
+    unreadCount: { method: 'GET' as const, path: '/api/dm/unread-count' as const, responses: { 200: z.any() } },
+  },
+  users: {
+    search: { method: 'GET' as const, path: '/api/users/search' as const, responses: { 200: z.array(z.any()) } },
+  },
   eventMap: {
     get: { method: 'GET' as const, path: '/api/events/:id/map' as const, responses: { 200: z.any() } },
     save: { method: 'PUT' as const, path: '/api/events/:id/map' as const, input: z.object({ mapData: z.any() }), responses: { 200: z.any() } },
