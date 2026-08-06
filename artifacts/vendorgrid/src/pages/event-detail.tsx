@@ -473,9 +473,11 @@ export default function EventDetail() {
       }
       // Also update every matching entry in the events list cache so the home
       // page card reflects the change without waiting for a full list refetch.
+      // Guard with Array.isArray: other queries keyed under "/api/events" (e.g.
+      // map, attendance) return objects, not arrays — calling .map on them throws.
       qc.setQueriesData<any[]>(
         { queryKey: [api.events.list.path], exact: false },
-        (old) => old?.map((e) => e.id === eventId ? { ...e, ...updatedFields } : e),
+        (old) => Array.isArray(old) ? old.map((e) => e.id === eventId ? { ...e, ...updatedFields } : e) : old,
       );
       qc.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
       qc.invalidateQueries({ queryKey: [api.events.list.path] });
