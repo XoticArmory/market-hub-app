@@ -180,6 +180,7 @@ export interface IStorage {
   // Direct Messages
   sendDirectMessage(senderId: string, recipientId: string, content: string): Promise<DirectMessage>;
   getDmInbox(userId: string): Promise<any[]>;
+  getDmSent(userId: string): Promise<any[]>;
   getDmThread(userId: string, otherId: string): Promise<any[]>;
   markDmThreadRead(userId: string, senderId: string): Promise<void>;
   getDmUnreadCount(userId: string): Promise<number>;
@@ -1284,6 +1285,27 @@ export class DatabaseStorage implements IStorage {
       read: r.read,
       createdAt: r.created_at,
       senderName: r.sender_name || "Unknown",
+    }));
+  }
+
+  async getDmSent(userId: string): Promise<any[]> {
+    const result = await pool.query(`
+      SELECT dm.*,
+        TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS recipient_name,
+        up.business_name AS recipient_business_name
+      FROM direct_messages dm
+      LEFT JOIN users u ON u.id = dm.recipient_id
+      LEFT JOIN user_profiles up ON up.user_id = dm.recipient_id
+      WHERE dm.sender_id = $1
+      ORDER BY dm.created_at DESC
+    `, [userId]);
+    return result.rows.map(r => ({
+      id: r.id,
+      recipientId: r.recipient_id,
+      content: r.content,
+      read: r.read,
+      createdAt: r.created_at,
+      recipientName: r.recipient_business_name || r.recipient_name || "Unknown User",
     }));
   }
 

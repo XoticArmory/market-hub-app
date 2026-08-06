@@ -1111,6 +1111,7 @@ export default function ProfilePage() {
   }
 
   // ---- DM state ----
+  const [dmView, setDmView] = useState<"inbox" | "sent">("inbox");
   const [dmComposeOpen, setDmComposeOpen] = useState(false);
   const [dmSearchQ, setDmSearchQ] = useState("");
   const [dmRecipient, setDmRecipient] = useState<{ id: string; name: string; businessName: string | null } | null>(null);
@@ -1121,6 +1122,11 @@ export default function ProfilePage() {
 
   const { data: dmInbox = [], refetch: refetchInbox } = useQuery<any[]>({
     queryKey: ["/api/dm"],
+    enabled: isAuthenticated,
+  });
+
+  const { data: dmSent = [], refetch: refetchSent } = useQuery<any[]>({
+    queryKey: ["/api/dm/sent"],
     enabled: isAuthenticated,
   });
 
@@ -1152,6 +1158,7 @@ export default function ProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/dm"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dm/sent"] });
       setDmComposeOpen(false);
       setDmRecipient(null);
       setDmSearchQ("");
@@ -1168,9 +1175,11 @@ export default function ProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/dm"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dm/sent"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dm/thread", dmThreadOther?.id] });
       refetchThread();
       refetchInbox();
+      refetchSent();
       setDmReplyContent("");
     },
     onError: (e: any) => toast({ title: "Send failed", description: e.message, variant: "destructive" }),
@@ -1640,44 +1649,100 @@ export default function ProfilePage() {
               </Button>
             </CardHeader>
             <CardContent>
-              {(dmInbox as any[]).length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm">No messages yet. Send your first message!</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {(dmInbox as any[]).map((conv: any) => (
-                    <button
-                      key={conv.otherId}
-                      className={`w-full text-left p-4 rounded-xl border transition-all hover:bg-muted/50 ${conv.unreadCount > 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/20 border-border/30'}`}
-                      onClick={() => openThread(conv.otherId, conv.otherBusinessName || conv.otherName)}
-                      data-testid={`dm-conv-${conv.otherId}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <User className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-semibold text-sm text-foreground truncate">
-                              {conv.otherBusinessName || conv.otherName}
-                            </p>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {conv.unreadCount > 0 && (
-                                <span className="bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{conv.unreadCount}</span>
-                              )}
-                              <span className="text-xs text-muted-foreground">{format(new Date(conv.lastAt), 'MMM d')}</span>
-                            </div>
+              {/* Inbox / Sent toggle */}
+              <div className="flex gap-1 p-1 bg-muted/50 rounded-xl mb-4 w-fit">
+                <button
+                  onClick={() => setDmView("inbox")}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${dmView === "inbox" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Inbox {dmUnreadCount > 0 && <span className="ml-1 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5">{dmUnreadCount}</span>}
+                </button>
+                <button
+                  onClick={() => setDmView("sent")}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${dmView === "sent" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Sent
+                </button>
+              </div>
+
+              {dmView === "inbox" && (
+                (dmInbox as any[]).length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">No messages yet. Send your first message!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(dmInbox as any[]).map((conv: any) => (
+                      <button
+                        key={conv.otherId}
+                        className={`w-full text-left p-4 rounded-xl border transition-all hover:bg-muted/50 ${conv.unreadCount > 0 ? 'bg-primary/5 border-primary/20' : 'bg-muted/20 border-border/30'}`}
+                        onClick={() => openThread(conv.otherId, conv.otherBusinessName || conv.otherName)}
+                        data-testid={`dm-conv-${conv.otherId}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <User className="w-4 h-4 text-primary" />
                           </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {conv.lastSenderId === userId ? "You: " : ""}{conv.lastContent}
-                          </p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-sm text-foreground truncate">
+                                {conv.otherBusinessName || conv.otherName}
+                              </p>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {conv.unreadCount > 0 && (
+                                  <span className="bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{conv.unreadCount}</span>
+                                )}
+                                <span className="text-xs text-muted-foreground">{format(new Date(conv.lastAt), 'MMM d')}</span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              {conv.lastSenderId === userId ? "You: " : ""}{conv.lastContent}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {dmView === "sent" && (
+                (dmSent as any[]).length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Send className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">No sent messages yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(dmSent as any[]).map((msg: any) => (
+                      <button
+                        key={msg.id}
+                        className="w-full text-left p-4 rounded-xl border bg-muted/20 border-border/30 transition-all hover:bg-muted/50"
+                        onClick={() => openThread(msg.recipientId, msg.recipientName)}
+                        data-testid={`dm-sent-${msg.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-sm text-foreground truncate">To: {msg.recipientName}</p>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${msg.read ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>
+                                  {msg.read ? "Read" : "Unread"}
+                                </span>
+                                <span className="text-xs text-muted-foreground">{format(new Date(msg.createdAt), 'MMM d, h:mm a')}</span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">{msg.content}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
               )}
             </CardContent>
           </Card>

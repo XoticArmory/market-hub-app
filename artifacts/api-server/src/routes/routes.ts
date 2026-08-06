@@ -1824,6 +1824,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(inbox);
   });
 
+  app.get('/api/dm/sent', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const sent = await storage.getDmSent(userId);
+    res.json(sent);
+  });
+
   app.get('/api/dm/thread/:otherId', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const { otherId } = req.params;
