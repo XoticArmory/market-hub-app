@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation, Smartphone, X } from "lucide-react";
+import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation, Smartphone, X, Phone, ClipboardList } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -585,33 +585,90 @@ export default function Home() {
                         <div className="pt-4 border-t border-border/50 flex items-center justify-between mt-auto gap-2">
                           <span className="text-sm font-medium text-muted-foreground shrink-0">{eventPosts.length} items listed</span>
                           <div className="flex items-center gap-2">
-                            {/* Vendor Registration button — only for active, non-owned events */}
-                            {!event.canceledAt && event.createdBy !== user?.id && (
-                              registeredEventIds.has(event.id) ? (
-                                <Badge className="rounded-xl gap-1.5 h-8 px-3 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-300 dark:border-green-700" data-testid={`badge-registered-${event.id}`}>
-                                  <ShieldCheck className="w-3.5 h-3.5" />Registered
-                                </Badge>
-                              ) : isVendorPro ? (
-                                <Button
-                                  size="sm"
-                                  className="rounded-xl gap-1.5 h-8 text-xs"
-                                  onClick={(e) => { e.preventDefault(); navigate(`/events/${event.id}`); }}
-                                  data-testid={`button-vendor-registration-card-${event.id}`}
-                                >
-                                  <ShieldCheck className="w-3.5 h-3.5" />Vendor Registration
-                                </Button>
-                              ) : isAuthenticated ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="rounded-xl gap-1.5 h-8 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                  onClick={(e) => { e.preventDefault(); navigate("/upgrade"); }}
-                                  data-testid={`button-upgrade-card-${event.id}`}
-                                >
-                                  <Crown className="w-3.5 h-3.5" />Register
-                                </Button>
-                              ) : null
-                            )}
+                            {/* Vendor Registration / Apply button — only for active, non-owned events */}
+                            {!event.canceledAt && event.createdBy !== user?.id && (() => {
+                              const regType = (event as any).vendorRegistrationType as string | undefined;
+                              const regUrl = (event as any).vendorRegistrationUrl as string | undefined;
+                              const hasDirectReg = regType && regType !== 'vendorgrid' && regUrl;
+
+                              if (registeredEventIds.has(event.id)) {
+                                return (
+                                  <Badge className="rounded-xl gap-1.5 h-8 px-3 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-300 dark:border-green-700" data-testid={`badge-registered-${event.id}`}>
+                                    <ShieldCheck className="w-3.5 h-3.5" />Registered
+                                  </Badge>
+                                );
+                              }
+
+                              // Direct-registration events: Apply button works for everyone
+                              if (hasDirectReg) {
+                                const handleApply = (e: React.MouseEvent) => {
+                                  e.preventDefault();
+                                  if (regType === 'email') {
+                                    window.location.href = `mailto:${regUrl}`;
+                                  } else if (regType === 'phone') {
+                                    window.location.href = `tel:${regUrl!.replace(/\s/g, '')}`;
+                                  } else {
+                                    window.open(normalizeUrl(regUrl!), '_blank', 'noopener,noreferrer');
+                                  }
+                                };
+                                const ApplyIcon = regType === 'email' ? Mail : regType === 'phone' ? Phone : regType === 'form' ? ClipboardList : ExternalLink;
+                                return (
+                                  <Button
+                                    size="sm"
+                                    className="rounded-xl gap-1.5 h-8 text-xs"
+                                    onClick={handleApply}
+                                    data-testid={`button-apply-card-${event.id}`}
+                                  >
+                                    <ApplyIcon className="w-3.5 h-3.5" />Apply
+                                  </Button>
+                                );
+                              }
+
+                              // VendorGrid registration or no registration set
+                              if (isVendorPro) {
+                                return (
+                                  <Button
+                                    size="sm"
+                                    className="rounded-xl gap-1.5 h-8 text-xs"
+                                    onClick={(e) => { e.preventDefault(); navigate(`/events/${event.id}`); }}
+                                    data-testid={`button-vendor-registration-card-${event.id}`}
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5" />Vendor Registration
+                                  </Button>
+                                );
+                              }
+
+                              if (isAuthenticated) {
+                                return (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="rounded-xl gap-1.5 h-8 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                    onClick={(e) => { e.preventDefault(); navigate("/upgrade"); }}
+                                    data-testid={`button-upgrade-card-${event.id}`}
+                                  >
+                                    <Crown className="w-3.5 h-3.5" />Register
+                                  </Button>
+                                );
+                              }
+
+                              // Logged-out user on a VendorGrid-registration event — show Apply → event detail
+                              if (regType === 'vendorgrid' || !regType) {
+                                return (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="rounded-xl gap-1.5 h-8 text-xs"
+                                    onClick={(e) => { e.preventDefault(); navigate(`/events/${event.id}`); }}
+                                    data-testid={`button-apply-guest-card-${event.id}`}
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5" />Apply
+                                  </Button>
+                                );
+                              }
+
+                              return null;
+                            })()}
                             <Link href={`/events/${event.id}`}>
                               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
                                 <ArrowRight className="w-4 h-4" />
