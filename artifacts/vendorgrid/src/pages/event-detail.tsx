@@ -464,7 +464,19 @@ export default function EventDetail() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Failed"); }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedFields: Record<string, any>) => {
+      // Immediately merge the changed fields into the cached event so the card
+      // updates synchronously before the background refetch completes.
+      const existing = qc.getQueryData<Record<string, any>>([api.events.get.path, eventId]);
+      if (existing) {
+        qc.setQueryData([api.events.get.path, eventId], { ...existing, ...updatedFields });
+      }
+      // Also update every matching entry in the events list cache so the home
+      // page card reflects the change without waiting for a full list refetch.
+      qc.setQueriesData<any[]>(
+        { queryKey: [api.events.list.path], exact: false },
+        (old) => old?.map((e) => e.id === eventId ? { ...e, ...updatedFields } : e),
+      );
       qc.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
       qc.invalidateQueries({ queryKey: [api.events.list.path] });
       setEditDialogOpen(false);
