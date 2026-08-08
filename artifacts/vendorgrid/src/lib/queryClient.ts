@@ -7,6 +7,14 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/** Clear cached auth state so the app redirects to /auth on session expiry. */
+function handleSessionExpired() {
+  // Use setTimeout so we don't set query data before React finishes rendering.
+  setTimeout(() => {
+    queryClient.setQueryData(["/api/auth/user"], null);
+  }, 0);
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -18,6 +26,10 @@ export async function apiRequest(
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
+
+  if (res.status === 401) {
+    handleSessionExpired();
+  }
 
   await throwIfResNotOk(res);
   return res;
@@ -33,8 +45,12 @@ export const getQueryFn: <T>(options: {
       credentials: "include",
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    if (res.status === 401) {
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
+      // "throw" path — clear auth state before throwing so the app redirects
+      handleSessionExpired();
     }
 
     await throwIfResNotOk(res);
