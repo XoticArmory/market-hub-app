@@ -1778,22 +1778,31 @@ export default function EventDetail() {
 
         <TabsContent value="gallery" className="mt-0">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {posts?.flatMap((post: any) => {
-              const postImages: string[] = post.imageUrls || [];
-              const allImages: string[] = [
-                ...(post.imageUrl ? [post.imageUrl] : []),
-                ...postImages.filter((u: string) => u !== post.imageUrl),
-              ];
-              return allImages.map((imgUrl, idx) => ({ imgUrl, post, idx }));
-            }).map(({ imgUrl, post, idx }) => (
-              <div key={`gallery-${post.id}-${idx}`} className="group relative aspect-square rounded-2xl overflow-hidden border border-border/50 bg-muted">
-                <img src={imgUrl} alt={post.vendorName || "Vendor item"} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                  <p className="text-white text-sm font-medium line-clamp-1">{post.vendorName}</p>
-                  <p className="text-white/80 text-xs line-clamp-2 mt-1">{post.itemsDescription}</p>
-                </div>
-              </div>
-            ))}
+            {(() => {
+              const galleryItems = posts?.flatMap((post: any) => {
+                const postImages: string[] = post.imageUrls || [];
+                const allImages: string[] = [
+                  ...(post.imageUrl ? [post.imageUrl] : []),
+                  ...postImages.filter((u: string) => u !== post.imageUrl),
+                ];
+                return allImages.map((imgUrl, idx) => ({ imgUrl, post, idx }));
+              }) ?? [];
+              const allGalleryUrls = galleryItems.map((g: any) => g.imgUrl);
+              return galleryItems.map(({ imgUrl, post, idx }: any) => (
+                <button
+                  key={`gallery-${post.id}-${idx}`}
+                  className="group relative aspect-square rounded-2xl overflow-hidden border border-border/50 bg-muted focus:outline-none w-full"
+                  onClick={() => setLightbox({ images: allGalleryUrls, index: allGalleryUrls.indexOf(imgUrl) })}
+                  title="View full size"
+                >
+                  <img src={imgUrl} alt={post.vendorName || "Vendor item"} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                    <p className="text-white text-sm font-medium line-clamp-1">{post.vendorName}</p>
+                    <p className="text-white/80 text-xs line-clamp-2 mt-1">{post.itemsDescription}</p>
+                  </div>
+                </button>
+              ));
+            })()}
             {(!posts || posts.flatMap((p: any) => {
               const imgs: string[] = p.imageUrls || [];
               return [p.imageUrl, ...imgs].filter(Boolean);
