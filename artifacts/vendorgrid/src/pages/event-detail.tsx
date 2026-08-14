@@ -8,7 +8,7 @@ import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace, useDeclareVendingIntent } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, Pencil, Mail, Store, Navigation, Phone, Globe, LayoutGrid } from "lucide-react";
+import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, Mail, Store, Navigation, Phone, Globe, LayoutGrid } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -383,6 +383,7 @@ export default function EventDetail() {
   const [proUserSearching, setProUserSearching] = useState(false);
   const [selectedProUser, setSelectedProUser] = useState<{ id: string; name: string; businessName: string | null; zip: string | null } | null>(null);
   const [showProDropdown, setShowProDropdown] = useState(false);
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1686,11 +1687,17 @@ export default function EventDetail() {
                       <div className={`mb-4 grid gap-2 ${allImages.length === 1 ? 'grid-cols-1' : allImages.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                         {allImages.map((imgUrl, idx) => (
                           <div key={idx} className="relative rounded-xl overflow-hidden aspect-square group">
-                            <img src={imgUrl} alt={`Vendor photo ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              className="w-full h-full block focus:outline-none"
+                              onClick={() => setLightbox({ images: allImages, index: idx })}
+                              title="View full size"
+                            >
+                              <img src={imgUrl} alt={`Vendor photo ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                            </button>
                             {isMyPost && (
                               <button
                                 onClick={() => handleRemovePhoto(postImages.indexOf(imgUrl))}
-                                className="absolute top-1 right-1 w-6 h-6 bg-black/70 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-1 right-1 w-6 h-6 bg-black/70 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
                                 title="Remove photo"
                               >
                                 <X className="w-3 h-3" />
@@ -2069,6 +2076,58 @@ export default function EventDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Image Lightbox */}
+      {lightbox && (
+        <Dialog open onOpenChange={() => setLightbox(null)}>
+          <DialogContent className="max-w-screen-lg w-full p-0 bg-black/95 border-0 rounded-2xl overflow-hidden" aria-label="Image viewer">
+            <button
+              onClick={() => setLightbox(null)}
+              className="absolute top-3 right-3 z-50 w-9 h-9 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {/* Prev */}
+            {lightbox.images.length > 1 && (
+              <button
+                onClick={() => setLightbox(lb => lb && { ...lb, index: (lb.index - 1 + lb.images.length) % lb.images.length })}
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-50 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+                aria-label="Previous photo"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+            {/* Next */}
+            {lightbox.images.length > 1 && (
+              <button
+                onClick={() => setLightbox(lb => lb && { ...lb, index: (lb.index + 1) % lb.images.length })}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-50 w-10 h-10 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+                aria-label="Next photo"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            )}
+            <img
+              src={lightbox.images[lightbox.index]}
+              alt={`Photo ${lightbox.index + 1} of ${lightbox.images.length}`}
+              className="w-full max-h-[85vh] object-contain"
+            />
+            {lightbox.images.length > 1 && (
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                {lightbox.images.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setLightbox(lb => lb && { ...lb, index: i })}
+                    className={`w-2 h-2 rounded-full transition-colors ${i === lightbox.index ? 'bg-white' : 'bg-white/40 hover:bg-white/70'}`}
+                    aria-label={`Go to photo ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Add Photo Dialog */}
       <Dialog open={addPhotoDialogOpen} onOpenChange={open => { setAddPhotoDialogOpen(open); if (!open) setAddPhotoUrl(""); }}>
