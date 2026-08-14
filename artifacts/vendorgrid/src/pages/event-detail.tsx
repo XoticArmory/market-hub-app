@@ -551,6 +551,8 @@ export default function EventDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/events", eventId, "registrations"] });
       qc.invalidateQueries({ queryKey: ["/api/vendor/registrations"] });
+      // Refresh the Vendors tab so any catalog items the vendor already allocated appear immediately
+      qc.invalidateQueries({ queryKey: [api.vendorPosts.listByEvent.path, eventId] });
       setAddVendorOpen(false);
       setAddVendorName(""); setAddVendorDesc(""); setAddVendorEmail("");
       setSelectedProUser(null); setProUserResults([]); setShowProDropdown(false);

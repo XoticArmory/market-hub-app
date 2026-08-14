@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { api } from "@shared/routes";
 import { useProfile } from "@/hooks/use-profile";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -186,9 +187,11 @@ export default function InventoryPage() {
         })
       ));
     },
-    onSuccess: () => {
+    onSuccess: (_, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/catalog"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vendor/cogs/events"] });
+      // Refresh the Vendors tab on the event page so the newly allocated items appear
+      queryClient.invalidateQueries({ queryKey: [api.vendorPosts.listByEvent.path, eventId] });
       toast({ title: "Items allocated to event!" });
       setAllocateOpen(false);
       setBatchEventId("");
