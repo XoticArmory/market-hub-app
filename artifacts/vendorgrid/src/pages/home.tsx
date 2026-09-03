@@ -34,6 +34,20 @@ function getNextDate(event: any): Date {
   return upcoming.length > 0 ? upcoming[0] : new Date(event.date);
 }
 
+function distanceInMiles(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number },
+): number {
+  const earthRadiusMiles = 3958.8;
+  const latDelta = (to.latitude - from.latitude) * Math.PI / 180;
+  const lonDelta = (to.longitude - from.longitude) * Math.PI / 180;
+  const fromLat = from.latitude * Math.PI / 180;
+  const toLat = to.latitude * Math.PI / 180;
+  const a = Math.sin(latDelta / 2) ** 2
+    + Math.sin(lonDelta / 2) ** 2 * Math.cos(fromLat) * Math.cos(toLat);
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function getAnonSessionId(): string {
   const key = "vg_session_id";
   let id = sessionStorage.getItem(key);
@@ -273,10 +287,13 @@ function PwaInstallBanner() {
 export default function Home() {
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
+  const [radiusInput, setRadiusInput] = useState("");
+  const [radiusFilter, setRadiusFilter] = useState<number | undefined>(undefined);
   const [stateFilter, setStateFilter] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<"nearest" | "furthest">("nearest");
-  const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(areaFilter);
+  const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(radiusFilter ? undefined : areaFilter);
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
   const profile = profileData?.profile;
@@ -309,30 +326,58 @@ export default function Home() {
   );
 
   const [cityMap, setCityMap] = useState<Record<string, string>>({});
+  const [zipCoordinates, setZipCoordinates] = useState<Record<string, { latitude: number; longitude: number }>>({});
 
   useEffect(() => {
-    const uniqueZips = [...new Set((events || []).map(e => e.areaCode).filter(Boolean))] as string[];
-    const missing = uniqueZips.filter(z => !(z in cityMap));
+    const eventZips = (events || []).map(e => e.areaCode).filter(Boolean) as string[];
+    const lookupZips = radiusFilter && areaFilter ? [...eventZips, areaFilter] : eventZips;
+    const uniqueZips = [...new Set(lookupZips)];
+    const missing = uniqueZips.filter(z => !(z in cityMap) || !(z in zipCoordinates));
     if (missing.length === 0) return;
     missing.forEach(zip => {
       fetch(`https://api.zippopotam.us/us/${zip}`)
         .then(r => r.ok ? r.json() : null)
         .then(data => {
-          if (data?.places?.[0]) {
-            const city = data.places[0]['place name'];
+          const place = data?.places?.[0];
+          if (place) {
+            const city = place['place name'];
             setCityMap(prev => ({ ...prev, [zip]: city }));
+            const latitude = Number(place.latitude);
+            const longitude = Number(place.longitude);
+            if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+              setZipCoordinates(prev => ({ ...prev, [zip]: { latitude, longitude } }));
+            }
           }
         })
         .catch(() => {});
     });
-  }, [events]);
+  }, [events, areaFilter, radiusFilter]);
 
-  const sortedEvents = [...(events || [])]
+  const radiusCenter = radiusFilter && areaFilter ? zipCoordinates[areaFilter] : undefined;
+  const isLoadingRadiusCoordinates = !!radiusFilter && !!areaFilter && !radiusCenter;
+  const locationFilteredEvents = radiusFilter && radiusCenter
+    ? (events || []).filter(event => {
+      const eventCoordinates = event.areaCode ? zipCoordinates[event.areaCode] : undefined;
+      return !!eventCoordinates && distanceInMiles(radiusCenter, eventCoordinates) <= radiusFilter;
+    })
+    : (events || []);
+  const sortedEvents = [...locationFilteredEvents]
     .filter(e => !stateFilter || (e.areaCode && zipToState(e.areaCode) === stateFilter))
     .sort((a, b) => {
       const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
       return sortOrder === "nearest" ? diff : -diff;
     });
+
+  const handleApplyFilters = () => {
+    const zip = areaInput.trim();
+    const parsedRadius = Number(radiusInput);
+    if (radiusInput && (!/^\d{5}$/.test(zip) || !Number.isFinite(parsedRadius) || parsedRadius <= 0)) {
+      toast({ title: "Enter a valid ZIP code", description: "A 5-digit ZIP code is needed to search by radius.", variant: "destructive" });
+      return;
+    }
+    setAreaFilter(zip || undefined);
+    setRadiusFilter(radiusInput ? parsedRadius : undefined);
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-12">
@@ -397,11 +442,27 @@ export default function Home() {
                   className="pl-9 rounded-xl h-10 w-36 text-sm"
                 />
               </div>
-              <Button size="sm" variant="outline" onClick={() => setAreaFilter(areaInput || undefined)} className="rounded-xl h-10" data-testid="button-filter">
+              <Select
+                value={radiusInput}
+                onValueChange={val => setRadiusInput(val === "__exact__" ? "" : val)}
+              >
+                <SelectTrigger className="rounded-xl h-10 w-32 text-sm" data-testid="select-radius-filter">
+                  <SelectValue placeholder="Radius" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__exact__">Exact ZIP</SelectItem>
+                  <SelectItem value="5">Within 5 mi</SelectItem>
+                  <SelectItem value="10">Within 10 mi</SelectItem>
+                  <SelectItem value="25">Within 25 mi</SelectItem>
+                  <SelectItem value="50">Within 50 mi</SelectItem>
+                  <SelectItem value="100">Within 100 mi</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" onClick={handleApplyFilters} className="rounded-xl h-10" data-testid="button-filter">
                 <Filter className="w-4 h-4" />
               </Button>
               {(areaFilter || stateFilter) && (
-                <Button size="sm" variant="ghost" onClick={() => { setAreaFilter(undefined); setAreaInput(""); setStateFilter(""); }} className="rounded-xl h-10 text-muted-foreground text-sm" data-testid="button-clear-filters">
+                <Button size="sm" variant="ghost" onClick={() => { setAreaFilter(undefined); setAreaInput(""); setRadiusInput(""); setRadiusFilter(undefined); setStateFilter(""); }} className="rounded-xl h-10 text-muted-foreground text-sm" data-testid="button-clear-filters">
                   Clear
                 </Button>
               )}
@@ -441,10 +502,12 @@ export default function Home() {
           {(stateFilter || areaFilter) && (
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               {stateFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><MapPin className="w-3 h-3 mr-1" />State: {US_STATES.find(s => s.abbr === stateFilter)?.name ?? stateFilter}</Badge>}
-              {areaFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><Hash className="w-3 h-3 mr-1" />Zip: {areaFilter}</Badge>}
+              {areaFilter && radiusFilter
+                ? <Badge variant="secondary" className="text-sm py-1.5 px-3"><Navigation className="w-3 h-3 mr-1" />Within {radiusFilter} mi of {areaFilter}</Badge>
+                : areaFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><Hash className="w-3 h-3 mr-1" />Zip: {areaFilter}</Badge>}
             </div>
           )}
-          {isLoadingEvents ? (
+          {isLoadingEvents || isLoadingRadiusCoordinates ? (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
               <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" /><p>Loading markets...</p>
             </div>
@@ -455,10 +518,18 @@ export default function Home() {
               <p className="text-muted-foreground mb-6">We're having a moment — please try again in a few seconds.</p>
               <button onClick={() => refetchEvents()} className="text-primary font-medium hover:underline">Refresh</button>
             </div>
-          ) : events?.length === 0 ? (
+          ) : sortedEvents.length === 0 ? (
             <div className="text-center py-20 bg-card rounded-2xl border border-dashed border-border">
               <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">{areaFilter ? `No events in area ${areaFilter}` : "No events scheduled"}</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                {radiusFilter && areaFilter
+                  ? `No events within ${radiusFilter} miles of ${areaFilter}`
+                  : areaFilter
+                    ? `No events in area ${areaFilter}`
+                    : stateFilter
+                      ? `No events in ${US_STATES.find(s => s.abbr === stateFilter)?.name ?? stateFilter}`
+                      : "No events scheduled"}
+              </h3>
               <p className="text-muted-foreground mb-6">Be the first to add a local market event to the board.</p>
               <Link href="/events/new" className="text-primary font-medium hover:underline">Create an event</Link>
             </div>
