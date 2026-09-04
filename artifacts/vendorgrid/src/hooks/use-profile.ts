@@ -62,6 +62,12 @@ export function useUpsertProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      // Vendor names are embedded into event/post/registration responses.
+      // Refresh every event view so a saved Vendor Name replaces the user's
+      // personal account name anywhere they are listed as an accepted vendor.
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/:id"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/:eventId/posts"] });
       toast({ title: "Profile updated!" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
