@@ -1896,12 +1896,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const regs = await storage.getUserRegistrations(userId);
       const enriched = await Promise.all(regs.map(async r => {
         const event = await storage.getEvent(r.eventId);
-        return { ...r, eventTitle: event?.title || null, eventDate: event?.date || null, eventLocation: event?.location || null };
+        if (!event) return { ...r, event: null, documents: [] };
+        const extraDates = await storage.getEventDates(event.id);
+        const { registrationCode: _registrationCode, ...safeEvent } = event;
+        return {
+          ...r,
+          event: { ...safeEvent, extraDates },
+          documents: [],
+          eventTitle: event.title,
+          eventDate: event.date,
+          eventLocation: event.location,
+        };
       }));
       res.json(enriched);
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
+  });
+
+  app.patch(api.vendorRegistrations.setManualFeeStatus.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const registrationId = Number(req.params.registrationId);
+    if (!Number.isInteger(registrationId)) return res.status(400).json({ message: "Invalid registration." });
+    const input = api.vendorRegistrations.setManualFeeStatus.input.parse(req.body);
+    const registration = await storage.getVendorRegistrationById(registrationId);
+    if (!registration) return res.status(404).json({ message: "Registration not found." });
+    if (registration.vendorId !== userId) return res.status(403).json({ message: "You can only update your own registration." });
+    const event = await storage.getEvent(registration.eventId);
+    if (!event) return res.status(404).json({ message: "Event not found." });
+    if (event.vendorRegistrationType === 'vendorgrid') {
+      return res.status(400).json({ message: "VendorGrid payment status updates automatically." });
+    }
+    const updated = await storage.updateManualFeeStatus(registrationId, input.paid);
+    res.json(updated);
   });
 
   app.get(api.vendorRegistrations.listByEvent.path, async (req, res) => {

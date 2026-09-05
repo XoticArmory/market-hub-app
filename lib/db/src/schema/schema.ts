@@ -126,6 +126,8 @@ export const vendorRegistrations = pgTable("vendor_registrations", {
   isPro: boolean("is_pro").default(false),
   status: text("status").notNull().default("pending"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
+  manualFeePaid: boolean("manual_fee_paid").notNull().default(false),
+  manualFeePaidAt: timestamp("manual_fee_paid_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

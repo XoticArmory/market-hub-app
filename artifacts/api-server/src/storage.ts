@@ -95,6 +95,7 @@ export interface IStorage {
   getUserRegistrations(userId: string): Promise<VendorRegistration[]>;
   createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt'>): Promise<VendorRegistration>;
   updateRegistrationStatus(id: number, status: string, paymentIntentId?: string): Promise<void>;
+  updateManualFeeStatus(id: number, paid: boolean): Promise<VendorRegistration | undefined>;
   getAllRegistrations(): Promise<VendorRegistration[]>;
   cancelVendorRegistration(eventId: number, vendorId: string): Promise<void>;
 
@@ -641,7 +642,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(vendorRegistrations.createdAt));
   }
 
-  async createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt'>): Promise<VendorRegistration> {
+  async createVendorRegistration(data: Omit<VendorRegistration, 'id' | 'createdAt' | 'manualFeePaid' | 'manualFeePaidAt'>): Promise<VendorRegistration> {
     const [r] = await db.insert(vendorRegistrations).values(data).returning();
     return r;
   }
@@ -650,6 +651,14 @@ export class DatabaseStorage implements IStorage {
     const update: any = { status };
     if (paymentIntentId) update.stripePaymentIntentId = paymentIntentId;
     await db.update(vendorRegistrations).set(update).where(eq(vendorRegistrations.id, id));
+  }
+
+  async updateManualFeeStatus(id: number, paid: boolean): Promise<VendorRegistration | undefined> {
+    const [registration] = await db.update(vendorRegistrations)
+      .set({ manualFeePaid: paid, manualFeePaidAt: paid ? new Date() : null })
+      .where(eq(vendorRegistrations.id, id))
+      .returning();
+    return registration;
   }
 
   async getAllRegistrations(): Promise<VendorRegistration[]> {

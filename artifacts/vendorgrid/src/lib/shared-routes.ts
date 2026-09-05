@@ -51,6 +51,7 @@ export const api = {
   vendorRegistrations: {
     listByEvent: { method: "GET" as const, path: "/api/events/:eventId/registrations" as const, responses: { 200: z.array(_any) } },
     create: { method: "POST" as const, path: "/api/events/:eventId/register" as const, input: z.object({ spotId: z.string().optional(), spotName: z.string().optional() }), responses: { 200: _any } },
+    setManualFeeStatus: { method: "PATCH" as const, path: "/api/vendor/registrations/:registrationId/manual-fee-status" as const, input: z.object({ paid: z.boolean() }), responses: { 200: _any } },
   },
   admin: {
     getSettings: { method: "GET" as const, path: "/api/admin/settings" as const, responses: { 200: z.array(_any) } },

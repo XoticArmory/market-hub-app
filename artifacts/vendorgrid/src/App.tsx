@@ -39,6 +39,7 @@ import InventoryAnalyticsPage from "@/pages/inventory-analytics";
 import NotFound from "@/pages/not-found";
 import PrivacyPolicyPage from "@/pages/privacy-policy";
 import TermsOfServicePage from "@/pages/terms-of-service";
+import ManageMarketsPage from "@/pages/manage-markets";
 
 function OnboardingGuard() {
   const { isAuthenticated } = useAuth();
@@ -417,6 +418,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/events/new" component={AddEvent} />
       <Route path="/events/:id" component={EventDetail} />
+      <Route path="/manage-markets" component={ManageMarketsPage} />
       <Route path="/chat" component={Chat} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/admin" component={AdminPage} />

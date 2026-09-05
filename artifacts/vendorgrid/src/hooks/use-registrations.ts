@@ -57,6 +57,33 @@ export function useUserRegistrations() {
   });
 }
 
+export function useSetManualFeeStatus() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ registrationId, paid }: { registrationId: number; paid: boolean }) => {
+      const res = await fetch(`/api/vendor/registrations/${registrationId}/manual-fee-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ paid }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to update fee status." }));
+        throw new Error(error.message);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/registrations"] });
+      toast({ title: "Fee status updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not update fee status", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeclareVendingIntent(eventId: number) {
   const queryClient = useQueryClient();
   const { toast } = useToast();

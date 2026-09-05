@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, FolderOpen, Lock, Package, Search } from "lucide-react";
+import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, FolderOpen, Lock, Package, Search, Store } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -60,6 +60,7 @@ export function AppSidebar() {
 
   const navItems = [
     { title: "Market Events", url: "/", icon: CalendarDays },
+    ...(isAuthenticated ? [{ title: "Manage Your Markets", url: "/manage-markets", icon: Store }] : []),
     { title: "Community Chat", url: "/chat", icon: MessageCircle },
     ...(isEventOwnerPro ? [{ title: "Add Event", url: "/events/new", icon: PlusCircle }] : []),
     ...(hasActivePro ? [{ title: "Inventory", url: "/inventory", icon: Package }] : []),
