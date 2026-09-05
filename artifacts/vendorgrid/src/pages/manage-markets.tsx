@@ -332,7 +332,7 @@ function MarketCard({ data }: { data: UnifiedMarket }) {
                     <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
                       <FileText className="w-4 h-4" /> Documents & Forms
                     </h4>
-                    <DocumentList documents={registration?.documents || []} />
+                    <DocumentList documents={registration?.documents || event?.documents || []} />
                   </div>
                   
                   <div className="pt-2">
@@ -516,7 +516,7 @@ function DocumentList({ documents }: { documents: any[] }) {
       {documents.map((doc, idx) => (
         <a 
           key={idx} 
-          href={doc.fileUrl} 
+          href={doc.downloadUrl || doc.fileUrl}
           target="_blank" 
           rel="noreferrer"
           className="flex items-center gap-3 p-3 rounded-xl border border-border/60 hover:border-primary/50 hover:bg-primary/5 transition-colors group bg-card shadow-sm"

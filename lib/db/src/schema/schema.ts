@@ -366,6 +366,20 @@ export const documents = pgTable("documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const eventDocuments = pgTable("event_documents", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull().default(0),
+  fileType: text("file_type").notNull(),
+  storagePath: text("storage_path").notNull(),
+  visibility: text("visibility").notNull().default("public"),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true, senderId: true, createdAt: true });
 export type DirectMessage = typeof directMessages.$inferSelect;
 export type InsertDirectMessage = z.infer<typeof insertDirectMessageSchema>;
@@ -373,6 +387,10 @@ export type InsertDirectMessage = z.infer<typeof insertDirectMessageSchema>;
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type Document = typeof documents.$inferSelect;
+
+export const insertEventDocumentSchema = createInsertSchema(eventDocuments).omit({ id: true, createdAt: true });
+export type InsertEventDocument = typeof eventDocuments.$inferInsert;
+export type EventDocument = typeof eventDocuments.$inferSelect;
 
 export const userFiles = pgTable("user_files", {
   id: serial("id").primaryKey(),

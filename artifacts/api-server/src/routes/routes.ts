@@ -99,6 +99,46 @@ function isPro(profile: any): boolean {
     && profile.subscriptionStatus === 'active';
 }
 
+const EVENT_DOCUMENT_VISIBILITIES = new Set(["public", "paid", "registered"]);
+
+async function canAccessEventDocument(event: any, document: any, userId?: string): Promise<boolean> {
+  if (document.visibility === "public") return true;
+  if (!userId) return false;
+  const profile = await storage.getUserProfile(userId);
+  if (profile?.isAdmin || event.createdBy === userId) return true;
+  if (document.visibility === "paid") return isPro(profile);
+  if (document.visibility === "registered") {
+    const registrations = await storage.getVendorRegistrations(event.id);
+    return registrations.some((registration) =>
+      registration.vendorId === userId &&
+      registration.status !== "canceled" &&
+      registration.status !== "rejected"
+    );
+  }
+  return false;
+}
+
+async function visibleEventDocuments(event: any, userId?: string) {
+  const docs = await storage.getEventDocuments(event.id);
+  const allowed = await Promise.all(docs.map(async (doc) => (
+    (await canAccessEventDocument(event, doc, userId))
+      ? {
+          id: doc.id,
+          eventId: doc.eventId,
+          title: doc.title,
+          description: doc.description,
+          fileName: doc.fileName,
+          fileSize: doc.fileSize,
+          fileType: doc.fileType,
+          visibility: doc.visibility,
+          createdAt: doc.createdAt,
+          downloadUrl: `/api/events/${event.id}/documents/${doc.id}/download`,
+        }
+      : null
+  )));
+  return allowed.filter(Boolean);
+}
+
 function getStripe(): Stripe | null {
   if (!process.env.STRIPE_SECRET_KEY) return null;
   return new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-12-18.acacia' as any });
@@ -368,6 +408,96 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.deleteDocument(parseInt(req.params.id));
       res.json({ ok: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ---- EVENT DOCUMENT ROUTES ----
+  app.get("/api/events/:eventId/documents", async (req: any, res) => {
+    const eventId = Number(req.params.eventId);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found." });
+    res.json(await visibleEventDocuments(event, req.user?.claims?.sub));
+  });
+
+  app.post("/api/events/:eventId/documents", isAuthenticated, docUpload.single("file"), async (req: any, res) => {
+    const eventId = Number(req.params.eventId);
+    const userId = req.user.claims.sub;
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found." });
+    const profile = await storage.getUserProfile(userId);
+    if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Only the event owner can attach documents." });
+    if (!isPro(profile) && !profile?.isAdmin) return res.status(403).json({ message: "Pro subscription required to edit events." });
+    if (!req.file) return res.status(400).json({ message: "Choose a document to upload." });
+    const visibility = String(req.body.visibility || "public");
+    if (!EVENT_DOCUMENT_VISIBILITIES.has(visibility)) return res.status(400).json({ message: "Invalid document visibility." });
+    const supabase = getStorageClient();
+    if (!supabase) return res.status(500).json({ message: "Storage not configured." });
+
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const storagePath = `event-documents/${eventId}/${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    const { error } = await supabase.storage.from(DOC_BUCKET)
+      .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+    if (error) return res.status(500).json({ message: error.message });
+
+    try {
+      const doc = await storage.createEventDocument({
+        eventId,
+        title: String(req.body.title || req.file.originalname).trim(),
+        description: String(req.body.description || "").trim() || null,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        fileType: req.file.mimetype,
+        storagePath,
+        visibility,
+        uploadedBy: userId,
+      });
+      res.status(201).json({
+        ...doc,
+        storagePath: undefined,
+        downloadUrl: `/api/events/${eventId}/documents/${doc.id}/download`,
+      });
+    } catch (error) {
+      await supabase.storage.from(DOC_BUCKET).remove([storagePath]);
+      throw error;
+    }
+  });
+
+  app.get("/api/events/:eventId/documents/:documentId/download", async (req: any, res) => {
+    const eventId = Number(req.params.eventId);
+    const documentId = Number(req.params.documentId);
+    const [event, document] = await Promise.all([
+      storage.getEvent(eventId),
+      storage.getEventDocument(documentId),
+    ]);
+    if (!event || !document || document.eventId !== eventId) return res.status(404).json({ message: "Document not found." });
+    if (!(await canAccessEventDocument(event, document, req.user?.claims?.sub))) {
+      return res.status(403).json({ message: "You do not have access to this document." });
+    }
+    const supabase = getStorageClient();
+    if (!supabase) return res.status(500).json({ message: "Storage not configured." });
+    const { data, error } = await supabase.storage.from(DOC_BUCKET).download(document.storagePath);
+    if (error || !data) return res.status(404).json({ message: "Document file not found." });
+    const buffer = Buffer.from(await data.arrayBuffer());
+    res.setHeader("Content-Type", document.fileType || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(document.fileName)}`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(buffer);
+  });
+
+  app.delete("/api/events/:eventId/documents/:documentId", isAuthenticated, async (req: any, res) => {
+    const eventId = Number(req.params.eventId);
+    const documentId = Number(req.params.documentId);
+    const userId = req.user.claims.sub;
+    const [event, document, profile] = await Promise.all([
+      storage.getEvent(eventId),
+      storage.getEventDocument(documentId),
+      storage.getUserProfile(userId),
+    ]);
+    if (!event || !document || document.eventId !== eventId) return res.status(404).json({ message: "Document not found." });
+    if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Only the event owner can remove documents." });
+    const supabase = getStorageClient();
+    if (supabase) await supabase.storage.from(DOC_BUCKET).remove([document.storagePath]);
+    await storage.deleteEventDocument(documentId);
+    res.json({ ok: true });
   });
 
   // ---- USER FILE FOLDER ROUTES (Pro only) ----
@@ -670,7 +800,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const canSeeCode = isRequesterAdmin || (requesterId === event.createdBy && (isPro(requesterProfile) || isRequesterAdmin));
     const { registrationCode: rawCode, ...eventWithoutCode } = event;
     const responseEvent = canSeeCode ? { ...event } : { ...eventWithoutCode };
-    res.json({ ...responseEvent, vendorSpacesUsed: approvedCount, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured });
+    const eventDocuments = await visibleEventDocuments(event, requesterId);
+    res.json({ ...responseEvent, vendorSpacesUsed: approvedCount, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured, documents: eventDocuments });
   });
 
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
@@ -1517,6 +1648,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const u = await enrichUser(r.vendorId);
         const vendorProfile = await storage.getUserProfile(r.vendorId);
         const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+        const documents = r.status === "canceled" || r.status === "rejected"
+          ? []
+          : await visibleEventDocuments(event, userId);
         return {
           id: null as number | null,
           vendorId: r.vendorId,
@@ -1908,7 +2042,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             extraDates,
             vendorSpacesUsed: approvedCounts.get(event.id) || 0,
           },
-          documents: [],
+          documents,
           eventTitle: event.title,
           eventDate: event.date,
           eventLocation: event.location,

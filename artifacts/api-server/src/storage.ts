@@ -5,7 +5,7 @@ import {
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, vendorInventorySales, roadmapItems,
   promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
-  vendorItemCogs, vendorEventOverhead, documents, userFiles, directMessages,
+  vendorItemCogs, vendorEventOverhead, documents, eventDocuments, userFiles, directMessages,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -17,6 +17,7 @@ import {
   type EventVendorEntry,
   type VendorItemCogs, type VendorEventOverhead,
   type Document, type InsertDocument,
+  type EventDocument, type InsertEventDocument,
   type UserFile, type InsertUserFile,
   type DirectMessage,
 } from "@workspace/db";
@@ -191,6 +192,10 @@ export interface IStorage {
   getDocuments(): Promise<Document[]>;
   createDocument(data: InsertDocument): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
+  getEventDocuments(eventId: number): Promise<EventDocument[]>;
+  getEventDocument(id: number): Promise<EventDocument | undefined>;
+  createEventDocument(data: InsertEventDocument): Promise<EventDocument>;
+  deleteEventDocument(id: number): Promise<void>;
 
   // User Files
   getUserFiles(userId: string): Promise<UserFile[]>;
@@ -1588,6 +1593,26 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<void> {
     await pool.query("DELETE FROM documents WHERE id = $1", [id]);
+  }
+
+  async getEventDocuments(eventId: number): Promise<EventDocument[]> {
+    return await db.select().from(eventDocuments)
+      .where(eq(eventDocuments.eventId, eventId))
+      .orderBy(desc(eventDocuments.createdAt));
+  }
+
+  async getEventDocument(id: number): Promise<EventDocument | undefined> {
+    const [doc] = await db.select().from(eventDocuments).where(eq(eventDocuments.id, id));
+    return doc;
+  }
+
+  async createEventDocument(data: InsertEventDocument): Promise<EventDocument> {
+    const [doc] = await db.insert(eventDocuments).values(data).returning();
+    return doc;
+  }
+
+  async deleteEventDocument(id: number): Promise<void> {
+    await db.delete(eventDocuments).where(eq(eventDocuments.id, id));
   }
 
   // ---- User Files ----

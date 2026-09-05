@@ -26,6 +26,7 @@ import { ImageUpload } from "@/components/image-upload";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@shared/routes";
+import { SavedEventDocumentManager } from "@/components/event-document-editor";
 
 function normalizeUrl(url: string) {
   if (!url) return url;
@@ -55,12 +56,13 @@ const editEventSchema = z.object({
 });
 type EditEventValues = z.infer<typeof editEventSchema>;
 
-function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
+function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDocumentsChanged }: {
   event: any;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onSubmit: (data: Record<string, any>) => void;
   isPending: boolean;
+  onDocumentsChanged: () => void;
 }) {
   const form = useForm<EditEventValues>({
     resolver: zodResolver(editEventSchema),
@@ -324,6 +326,11 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending }: {
               </div>
             </form>
           </Form>
+          <SavedEventDocumentManager
+            eventId={event.id}
+            documents={event.documents || []}
+            onChanged={onDocumentsChanged}
+          />
         </DialogContent>
       </Dialog>
     </>
@@ -1121,6 +1128,10 @@ export default function EventDetail() {
                   onOpenChange={setEditDialogOpen}
                   onSubmit={(data) => updateEvent.mutate(data)}
                   isPending={updateEvent.isPending}
+                  onDocumentsChanged={() => {
+                    qc.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
+                    qc.invalidateQueries({ queryKey: ["/api/vendor/registrations"] });
+                  }}
                 />
               )}
 
@@ -1390,6 +1401,31 @@ export default function EventDetail() {
           )}
         </div>
       </div>
+
+      {(event as any).documents?.length > 0 && (
+        <section className="bg-card rounded-2xl border border-border/60 p-5 md:p-6 mb-8 shadow-sm">
+          <h2 className="font-display font-semibold text-xl flex items-center gap-2 mb-4">
+            <FileText className="w-5 h-5 text-primary" />Event Documents
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(event as any).documents.map((document: any) => (
+              <a
+                key={document.id}
+                href={document.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-xl border border-border/60 p-4 hover:border-primary/50 hover:bg-primary/5 transition-colors"
+              >
+                <FileText className="w-5 h-5 text-primary shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm truncate">{document.title || document.fileName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{document.fileName}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Content Tabs */}
       <Tabs defaultValue="vendors" className="space-y-6">

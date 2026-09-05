@@ -13,6 +13,8 @@ import { useLocation } from "wouter";
 import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell, Image as ImageIcon, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/image-upload";
+import { PendingEventDocumentEditor, uploadEventDocument, type PendingEventDocument } from "@/components/event-document-editor";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -54,13 +56,15 @@ export default function AddEvent() {
   const { isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
   const profile = profileData?.profile;
-  const { mutate: createEvent, isPending } = useCreateEvent();
+  const { mutateAsync: createEvent, isPending } = useCreateEvent();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [extraDates, setExtraDates] = useState<{ date: string; endTime: string }[]>([]);
   const [newDate, setNewDate] = useState("");
   const [newEndTime, setNewEndTime] = useState("");
   const [bannerUrl, setBannerUrl] = useState("");
   const [notifyMessage, setNotifyMessage] = useState("");
+  const [eventDocuments, setEventDocuments] = useState<PendingEventDocument[]>([]);
 
   const isEventOwnerPro = profile?.isAdmin === true || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
 
@@ -84,18 +88,32 @@ export default function AddEvent() {
 
   const registrationType = form.watch("vendorRegistrationType");
 
-  const onSubmit = (data: FormValues) => {
-    createEvent({
-      ...data,
-      date: new Date(data.date),
-      endTime: (data as any).endTime || undefined,
-      spotPrice: Math.round((data.spotPrice || 0) * 100),
-      bannerUrl: bannerUrl || undefined,
-      extraDates,
-      notifyMessage: notifyMessage.trim() || undefined,
-    }, {
-      onSuccess: (event: any) => setLocation(`/events/${event.id}`)
-    });
+  const onSubmit = async (data: FormValues) => {
+    let event: any;
+    try {
+      event = await createEvent({
+        ...data,
+        date: new Date(data.date),
+        endTime: (data as any).endTime || undefined,
+        spotPrice: Math.round((data.spotPrice || 0) * 100),
+        bannerUrl: bannerUrl || undefined,
+        extraDates,
+        notifyMessage: notifyMessage.trim() || undefined,
+      });
+    } catch {
+      return;
+    }
+    try {
+      await Promise.all(eventDocuments.map((document) => uploadEventDocument(event.id, document)));
+      setLocation(`/events/${event.id}`);
+    } catch (error: any) {
+      toast({
+        title: "Event created, but documents need attention",
+        description: error.message || "One or more documents could not be uploaded. Add them from Edit Event.",
+        variant: "destructive",
+      });
+      setLocation(`/events/${event.id}`);
+    }
   };
 
   const addExtraDate = () => {
@@ -502,6 +520,8 @@ export default function AddEvent() {
                 data-testid="input-event-banner"
               />
             </div>
+
+            <PendingEventDocumentEditor documents={eventDocuments} onChange={setEventDocuments} />
 
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
