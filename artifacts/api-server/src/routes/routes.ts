@@ -1894,6 +1894,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = req.user.claims.sub;
       const regs = await storage.getUserRegistrations(userId);
+      const eventIds = [...new Set(regs.map(r => r.eventId))];
+      const approvedCounts = await storage.getBulkApprovedRegistrationCounts(eventIds);
       const enriched = await Promise.all(regs.map(async r => {
         const event = await storage.getEvent(r.eventId);
         if (!event) return { ...r, event: null, documents: [] };
@@ -1901,7 +1903,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const { registrationCode: _registrationCode, ...safeEvent } = event;
         return {
           ...r,
-          event: { ...safeEvent, extraDates },
+          event: {
+            ...safeEvent,
+            extraDates,
+            vendorSpacesUsed: approvedCounts.get(event.id) || 0,
+          },
           documents: [],
           eventTitle: event.title,
           eventDate: event.date,

@@ -31,7 +31,20 @@ function isValidDate(d: any) {
 
 function formatExtraDates(dates: any) {
   if (!Array.isArray(dates) || dates.length === 0) return null;
-  return dates.map(d => isValidDate(new Date(d)) ? format(new Date(d), "MMM d, yyyy") : d).join(', ');
+  const formatted = dates.flatMap((entry: any) => {
+    const start = new Date(entry?.date ?? entry);
+    if (!isValidDate(start)) return [];
+
+    let label = format(start, "MMM d, yyyy");
+    if (entry?.endTime) {
+      const end = new Date(entry.endTime);
+      if (isValidDate(end)) {
+        label += `, ${format(start, "h:mm a")} – ${format(end, "h:mm a")}`;
+      }
+    }
+    return [label];
+  });
+  return formatted.length > 0 ? formatted.join(", ") : "Date unavailable";
 }
 
 export default function ManageMarketsPage() {
