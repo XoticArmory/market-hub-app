@@ -65,6 +65,7 @@ pnpm monorepo hosting VendorGrid — a vendor/market-event community platform fo
 ## Notes
 
 - **Production hosting safety:** `https://www.vendorgrid.net` is the paid-user production site and must remain hosted through Railway from the GitHub repository. Never move its DNS to Replit, disconnect its Railway mapping, or treat a Replit deployment as the customer production release. Verify Railway and `www.vendorgrid.net` after release-related changes.
+- **Required release warning:** Before any Replit publish, custom-domain attachment, DNS edit, hosting migration, or change to API static frontend serving, stop and explicitly warn the user if it could affect Railway or `www.vendorgrid.net`. Confirm the intended customer deployment target before proceeding. A GitHub push should deploy through Railway; do not present a Replit publish as the production update path.
 - The backend routes use full paths like `/api/events` — `registerRoutes()` is called directly on the Express app, not mounted under a sub-router.
 - `lib/db/src/index.ts` uses `SUPABASE_DATABASE_URL || DATABASE_URL` for the connection pool.
 - The Supabase URL env var is set as both `SUPABASE_URL` (backend) and `VITE_SUPABASE_URL` (frontend).
