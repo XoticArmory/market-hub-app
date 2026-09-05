@@ -12,7 +12,6 @@ import path from "path";
 import fs from "fs";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pool } from "../db";
-import { serveStatic } from "../static";
 
 // ---------------------------------------------------------------------------
 // DB circuit breaker — prevents Supabase connection-pool exhaustion from
@@ -3305,11 +3304,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: e.message || "Failed to end event" });
     }
   });
-
-  // Serve the React frontend for all non-API routes in production
-  if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
-  }
 
   return httpServer;
 }
