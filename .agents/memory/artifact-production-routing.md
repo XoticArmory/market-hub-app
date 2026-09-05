@@ -3,8 +3,8 @@ name: Artifact production routing
 description: Explains the production ownership boundary between VendorGrid's static web artifact and API service.
 ---
 
-In artifact-mode production, the VendorGrid web artifact owns frontend static serving and the API service must start as an API-only process. Do not restore legacy API-side frontend static serving.
+VendorGrid has two distinct production-style runtime layouts. The paid-user production site is hosted on Railway as a single service, so its API must serve the copied frontend build. Replit artifact deployments serve the web artifact separately, so their API must start without requiring frontend files.
 
-**Why:** The legacy API static server expects a client build inside the API output directory. The actual frontend is built into the separate web artifact, so enabling that legacy path crashes the API before it opens its health-check port and causes publishing to time out.
+**Why:** Enabling static serving unconditionally crashes Replit artifact publishing because its API output has no frontend directory. Disabling static serving unconditionally leaves Railway unable to deliver new frontend bundles, causing paid users on `www.vendorgrid.net` to remain on a cached older UI.
 
-**How to apply:** Keep frontend rewrites and the static public directory in the web artifact configuration. Keep the API production command independently startable and verify its configured health endpoint without requiring frontend files.
+**How to apply:** Gate API-side static serving on Railway’s runtime environment (or an explicit static-serving flag). Keep Replit artifact API startup independently health-checkable without frontend files. Treat Railway and `www.vendorgrid.net` as the customer release target.

@@ -12,6 +12,7 @@ import path from "path";
 import fs from "fs";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { pool } from "../db";
+import { serveStatic } from "../static";
 
 // ---------------------------------------------------------------------------
 // DB circuit breaker — prevents Supabase connection-pool exhaustion from
@@ -3304,6 +3305,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: e.message || "Failed to end event" });
     }
   });
+
+  // Railway runs VendorGrid as one service and copies the frontend build into
+  // the API bundle. Replit artifact deployments serve the web artifact
+  // separately, so enabling this there would look for a nonexistent directory
+  // and prevent the API health-check port from opening.
+  if (process.env.RAILWAY_ENVIRONMENT || process.env.SERVE_STATIC === "true") {
+    serveStatic(app);
+  }
 
   return httpServer;
 }
