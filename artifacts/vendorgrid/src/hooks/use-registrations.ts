@@ -50,7 +50,10 @@ export function useUserRegistrations() {
     queryFn: async () => {
       const res = await fetch("/api/vendor/registrations", { credentials: "include" });
       if (res.status === 401) return [];
-      if (!res.ok) return [];
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to load registered markets." }));
+        throw new Error(error.message || "Failed to load registered markets.");
+      }
       return res.json();
     },
     retry: false,

@@ -2036,6 +2036,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const event = await storage.getEvent(r.eventId);
         if (!event) return { ...r, event: null, documents: [] };
         const extraDates = await storage.getEventDates(event.id);
+        const documents = r.status === "canceled" || r.status === "rejected"
+          ? []
+          : await visibleEventDocuments(event, userId);
         const { registrationCode: _registrationCode, ...safeEvent } = event;
         return {
           ...r,
