@@ -39,6 +39,8 @@ export const events = pgTable("events", {
   endTime: timestamp("end_time"),
   vendorSpaces: integer("vendor_spaces").default(0),
   vendorSpacesUsed: integer("vendor_spaces_used").default(0),
+  boothWidth: integer("booth_width_feet"),
+  boothDepth: integer("booth_depth_feet"),
   spotPrice: integer("spot_price_cents").default(0),
   registrationCode: text("registration_code"),
   vendorRegistrationType: text("vendor_registration_type"),

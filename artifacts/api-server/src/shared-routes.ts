@@ -11,6 +11,8 @@ const createEventInput = z.object({
   areaCode: z.string().optional().nullable(),
   date: z.coerce.date(),
   vendorSpaces: z.number().optional().nullable(),
+  boothWidth: z.number().int().positive().optional().nullable(),
+  boothDepth: z.number().int().positive().optional().nullable(),
   spotPrice: z.number().optional().nullable(),
   registrationCode: z.string().optional().nullable(),
   vendorRegistrationType: z.string().optional().nullable(),

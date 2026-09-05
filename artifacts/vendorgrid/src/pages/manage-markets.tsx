@@ -287,6 +287,12 @@ function MarketCard({ data }: { data: UnifiedMarket }) {
                           <p className="font-medium text-foreground">{formatCurrency(spotPrice)}</p>
                         </div>
                       )}
+                      {event.boothWidth && event.boothDepth && (
+                        <div className="col-span-2 sm:col-span-1">
+                          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Booth Size</p>
+                          <p className="font-medium text-foreground">{event.boothWidth} × {event.boothDepth} ft</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 

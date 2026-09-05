@@ -47,6 +47,8 @@ const editEventSchema = z.object({
   date: z.string().min(1, "Date required"),
   endTime: z.string().optional(),
   vendorSpaces: z.coerce.number().min(0),
+  boothWidth: z.coerce.number().int().positive().optional(),
+  boothDepth: z.coerce.number().int().positive().optional(),
   spotPrice: z.coerce.number().min(0),
   vendorRegistrationType: z.string().optional(),
   vendorRegistrationUrl: z.string().optional(),
@@ -74,6 +76,8 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       date: event?.date ? new Date(event.date).toISOString().slice(0, 16) : "",
       endTime: event?.endTime ? new Date(event.endTime).toISOString().slice(0, 16) : "",
       vendorSpaces: event?.vendorSpaces || 0,
+      boothWidth: event?.boothWidth || 10,
+      boothDepth: event?.boothDepth || 10,
       spotPrice: event?.spotPrice ? event.spotPrice / 100 : 0,
       vendorRegistrationType: event?.vendorRegistrationType || "",
       vendorRegistrationUrl: event?.vendorRegistrationUrl || "",
@@ -92,6 +96,8 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       date: vals.date,
       endTime: vals.endTime || null,
       vendorSpaces: vals.vendorSpaces,
+      boothWidth: vals.boothWidth,
+      boothDepth: vals.boothDepth,
       spotPrice: Math.round((vals.spotPrice || 0) * 100),
       vendorRegistrationType: vals.vendorRegistrationType || null,
       vendorRegistrationUrl: vals.vendorRegistrationUrl || null,
@@ -145,6 +151,22 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
                   <FormItem>
                     <FormLabel>Area Code</FormLabel>
                     <FormControl><Input {...field} placeholder="e.g. NYC" data-testid="input-edit-areacode" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="boothWidth" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Booth Width (ft)</FormLabel>
+                    <FormControl><Input type="number" min={1} step={1} {...field} data-testid="input-edit-booth-width" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="boothDepth" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Booth Depth (ft)</FormLabel>
+                    <FormControl><Input type="number" min={1} step={1} {...field} data-testid="input-edit-booth-depth" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -834,6 +856,15 @@ export default function EventDetail() {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Spot Price</p>
                   <p className="font-medium text-foreground">${spotPriceDollars} per space</p>
+                </div>
+              </div>
+            )}
+            {event.boothWidth && event.boothDepth && (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><LayoutGrid className="w-5 h-5" /></div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Booth Size</p>
+                  <p className="font-medium text-foreground">{event.boothWidth} × {event.boothDepth} ft</p>
                 </div>
               </div>
             )}

@@ -23,6 +23,8 @@ const formSchema = z.object({
   areaCode: z.string().optional(),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
   vendorSpaces: z.coerce.number().min(0).default(0),
+  boothWidth: z.coerce.number().int().positive("Enter a valid width"),
+  boothDepth: z.coerce.number().int().positive("Enter a valid depth"),
   spotPrice: z.coerce.number().min(0).default(0),
   contactEmail: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
   eventWebsiteUrl: z.string().optional(),
@@ -77,6 +79,8 @@ export default function AddEvent() {
       areaCode: profile?.areaCode || "",
       date: "",
       vendorSpaces: 0,
+      boothWidth: 10,
+      boothDepth: 10,
       spotPrice: 0,
       contactEmail: "",
       eventWebsiteUrl: "",
@@ -343,12 +347,34 @@ export default function AddEvent() {
               )} />
             )}
 
-            {/* Spot Price — only if "vendorgrid" chosen */}
-            {isEventOwnerPro && registrationType === "vendorgrid" && (
+            <div className="rounded-2xl border border-border bg-muted/20 p-5 space-y-4">
+              <div>
+                <p className="text-base font-semibold flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-primary" />Booth Size &amp; Price
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Set the standard booth footprint and price vendors can expect.</p>
+              </div>
+              <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
+                <FormField control={form.control} name="boothWidth" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Width (ft)</FormLabel>
+                    <FormControl><Input data-testid="input-booth-width" type="number" min="1" step="1" className="h-12 rounded-xl" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <span className="pb-3 text-lg font-semibold text-muted-foreground">×</span>
+                <FormField control={form.control} name="boothDepth" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Depth (ft)</FormLabel>
+                    <FormControl><Input data-testid="input-booth-depth" type="number" min="1" step="1" className="h-12 rounded-xl" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
               <FormField control={form.control} name="spotPrice" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-base font-semibold flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-primary" />Registration Fee per Space
+                    <DollarSign className="w-4 h-4 text-primary" />Price per Booth
                   </FormLabel>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
@@ -364,11 +390,11 @@ export default function AddEvent() {
                       />
                     </FormControl>
                   </div>
-                  <p className="text-xs text-muted-foreground">Set to 0 for free registration. Vendors pay this when reserving their space.</p>
+                  <p className="text-xs text-muted-foreground">Set to 0 for a free booth. VendorGrid collects this amount only for VendorGrid registrations.</p>
                   <FormMessage />
                 </FormItem>
               )} />
-            )}
+            </div>
 
             {/* Registration Code — only if "vendorgrid" chosen */}
             {isEventOwnerPro && registrationType === "vendorgrid" && (
