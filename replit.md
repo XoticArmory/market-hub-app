@@ -64,7 +64,7 @@ pnpm monorepo hosting VendorGrid — a vendor/market-event community platform fo
 
 ## Notes
 
-- **Production domain safety:** `https://vendorgrid.net` is the customer-facing production URL used by paid users. Preserve its custom-domain attachment and routing for every release. Do not disconnect, replace, or redirect this domain, and do not treat the generated `*.replit.app` URL as the primary customer URL. Before and after production-routing or publishing changes, verify both the generated deployment URL and `vendorgrid.net`.
+- **Production domain safety:** `https://www.vendorgrid.net` is the customer-facing production URL used by paid users. Preserve its custom-domain attachment and routing for every release. Do not disconnect, replace, or redirect this domain, and do not treat the apex domain or generated `*.replit.app` URL as the primary customer URL. Before and after production-routing or publishing changes, verify the generated deployment URL, `www.vendorgrid.net`, and the apex-domain behavior.
 - The backend routes use full paths like `/api/events` — `registerRoutes()` is called directly on the Express app, not mounted under a sub-router.
 - `lib/db/src/index.ts` uses `SUPABASE_DATABASE_URL || DATABASE_URL` for the connection pool.
 - The Supabase URL env var is set as both `SUPABASE_URL` (backend) and `VITE_SUPABASE_URL` (frontend).
