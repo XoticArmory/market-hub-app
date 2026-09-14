@@ -46,20 +46,18 @@ export default function AuthPage() {
 
     try {
       if (mode === "signup") {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { first_name: firstName, last_name: lastName },
-          },
+        const signUpResponse = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, firstName, lastName }),
         });
-        if (signUpError) throw signUpError;
-        if (data.session) {
-          await exchangeToken(data.session.access_token);
-        } else {
-          setSuccess("Check your email to confirm your account, then sign in.");
-          setMode("login");
+        if (!signUpResponse.ok) {
+          const signUpError = await signUpResponse.json().catch(() => ({ message: "Failed to create account." }));
+          throw new Error(signUpError.message);
         }
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError || !data.session) throw signInError || new Error("Failed to sign in after creating your account.");
+        await exchangeToken(data.session.access_token);
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUpgradeCheckout, useValidatePromo, useRedeemAdminCode } from "@/hooks/use-upgrade";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CheckCircle, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X } from "lucide-react";
+import { useSearch } from "wouter";
 
 const TERMS = `VENDORGRID PRO — SUBSCRIPTION TERMS OF SERVICE
 
@@ -88,6 +89,7 @@ const PLANS = [
 ];
 
 export default function UpgradePage() {
+  const search = useSearch();
   const { isAuthenticated } = useAuth();
   const { data: profileData } = useProfile();
   const { mutate: checkout, isPending: isCheckingOut } = useUpgradeCheckout();
@@ -110,8 +112,24 @@ export default function UpgradePage() {
   const currentTier = profile?.subscriptionTier || "free";
   const hasActivePro = profile?.subscriptionStatus === "active" && currentTier !== "free";
 
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const planId = params.get("plan");
+    if (params.get("checkout") !== "1" || (planId !== "monthly" && planId !== "annual") || hasActivePro) return;
+    setSelectedPlanId(planId);
+    setPromoInput("");
+    setPromoResult(null);
+    setTermsScrolled(false);
+    setTermsAccepted(false);
+    setTermsOpen(true);
+  }, [search, hasActivePro]);
+
   const handleUpgrade = (planId: string) => {
-    if (!isAuthenticated) { window.location.href = "/auth?mode=signup&next=/upgrade"; return; }
+    if (!isAuthenticated) {
+      const checkoutPath = `/upgrade?plan=${planId}&checkout=1`;
+      window.location.href = `/auth?mode=signup&next=${encodeURIComponent(checkoutPath)}`;
+      return;
+    }
     setSelectedPlanId(planId);
     setPromoInput("");
     setPromoResult(null);

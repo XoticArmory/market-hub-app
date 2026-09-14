@@ -129,6 +129,12 @@ export default function TourPage() {
   const isFirst = slide === 0;
 
   const endDest = isAuthenticated ? "/setup" : "/auth?mode=signup";
+  const subscribeDestination = (plan: "monthly" | "annual") => {
+    const checkoutPath = `/upgrade?plan=${plan}&checkout=1`;
+    return isAuthenticated
+      ? checkoutPath
+      : `/auth?mode=signup&next=${encodeURIComponent(checkoutPath)}`;
+  };
 
   const goNext = () => {
     if (isLast) {
@@ -256,13 +262,22 @@ export default function TourPage() {
                       <li key={f} className="flex items-center gap-1.5"><Check className="w-3 h-3 text-primary shrink-0" />{f}</li>
                     ))}
                   </ul>
-                  <Button
-                    data-testid="button-subscribe-pro"
-                    className="w-full h-10 rounded-xl bg-gradient-to-r from-primary to-amber-500 text-sm mt-2"
-                    onClick={() => setLocation(isAuthenticated ? "/upgrade" : "/auth?mode=signup&next=/upgrade")}
-                  >
-                    {isAuthenticated ? "Subscribe" : "Sign Up & Subscribe"}
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <Button
+                      data-testid="button-subscribe-pro-monthly"
+                      className="h-10 rounded-xl bg-gradient-to-r from-primary to-amber-500 text-xs px-2"
+                      onClick={() => setLocation(subscribeDestination("monthly"))}
+                    >
+                      Monthly
+                    </Button>
+                    <Button
+                      data-testid="button-subscribe-pro-annual"
+                      className="h-10 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-xs px-2"
+                      onClick={() => setLocation(subscribeDestination("annual"))}
+                    >
+                      Annual
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Community Free */}

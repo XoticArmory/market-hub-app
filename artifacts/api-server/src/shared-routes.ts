@@ -113,7 +113,7 @@ export const api = {
       path: '/api/stripe/checkout' as const,
       input: z.object({
         tier: z.literal('vendor_pro'),
-        billingInterval: z.enum(['month', 'year']),
+        billingInterval: z.enum(['month', 'year']).default('month'),
         promoCode: z.string().optional(),
         returnTo: z.string().optional(),
       }),

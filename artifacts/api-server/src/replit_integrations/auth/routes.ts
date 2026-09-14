@@ -3,6 +3,44 @@ import { authStorage } from "./storage";
 import { isAuthenticated, getSupabaseAdmin } from "./replitAuth";
 
 export function registerAuthRoutes(app: Express): void {
+  app.post("/api/auth/signup", async (req: any, res) => {
+    try {
+      const { email, password, firstName, lastName } = req.body;
+      if (typeof email !== "string" || !email.trim()) {
+        return res.status(400).json({ message: "Email is required." });
+      }
+      if (typeof password !== "string" || password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters." });
+      }
+      if (typeof firstName !== "string" || !firstName.trim()) {
+        return res.status(400).json({ message: "First name is required." });
+      }
+
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: email.trim().toLowerCase(),
+        password,
+        email_confirm: true,
+        user_metadata: {
+          first_name: firstName.trim(),
+          last_name: typeof lastName === "string" ? lastName.trim() : "",
+        },
+      });
+
+      if (error) {
+        const duplicate = /already|registered|exists/i.test(error.message);
+        return res.status(duplicate ? 409 : 400).json({
+          message: duplicate ? "An account with this email already exists. Sign in instead." : error.message,
+        });
+      }
+
+      res.status(201).json({ id: data.user.id });
+    } catch (error) {
+      console.error("Account signup error:", error);
+      res.status(500).json({ message: "Failed to create account." });
+    }
+  });
+
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
