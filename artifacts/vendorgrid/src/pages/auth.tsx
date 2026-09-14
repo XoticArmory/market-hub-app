@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
@@ -37,6 +37,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const exchangingRef = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,18 +47,22 @@ export default function AuthPage() {
 
     try {
       if (mode === "signup") {
-        const signUpResponse = await fetch("/api/auth/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, firstName, lastName }),
+        const confirmationReturn = `${window.location.origin}/auth?mode=login&next=${encodeURIComponent(nextParam)}`;
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { first_name: firstName, last_name: lastName },
+            emailRedirectTo: confirmationReturn,
+          },
         });
-        if (!signUpResponse.ok) {
-          const signUpError = await signUpResponse.json().catch(() => ({ message: "Failed to create account." }));
-          throw new Error(signUpError.message);
+        if (signUpError) throw signUpError;
+        if (data.session) {
+          await exchangeToken(data.session.access_token);
+        } else {
+          setSuccess("Check your email to confirm your account. After confirmation, you'll continue to your selected Pro plan.");
+          setMode("login");
         }
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError || !data.session) throw signInError || new Error("Failed to sign in after creating your account.");
-        await exchangeToken(data.session.access_token);
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
@@ -73,17 +78,31 @@ export default function AuthPage() {
   };
 
   const exchangeToken = async (access_token: string) => {
-    const res = await fetch("/api/auth/exchange", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ access_token }),
-    });
-    if (!res.ok) throw new Error("Failed to authenticate with server");
-    await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    await queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
-    setLocation(nextParam);
+    if (exchangingRef.current) return;
+    exchangingRef.current = true;
+    try {
+      const res = await fetch("/api/auth/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ access_token }),
+      });
+      if (!res.ok) throw new Error("Failed to authenticate with server");
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      setLocation(nextParam);
+    } finally {
+      exchangingRef.current = false;
+    }
   };
+
+  useEffect(() => {
+    if (isLoading || isAuthenticated) return;
+    supabase.auth.getSession().then(({ data }) => {
+      const accessToken = data.session?.access_token;
+      if (accessToken) exchangeToken(accessToken).catch((err) => setError(err.message || "Failed to finish signing in."));
+    });
+  }, [isAuthenticated, isLoading, nextParam]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
