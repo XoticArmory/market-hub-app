@@ -1650,9 +1650,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const u = await enrichUser(r.vendorId);
         const vendorProfile = await storage.getUserProfile(r.vendorId);
         const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
-        const documents = r.status === "canceled" || r.status === "rejected"
-          ? []
-          : await visibleEventDocuments(event, userId);
         return {
           id: null as number | null,
           vendorId: r.vendorId,
@@ -2940,7 +2937,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.stripe.checkout.path, isAuthenticated, async (req: any, res) => {
     const stripe = getStripe();
     if (!stripe) return res.status(503).json({ message: "Stripe not configured. Set STRIPE_SECRET_KEY in environment secrets." });
-    const { tier, promoCode, returnTo } = req.body;
+    const checkoutInput = api.stripe.checkout.input.safeParse(req.body);
+    if (!checkoutInput.success) return res.status(400).json({ message: "Invalid subscription selection." });
+    const { tier, billingInterval, promoCode, returnTo } = checkoutInput.data;
     const tierInfo = PRO_TIERS[tier as keyof typeof PRO_TIERS];
     if (!tierInfo) return res.status(400).json({ message: "Invalid tier." });
     const userId = req.user.claims.sub;
@@ -2982,21 +2981,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     try {
       const profile = await storage.getUserProfile(userId);
+      const isAnnual = billingInterval === 'year';
+      const amount = isAnnual ? 9900 : tierInfo.price;
+      const intervalLabel = isAnnual ? 'Annual' : 'Monthly';
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [{
           price_data: {
             currency: 'usd',
-            product_data: { name: `${tierInfo.label} — Monthly Subscription` },
-            unit_amount: tierInfo.price,
-            recurring: { interval: 'month' },
+            product_data: { name: `${tierInfo.label} — ${intervalLabel} Subscription` },
+            unit_amount: amount,
+            recurring: { interval: billingInterval },
           },
           quantity: 1,
         }],
+        subscription_data: {
+          trial_period_days: 14,
+          metadata: { userId, tier, billingInterval },
+        },
         success_url: `${getHost(req)}${returnTo || '/profile'}?subscribed=${tier}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${getHost(req)}/upgrade`,
-        metadata: { userId, tier },
+        metadata: { userId, tier, billingInterval },
       };
       if (stripeCouponId) {
         sessionParams.discounts = [{ coupon: stripeCouponId }];
@@ -3092,7 +3098,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             const profiles = await storage.getAllUserProfiles();
             const profile = profiles.find(p => p.stripeCustomerId === customerId);
             if (profile) {
-              const status = sub.status === 'active' ? 'active' : 'inactive';
+              const status = sub.status === 'active' || sub.status === 'trialing' ? 'active' : 'inactive';
               await storage.upsertUserProfile(profile.userId, { stripeSubscriptionId: sub.id, subscriptionStatus: status });
             }
           }

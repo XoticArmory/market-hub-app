@@ -4,11 +4,11 @@ import { useToast } from "@/hooks/use-toast";
 export function useUpgradeCheckout() {
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ tier, promoCode, returnTo }: { tier: string; promoCode?: string; returnTo?: string }) => {
+    mutationFn: async ({ tier, billingInterval, promoCode, returnTo }: { tier: "vendor_pro"; billingInterval: "month" | "year"; promoCode?: string; returnTo?: string }) => {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier, promoCode: promoCode || undefined, returnTo }),
+        body: JSON.stringify({ tier, billingInterval, promoCode: promoCode || undefined, returnTo }),
         credentials: "include",
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }

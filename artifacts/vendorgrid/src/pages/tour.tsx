@@ -250,6 +250,7 @@ export default function TourPage() {
                   </div>
                   <h3 className="font-bold text-foreground mb-1">VendorGrid Pro</h3>
                   <div className="text-2xl font-display font-bold text-primary mb-1">$14.95<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
+                  <p className="text-xs font-semibold text-primary">$99/year option · 14-day free trial</p>
                   <ul className="space-y-1.5 text-xs text-muted-foreground my-3 flex-1">
                     {["Post unlimited events", "Vendor spaces & payments", "Analytics dashboard", "Register as a vendor", "No platform fees", "Send area notifications"].map(f => (
                       <li key={f} className="flex items-center gap-1.5"><Check className="w-3 h-3 text-primary shrink-0" />{f}</li>

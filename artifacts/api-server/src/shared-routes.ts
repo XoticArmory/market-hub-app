@@ -108,7 +108,17 @@ export const api = {
   },
   stripe: {
     subscriptionStatus: { method: 'GET' as const, path: '/api/stripe/subscription' as const, responses: { 200: z.any() } },
-    checkout: { method: 'POST' as const, path: '/api/stripe/checkout' as const, responses: { 200: z.object({ url: z.string() }) } },
+    checkout: {
+      method: 'POST' as const,
+      path: '/api/stripe/checkout' as const,
+      input: z.object({
+        tier: z.literal('vendor_pro'),
+        billingInterval: z.enum(['month', 'year']),
+        promoCode: z.string().optional(),
+        returnTo: z.string().optional(),
+      }),
+      responses: { 200: z.object({ url: z.string() }) },
+    },
     manageSubscription: { method: 'POST' as const, path: '/api/stripe/portal' as const, responses: { 200: z.object({ url: z.string() }) } },
     acceptTerms: { method: 'POST' as const, path: '/api/stripe/terms-accept' as const, responses: { 200: z.any() } },
   },

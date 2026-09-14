@@ -12,12 +12,12 @@ import { CheckCircle, Crown, ArrowRight, Tag, ShieldCheck, Loader2, X } from "lu
 
 const TERMS = `VENDORGRID PRO — SUBSCRIPTION TERMS OF SERVICE
 
-Last updated: February 2026
+Last updated: September 2026
 
 By subscribing to a VendorGrid Pro plan, you agree to the following terms:
 
 1. SUBSCRIPTION & BILLING
-Your Pro subscription is billed monthly on a recurring basis. You authorize us to charge your payment method each billing period. Prices are as displayed at the time of purchase.
+Your Pro subscription is billed monthly or annually on a recurring basis, according to the plan you select. You authorize us to charge your payment method each billing period. Prices are as displayed at the time of purchase.
 
 2. CANCELLATION
 You may cancel your subscription at any time through your Profile > Billing page. Upon cancellation, you retain Pro access through the end of your current billing period. No partial-period refunds are issued.
@@ -26,7 +26,7 @@ You may cancel your subscription at any time through your Profile > Billing page
 Subscriptions automatically renew unless canceled before the renewal date. You will receive no separate reminder; it is your responsibility to cancel if you do not wish to renew.
 
 4. FREE TRIAL / REFUNDS
-There are no free trials. All sales are final except where required by law.
+Both paid Pro plans include a 14-day free trial. Unless canceled before the trial ends, your selected subscription begins automatically and your payment method will be charged. All sales are final except where required by law.
 
 5. FEATURE ACCESS
 Pro features are tied to an active, paid subscription. Features may be modified or discontinued with 30 days' notice where reasonably possible.
@@ -60,15 +60,29 @@ const PRO_FEATURES = [
   "Send notifications to vendors in your event's area",
 ];
 
-const TIERS = [
+const PLANS = [
   {
-    id: "vendor_pro",
+    id: "monthly",
+    tier: "vendor_pro" as const,
+    billingInterval: "month" as const,
     label: "VendorGrid Pro",
     price: "$14.95",
     period: "/month",
     icon: Crown,
     color: "from-primary to-amber-500",
     badge: "Everything Included",
+    features: PRO_FEATURES,
+  },
+  {
+    id: "annual",
+    tier: "vendor_pro" as const,
+    billingInterval: "year" as const,
+    label: "VendorGrid Pro Annual",
+    price: "$99",
+    period: "/year",
+    icon: Crown,
+    color: "from-amber-500 to-orange-500",
+    badge: "Save $80.40",
     features: PRO_FEATURES,
   },
 ];
@@ -81,7 +95,7 @@ export default function UpgradePage() {
   const { mutate: redeemAdmin, isPending: isRedeemingAdmin } = useRedeemAdminCode();
   const { mutate: portal } = usePortalSession();
 
-  const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
   const [termsScrolled, setTermsScrolled] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -96,9 +110,9 @@ export default function UpgradePage() {
   const currentTier = profile?.subscriptionTier || "free";
   const hasActivePro = profile?.subscriptionStatus === "active" && currentTier !== "free";
 
-  const handleUpgrade = (tierId: string) => {
+  const handleUpgrade = (planId: string) => {
     if (!isAuthenticated) { window.location.href = "/auth?mode=signup&next=/upgrade"; return; }
-    setSelectedTier(tierId);
+    setSelectedPlanId(planId);
     setPromoInput("");
     setPromoResult(null);
     setTermsOpen(true);
@@ -107,8 +121,9 @@ export default function UpgradePage() {
   };
 
   const handleValidatePromo = () => {
-    if (!promoInput.trim() || !selectedTier) return;
-    validatePromo({ code: promoInput.trim(), tier: selectedTier }, {
+    const selectedPlan = PLANS.find(plan => plan.id === selectedPlanId);
+    if (!promoInput.trim() || !selectedPlan) return;
+    validatePromo({ code: promoInput.trim(), tier: selectedPlan.tier }, {
       onSuccess: (data) => {
         if (data.valid && data.promoCode?.type === 'discount') {
           setPromoResult({ valid: true, discount: data.promoCode.discountPercent });
@@ -123,11 +138,13 @@ export default function UpgradePage() {
   };
 
   const handleAcceptAndSubscribe = () => {
-    if (!selectedTier || !termsAccepted) return;
+    const selectedPlan = PLANS.find(plan => plan.id === selectedPlanId);
+    if (!selectedPlan || !termsAccepted) return;
     setTermsOpen(false);
     const isOnboarding = !profile?.onboardingComplete;
     checkout({
-      tier: selectedTier,
+      tier: selectedPlan.tier,
+      billingInterval: selectedPlan.billingInterval,
       promoCode: promoResult?.valid ? promoInput.trim() : undefined,
       returnTo: isOnboarding ? "/setup" : "/profile",
     });
@@ -158,9 +175,9 @@ export default function UpgradePage() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-md">
-        {TIERS.map(({ id, label, price, period, icon: Icon, color, badge, features }) => {
-          const isCurrentPlan = hasActivePro && (currentTier === id || currentTier === "event_owner_pro");
+        <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
+        {PLANS.map(({ id, tier, label, price, period, icon: Icon, color, badge, features }) => {
+          const isCurrentPlan = hasActivePro && (currentTier === tier || currentTier === "event_owner_pro");
           return (
             <div key={id} className={`relative bg-card rounded-3xl border-2 shadow-lg flex flex-col ${isCurrentPlan ? 'border-primary' : 'border-border/50'} overflow-hidden`} data-testid={`tier-${id}`}>
               {badge && (
@@ -175,6 +192,7 @@ export default function UpgradePage() {
                   <span className="text-4xl font-bold">{price}</span>
                   <span className="text-white/80">{period}</span>
                 </div>
+                 <p className="mt-2 text-sm font-medium text-white/90">14-day free trial</p>
               </div>
               <div className="flex-1 p-8 space-y-3">
                 {features.map((f, i) => (
@@ -242,7 +260,7 @@ export default function UpgradePage() {
         <DialogContent className="max-w-2xl rounded-3xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-display">Terms of Service</DialogTitle>
-            <DialogDescription>Please read and accept before subscribing to {TIERS.find(t => t.id === selectedTier)?.label}.</DialogDescription>
+            <DialogDescription>Please read and accept before subscribing to {PLANS.find(plan => plan.id === selectedPlanId)?.label}.</DialogDescription>
           </DialogHeader>
           <div
             className="max-h-48 overflow-y-auto border border-border rounded-xl p-4 text-sm text-muted-foreground font-mono leading-relaxed bg-muted/30 whitespace-pre-wrap"
@@ -284,7 +302,10 @@ export default function UpgradePage() {
             {promoResult?.valid && (
               <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400" data-testid="promo-success">
                 <CheckCircle className="w-4 h-4" />
-                <span>{promoResult.discount}% discount applied — {discountedPrice(TIERS.find(t => t.id === selectedTier)?.price || "$0")}/mo</span>
+                <span>
+                  {promoResult.discount}% discount applied — {discountedPrice(PLANS.find(plan => plan.id === selectedPlanId)?.price || "$0")}
+                  {PLANS.find(plan => plan.id === selectedPlanId)?.period}
+                </span>
               </div>
             )}
             {promoResult?.valid === false && (
