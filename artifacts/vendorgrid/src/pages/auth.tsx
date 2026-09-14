@@ -37,7 +37,17 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const exchangingRef = useRef(false);
+
+  const confirmationReturn = `${window.location.origin}/auth?mode=login&next=${encodeURIComponent(nextParam)}`;
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown(current => current - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +57,8 @@ export default function AuthPage() {
 
     try {
       if (mode === "signup") {
-        const confirmationReturn = `${window.location.origin}/auth?mode=login&next=${encodeURIComponent(nextParam)}`;
         const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
+          email: email.trim().toLowerCase(),
           password,
           options: {
             data: { first_name: firstName, last_name: lastName },
@@ -61,6 +70,7 @@ export default function AuthPage() {
           await exchangeToken(data.session.access_token);
         } else {
           setSuccess("Check your email to confirm your account. After confirmation, you'll continue to your selected Pro plan.");
+          setResendCooldown(60);
           setMode("login");
         }
       } else {
@@ -74,6 +84,37 @@ export default function AuthPage() {
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError("Enter the email address you used to create your account.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setResending(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email: normalizedEmail,
+        options: { emailRedirectTo: confirmationReturn },
+      });
+      if (resendError) {
+        if (/rate limit/i.test(resendError.message)) {
+          throw new Error("Supabase has temporarily limited verification emails. Please wait a few minutes, then try again.");
+        }
+        throw resendError;
+      }
+      setSuccess(`A new verification link was sent to ${normalizedEmail}. Check your inbox and spam folder.`);
+      setResendCooldown(60);
+    } catch (err: any) {
+      setError(err.message || "Unable to resend the verification email.");
+    } finally {
+      setResending(false);
     }
   };
 
@@ -225,6 +266,25 @@ export default function AuthPage() {
                 <>{mode === "login" ? "Sign In" : "Create Account"} <ArrowRight className="w-4 h-4 ml-2" /></>
               )}
             </Button>
+
+            {mode === "login" && (
+              <Button
+                data-testid="button-resend-verification"
+                type="button"
+                variant="outline"
+                disabled={resending || resendCooldown > 0}
+                onClick={handleResendVerification}
+                className="w-full h-11 rounded-xl"
+              >
+                {resending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending verification email...</>
+                ) : resendCooldown > 0 ? (
+                  `Resend verification email in ${resendCooldown}s`
+                ) : (
+                  <><Mail className="w-4 h-4 mr-2" />Resend verification email</>
+                )}
+              </Button>
+            )}
           </form>
 
           <div className="px-8 pb-8 -mt-2 text-center">
