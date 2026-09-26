@@ -2255,6 +2255,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ---- VENDOR INVENTORY ----
+  app.get('/api/vendor/inventory/eligible-events', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      if (!(await requirePro(req, res))) return;
+      const [ownedEvents, registrations] = await Promise.all([
+        storage.getEventsByOwner(userId),
+        storage.getUserRegistrations(userId),
+      ]);
+      const eventsById = new Map(ownedEvents.map(event => [event.id, event]));
+      const latestRegistrations = new Map<number, typeof registrations[number]>();
+      // Registrations are newest first; a later cancellation or rejection overrides older applications.
+      for (const registration of registrations) {
+        if (!latestRegistrations.has(registration.eventId)) latestRegistrations.set(registration.eventId, registration);
+      }
+      for (const registration of latestRegistrations.values()) {
+        if (registration.status === 'canceled' || registration.status === 'rejected') continue;
+        if (eventsById.has(registration.eventId)) continue;
+        const event = await storage.getEvent(registration.eventId);
+        if (event) eventsById.set(event.id, event);
+      }
+      const eligibleEvents = [...eventsById.values()];
+      const extraDates = eligibleEvents.length
+        ? await storage.getBulkEventDates(eligibleEvents.map(event => event.id))
+        : [];
+      res.json(eligibleEvents.map(event => ({
+        id: event.id,
+        title: event.title,
+        date: event.date,
+        extraDates: extraDates.filter(date => date.eventId === event.id),
+      })));
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || 'Failed to load eligible events' });
+    }
+  });
+
   app.get('/api/vendor/inventory', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
@@ -2441,21 +2476,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const catalogItemId = Number(req.params.id);
     const { eventId, quantityAssigned, afterMarketReport } = req.body;
-    if (!eventId || quantityAssigned === undefined) return res.status(400).json({ message: "eventId and quantityAssigned required" });
+    const targetEventId = Number(eventId);
+    if (!Number.isInteger(targetEventId) || targetEventId <= 0 || quantityAssigned === undefined) return res.status(400).json({ message: "Valid eventId and quantityAssigned required" });
     // Ownership check: ensure this catalog item belongs to the requesting vendor
     const catalogItem = await storage.getCatalogItem(catalogItemId);
     if (!catalogItem || catalogItem.vendorId !== userId) return res.status(403).json({ message: "Catalog item not found or not owned by you" });
-    const assignment = await storage.assignCatalogItemToEvent(catalogItemId, Number(eventId), userId, Number(quantityAssigned), afterMarketReport === true);
+    const event = await storage.getEvent(targetEventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.createdBy !== userId) {
+      const registrations = await storage.getUserRegistrations(userId);
+      const latestRegistration = registrations.find(registration => registration.eventId === targetEventId);
+      if (!latestRegistration || latestRegistration.status === 'canceled' || latestRegistration.status === 'rejected') {
+        return res.status(403).json({ message: "You can only allocate inventory to events you own or have applied to vend at." });
+      }
+    }
+    const assignment = await storage.assignCatalogItemToEvent(catalogItemId, targetEventId, userId, Number(quantityAssigned), afterMarketReport === true);
 
     // Auto-create or update the inventory tracker entry for this event
     if (catalogItem) {
-      const ev = await storage.getEvent(Number(eventId));
-      const existing = await storage.getVendorInventoryByNameAndEvent(userId, Number(eventId), catalogItem.itemName);
+      const ev = event;
+      const existing = await storage.getVendorInventoryByNameAndEvent(userId, targetEventId, catalogItem.itemName);
       if (existing) {
         await storage.updateVendorInventoryItem(existing.id, { quantityBrought: Number(quantityAssigned) });
       } else {
         await storage.createVendorInventoryItem(userId, {
-          eventId: Number(eventId),
+          eventId: targetEventId,
           eventTitle: ev?.title || null,
           eventDate: ev?.date || null,
           itemName: catalogItem.itemName,

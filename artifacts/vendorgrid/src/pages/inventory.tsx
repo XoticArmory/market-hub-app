@@ -103,12 +103,14 @@ export default function InventoryPage() {
     enabled: hasActivePro === true,
   });
 
-  const allEvents: EventOption[] = allEventsRaw.map((e: any) => ({
-    id: e.id,
-    title: e.title,
-    date: e.date,
-    extraDates: (e.extraDates ?? []).map((d: any) => ({ id: d.id, date: d.date })),
-  }));
+  const {
+    data: eligibleEvents = [],
+    isPending: eligibleEventsLoading,
+    isError: eligibleEventsError,
+  } = useQuery<EventOption[]>({
+    queryKey: ["/api/vendor/inventory/eligible-events"],
+    enabled: hasActivePro === true && allocateOpen,
+  });
 
   const uploadImage = async (file: File): Promise<string | null> => {
     const fd = new FormData();
@@ -535,23 +537,26 @@ export default function InventoryPage() {
               <Select
                 value={batchEventId}
                 onValueChange={v => { setBatchEventId(v); setBatchEventDay(""); }}
+                disabled={eligibleEventsLoading || eligibleEventsError || eligibleEvents.length === 0}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Choose an event" />
                 </SelectTrigger>
                 <SelectContent>
-                  {allEvents.map(ev => (
+                  {eligibleEvents.map(ev => (
                     <SelectItem key={ev.id} value={String(ev.id)}>{ev.title}</SelectItem>
                   ))}
-                  {allEvents.length === 0 && (
-                    <SelectItem value="_none" disabled>No events found</SelectItem>
-                  )}
                 </SelectContent>
               </Select>
+              {eligibleEventsLoading && <p className="text-sm text-muted-foreground">Loading your events...</p>}
+              {eligibleEventsError && <p className="text-sm text-destructive">Could not load your events. Close and reopen this window to try again.</p>}
+              {!eligibleEventsLoading && !eligibleEventsError && eligibleEvents.length === 0 && (
+                <p className="text-sm text-muted-foreground">No eligible events yet. Apply to vend at an event or create your own event first.</p>
+              )}
             </div>
 
             {(() => {
-              const selectedEv = allEvents.find(e => String(e.id) === batchEventId);
+              const selectedEv = eligibleEvents.find(e => String(e.id) === batchEventId);
               const allDays = selectedEv
                 ? [
                     ...(selectedEv.date ? [{ key: "main", date: selectedEv.date }] : []),
@@ -584,7 +589,7 @@ export default function InventoryPage() {
             })()}
 
             {(() => {
-              const selectedEv = allEvents.find(e => String(e.id) === batchEventId);
+              const selectedEv = eligibleEvents.find(e => String(e.id) === batchEventId);
               const allDays = selectedEv
                 ? [
                     ...(selectedEv.date ? [{ key: "main", date: selectedEv.date }] : []),
@@ -646,7 +651,7 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => { setAllocateOpen(false); setBatchEventId(""); setBatchEventDay(""); setAllocateRows([]); }}>Cancel</Button>
             <Button
               disabled={!batchEventId || !batchHasAny || allocateBatch.isPending || (() => {
-                const selectedEv = allEvents.find(e => String(e.id) === batchEventId);
+                const selectedEv = eligibleEvents.find(e => String(e.id) === batchEventId);
                 const allDays = selectedEv
                   ? [
                       ...(selectedEv.date ? [1] : []),
