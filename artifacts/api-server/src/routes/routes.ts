@@ -99,6 +99,12 @@ function isPro(profile: any): boolean {
     && profile.subscriptionStatus === 'active';
 }
 
+function eventPinColor(creatorProfile: any): "admin" | "pro" | "default" {
+  if (creatorProfile?.isAdmin === true) return "admin";
+  if (isPro(creatorProfile)) return "pro";
+  return "default";
+}
+
 const EVENT_DOCUMENT_VISIBILITIES = new Set(["public", "paid", "registered"]);
 
 async function canAccessEventDocument(event: any, document: any, userId?: string): Promise<boolean> {
@@ -751,6 +757,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         vendorSpacesUsed: approvedRegCounts.get(e.id) ?? 0,
         userStatus: userAttendanceMap.get(e.id) ?? null,
         isFeatured,
+        pinColor: eventPinColor(creatorProfile),
       };
     });
 
@@ -774,6 +781,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const creator = await enrichUser(event.createdBy);
     const creatorProfile = await storage.getUserProfile(event.createdBy);
+    const pinColor = eventPinColor(creatorProfile);
     const attendance = await storage.getEventAttendance(eventId);
     const extraDates = await storage.getEventDates(eventId);
     const attendingCount = attendance.filter(a => a.status === 'attending').length;
@@ -801,7 +809,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { registrationCode: rawCode, ...eventWithoutCode } = event;
     const responseEvent = canSeeCode ? { ...event } : { ...eventWithoutCode };
     const eventDocuments = await visibleEventDocuments(event, requesterId);
-    res.json({ ...responseEvent, vendorSpacesUsed: approvedCount, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured, documents: eventDocuments });
+    res.json({ ...responseEvent, vendorSpacesUsed: approvedCount, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured, pinColor, documents: eventDocuments });
   });
 
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {

@@ -347,6 +347,7 @@ export type EventResponse = Event & {
   vendorAttendees?: VendorPostResponse[];
   userStatus?: string | null;
   isFeatured?: boolean;
+  pinColor?: "admin" | "pro" | "default";
 };
 export const anonymousEventClicks = pgTable("anonymous_event_clicks", {
   id: serial("id").primaryKey(),

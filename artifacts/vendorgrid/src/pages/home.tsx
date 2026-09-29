@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation, Smartphone, X, Phone, ClipboardList } from "lucide-react";
+import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation, Smartphone, X, Phone, ClipboardList, List, Map as MapIcon } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 import { useUserRegistrations } from "@/hooks/use-registrations";
 import { MissingPhoto } from "@/components/missing-photo";
+import { EventDiscoveryMap } from "@/components/event-discovery-map";
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
@@ -288,6 +289,10 @@ function PwaInstallBanner() {
 }
 
 export default function Home() {
+  const [viewMode, setViewMode] = useState<"list" | "map">(
+    () => new URLSearchParams(window.location.search).get("view") === "map" ? "map" : "list"
+  );
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
   const [radiusInput, setRadiusInput] = useState("");
@@ -370,6 +375,13 @@ export default function Home() {
       const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
       return sortOrder === "nearest" ? diff : -diff;
     });
+  const mapEvents = sortedEvents.map(event => ({
+    ...event,
+    date: getNextDate(event),
+    pinColor: event.pinColor ?? "default",
+    latitude: event.areaCode ? zipCoordinates[event.areaCode]?.latitude ?? null : null,
+    longitude: event.areaCode ? zipCoordinates[event.areaCode]?.longitude ?? null : null,
+  }));
 
   const handleApplyFilters = () => {
     const zip = areaInput.trim();
@@ -490,6 +502,14 @@ export default function Home() {
                 <ArrowDown className="w-3 h-3" />Furthest
               </Button>
             </div>
+            <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-xl p-1 h-10" role="group" aria-label="Event view">
+              <Button size="sm" variant={viewMode === "list" ? "default" : "ghost"} aria-pressed={viewMode === "list"} className="rounded-lg h-8 px-3 gap-1.5 text-xs font-medium" onClick={() => setViewMode("list")} data-testid="button-view-list">
+                <List className="w-3.5 h-3.5" />List
+              </Button>
+              <Button size="sm" variant={viewMode === "map" ? "default" : "ghost"} aria-pressed={viewMode === "map"} className="rounded-lg h-8 px-3 gap-1.5 text-xs font-medium" onClick={() => setViewMode("map")} data-testid="button-view-map">
+                <MapIcon className="w-3.5 h-3.5" />Map
+              </Button>
+            </div>
             <TabsList className="bg-muted/50 p-1 rounded-xl h-10 w-fit">
               <TabsTrigger value="markets" className="rounded-lg px-5 h-8 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2 text-sm">
                 <Calendar className="w-3.5 h-3.5" />Markets
@@ -537,15 +557,24 @@ export default function Home() {
               <Link href="/events/new" className="text-primary font-medium hover:underline">Create an event</Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="space-y-5">
+              {viewMode === "map" && (
+                <EventDiscoveryMap
+                  events={mapEvents}
+                  selectedEventId={selectedEventId}
+                />
+              )}
+              <div className={viewMode === "map"
+                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[640px] overflow-y-auto pr-2 pb-2"
+                : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
               {sortedEvents.map((event, i) => {
                 const eventPosts = postsByEventId.get(event.id) || [];
                 const uniqueVendors = Array.from(new Set(eventPosts.map((p: any) => p.vendorId)));
                 return (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.4 }} key={event.id}>
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.4 }} key={event.id} onClick={() => { if (viewMode === "map") setSelectedEventId(event.id); }}>
                     <div className="group h-full bg-card rounded-2xl overflow-hidden border border-border/50 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
                       {/* Image — clickable link to event */}
-                      <Link href={`/events/${event.id}`} className="block shrink-0" onClick={() => { if (!isAuthenticated) trackAnonEventClick(event.id); }}>
+                      <Link href={`/events/${event.id}`} className="block shrink-0" onClick={(e) => { if (viewMode === "map") e.preventDefault(); else if (!isAuthenticated) trackAnonEventClick(event.id); }}>
                         <div className="h-48 bg-muted relative overflow-hidden">
                           <img src={(event as any).bannerUrl || `https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                           {event.canceledAt ? (
@@ -586,7 +615,7 @@ export default function Home() {
                       <div className="p-6 flex-1 flex flex-col">
                         {/* Title row with share + optional website link */}
                         <div className="flex items-start gap-2 mb-2">
-                          <Link href={`/events/${event.id}`} className="flex-1 min-w-0">
+                          <Link href={`/events/${event.id}`} className="flex-1 min-w-0" onClick={(e) => { if (viewMode === "map") e.preventDefault(); }}>
                             <h3 className="text-xl font-display font-bold text-foreground group-hover:text-primary transition-colors">{event.title}</h3>
                           </Link>
                           {(() => {
@@ -675,7 +704,7 @@ export default function Home() {
                           <ShareButton event={event} />
                         </div>
                         {/* Details — link to event */}
-                        <Link href={`/events/${event.id}`} className="flex-1 flex flex-col">
+                        <Link href={`/events/${event.id}`} className="flex-1 flex flex-col" onClick={(e) => { if (viewMode === "map") e.preventDefault(); }}>
                           <div className="space-y-2 mb-4 flex-1">
                             <div className="flex items-start gap-2 text-muted-foreground text-sm">
                               <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-primary/70" /><span className="line-clamp-2">{event.location}</span>
@@ -800,6 +829,7 @@ export default function Home() {
                   </motion.div>
                 );
               })}
+              </div>
             </div>
           )}
         </TabsContent>
