@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { ImageUpload } from "@/components/image-upload";
 import { useProfile, useUpsertProfile } from "@/hooks/use-profile";
@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle, MessageSquare, MessageCircle, Search, ArrowLeft } from "lucide-react";
-import { useLocation, Link } from "wouter";
+import { useLocation, useSearch, Link } from "wouter";
 import { useEvents } from "@/hooks/use-events";
 import { format } from "date-fns";
 import { EventMapEditor } from "@/components/EventMapEditor";
@@ -519,6 +519,8 @@ function _VendorAnalyticsTab_REMOVED({ userId }: { userId: string }) {
                                 onClick={() => removeAssignment.mutate({ catalogItemId: item.id, eventId: a.eventId })}
                                 className="ml-1 hover:text-destructive transition-colors"
                                 data-testid={`button-remove-assignment-${item.id}-${a.eventId}`}
+                                aria-label={`Remove ${item.itemName} assignment from ${ev.title}`}
+                                title={`Remove ${item.itemName} assignment from ${ev.title}`}
                               >×</button>
                             </Badge>
                           ) : null;
@@ -530,8 +532,8 @@ function _VendorAnalyticsTab_REMOVED({ userId }: { userId: string }) {
                     <Button size="sm" variant="outline" className="rounded-xl h-8 px-3 text-xs" onClick={() => openAssign(item)} data-testid={`button-assign-${item.id}`}>
                       Assign to Event
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEditCatalog(item)} data-testid={`button-edit-catalog-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => deleteCatalogItem.mutate(item.id)} data-testid={`button-delete-catalog-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label={`Edit ${item.itemName}`} title={`Edit ${item.itemName}`} onClick={() => openEditCatalog(item)} data-testid={`button-edit-catalog-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:text-destructive" aria-label={`Delete ${item.itemName}`} title={`Delete ${item.itemName}`} onClick={() => deleteCatalogItem.mutate(item.id)} data-testid={`button-delete-catalog-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                   </div>
                 </div>
               ))}
@@ -667,7 +669,14 @@ function _VendorAnalyticsTab_REMOVED({ userId }: { userId: string }) {
                                         onClick={() => item.quantitySold > 0 && logSale.mutate({ id: item.id, quantitySold: item.quantitySold - 1 })}
                                         disabled={item.quantitySold <= 0 || isSaving}
                                         data-testid={`button-unsell-${item.id}`}
-                                        title="Undo 1 sale"
+                                        aria-label={isSaving
+                                          ? `Cannot undo a sale for ${item.itemName}: a sale update is in progress`
+                                          : item.quantitySold <= 0
+                                            ? `Cannot undo a sale for ${item.itemName}: no sales have been logged`
+                                            : `Undo one sale of ${item.itemName}`}
+                                        title={isSaving
+                                          ? "A sale update is in progress"
+                                          : item.quantitySold <= 0 ? "No sales have been logged" : `Undo one sale of ${item.itemName}`}
                                       >−</button>
                                       <span className="w-8 text-center font-semibold tabular-nums" data-testid={`sold-count-${item.id}`}>{item.quantitySold}</span>
                                       <button
@@ -675,7 +684,16 @@ function _VendorAnalyticsTab_REMOVED({ userId }: { userId: string }) {
                                         onClick={() => item.quantitySold < item.quantityBrought && logSale.mutate({ id: item.id, quantitySold: item.quantitySold + 1 })}
                                         disabled={item.quantitySold >= item.quantityBrought || isSaving}
                                         data-testid={`button-sell-${item.id}`}
-                                        title="Log 1 sale"
+                                        aria-label={isSaving
+                                          ? `Cannot log a sale for ${item.itemName}: a sale update is in progress`
+                                          : item.quantitySold >= item.quantityBrought
+                                            ? `Cannot log a sale for ${item.itemName}: all brought units are sold`
+                                            : `Log one sale of ${item.itemName}`}
+                                        title={isSaving
+                                          ? "A sale update is in progress"
+                                          : item.quantitySold >= item.quantityBrought
+                                            ? "All brought units are sold"
+                                            : `Log one sale of ${item.itemName}`}
                                       >+</button>
                                     </div>
                                   </td>
@@ -685,8 +703,8 @@ function _VendorAnalyticsTab_REMOVED({ userId }: { userId: string }) {
                                   <td className="py-3 px-3 text-right text-green-600 font-semibold hidden md:table-cell">${((item.quantitySold * item.priceCents) / 100).toFixed(2)}</td>
                                   <td className="py-3 px-3 text-right">
                                     <div className="flex gap-1 justify-end">
-                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(item)} data-testid={`button-edit-item-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteItem.mutate(item.id)} data-testid={`button-delete-item-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={`Edit ${item.itemName}`} title={`Edit ${item.itemName}`} onClick={() => openEdit(item)} data-testid={`button-edit-item-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" aria-label={`Delete ${item.itemName}`} title={`Delete ${item.itemName}`} onClick={() => deleteItem.mutate(item.id)} data-testid={`button-delete-item-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                                     </div>
                                   </td>
                                 </tr>
@@ -972,15 +990,8 @@ export default function ProfilePage() {
   const { data: notifications } = useNotifications();
   const { mutate: markAllRead } = useMarkAllRead();
   const { mutate: sendNotification, isPending: isSendingNotif } = useSendNotification();
-  const [location, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState("profile");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get("tab");
-    const validTabs = ["profile", "events", "notifications", "map", "billing", "payments"];
-    if (tab && validTabs.includes(tab)) setActiveTab(tab);
-  }, [location]);
+  const [, setLocation] = useLocation();
+  const search = useSearch();
 
   const profile = profileData?.profile;
   const userId = user?.id;
@@ -989,6 +1000,24 @@ export default function ProfilePage() {
   const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const isVendorPro = isEventOwnerPro;
   const hasActivePro = isAdmin || (profile?.subscriptionStatus === "active" && (profile?.subscriptionTier !== "free" && profile?.subscriptionTier !== null));
+  const requestedTab = new URLSearchParams(search).get("tab");
+  const publicTabs = ["profile", "billing", "notifications", "messages"];
+  const ownerTabs = ["events", "map", "payments"];
+  const activeTab = requestedTab && (publicTabs.includes(requestedTab) || (isEventOwnerPro && ownerTabs.includes(requestedTab)))
+    ? requestedTab
+    : "profile";
+  const selectTab = (tab: string) => {
+    setLocation(`/profile?tab=${encodeURIComponent(tab)}`);
+  };
+  const lastMarkedUnreadIds = useRef("");
+  useEffect(() => {
+    if (activeTab !== "notifications" || !notifications) return;
+    const unreadIds = notifications.filter((n: { id: number; read: boolean }) => !n.read).map((n: { id: number }) => n.id).join(",");
+    if (unreadIds && unreadIds !== lastMarkedUnreadIds.current) {
+      lastMarkedUnreadIds.current = unreadIds;
+      markAllRead();
+    }
+  }, [activeTab, notifications, markAllRead]);
 
   const [form, setForm] = useState({
     profileType: profile?.profileType || "general",
@@ -1077,9 +1106,8 @@ export default function ProfilePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("connect") === "stripe" && params.get("result") === "success") {
-      setActiveTab("payments");
       verifyStripe();
-      window.history.replaceState({}, "", "/profile?tab=payments");
+      setLocation("/profile?tab=payments", { replace: true });
     }
   }, []);
 
@@ -1207,7 +1235,6 @@ export default function ProfilePage() {
   const attendingEvents = events?.filter(e => attendingEventIds.includes(e.id)) || [];
   const alertUnreadCount = (notifications || []).filter((n: any) => !n.read).length;
   const dmUnreadCount = (dmInbox as any[]).reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0);
-  const unreadCount = alertUnreadCount + dmUnreadCount;
 
   if (!isAuthenticated) {
     return (
@@ -1253,19 +1280,27 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={selectTab} className="space-y-6">
         <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap gap-1">
-          <TabsTrigger value="profile" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Profile</TabsTrigger>
-          <TabsTrigger value="billing" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Billing</TabsTrigger>
+          <TabsTrigger value="profile" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-profile">Profile</TabsTrigger>
+          <TabsTrigger value="billing" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-billing">Billing</TabsTrigger>
           <TabsTrigger value="notifications" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm relative" data-testid="tab-notifications">
-            Messages
-            {unreadCount > 0 && (
-              <span className="ml-1.5 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{unreadCount}</span>
+            Notifications
+            {alertUnreadCount > 0 && (
+              <span className="sr-only">, {alertUnreadCount} unread</span>
             )}
+            {alertUnreadCount > 0 && (
+              <span aria-hidden="true" className="ml-2 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{alertUnreadCount}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="messages" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-messages">
+            Messages
+            {dmUnreadCount > 0 && <span className="sr-only">, {dmUnreadCount} unread</span>}
+            {dmUnreadCount > 0 && <span aria-hidden="true" className="ml-2 bg-destructive text-destructive-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] inline-block text-center">{dmUnreadCount}</span>}
           </TabsTrigger>
           {isEventOwnerPro && (
             <>
-              <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">Events</TabsTrigger>
+              <TabsTrigger value="events" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-events">Events</TabsTrigger>
               <TabsTrigger value="map" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-map">
                 <Map className="w-4 h-4 mr-1.5" />Map
               </TabsTrigger>
@@ -1450,10 +1485,10 @@ export default function ProfilePage() {
           </TabsContent>
         )}
 
-        {/* NOTIFICATIONS (Event Owner Pro sees Admin tools + Personal alerts, Others just alerts) */}
-        <TabsContent value="notifications" className="mt-0 space-y-6">
+        {/* NOTIFICATIONS (alerts first, with owner/admin tools below) */}
+        <TabsContent value="notifications" className="mt-0 flex flex-col gap-6">
           {isAdmin && (
-            <Card>
+            <Card className="order-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bell className="w-5 h-5 text-primary" />Welcome Letters
@@ -1529,7 +1564,7 @@ export default function ProfilePage() {
           )}
 
           {isEventOwnerPro && (
-            <Card>
+            <Card className="order-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Send className="w-5 h-5 text-primary" />Broadcast Notification</CardTitle>
                 <CardDescription>Send an in-app push notification to users in your area.</CardDescription>
@@ -1578,7 +1613,7 @@ export default function ProfilePage() {
                       {broadcastAreaCodes.map(code => (
                         <span key={code} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-mono font-medium text-primary">
                           {code}
-                          <button onClick={() => setBroadcastAreaCodes(c => c.filter(x => x !== code))} className="hover:text-destructive transition-colors" data-testid={`button-remove-broadcast-area-${code}`}>×</button>
+                          <button onClick={() => setBroadcastAreaCodes(c => c.filter(x => x !== code))} aria-label={`Remove area code ${code}`} title={`Remove area code ${code}`} className="hover:text-destructive transition-colors" data-testid={`button-remove-broadcast-area-${code}`}>×</button>
                         </span>
                       ))}
                     </div>
@@ -1637,7 +1672,46 @@ export default function ProfilePage() {
             </Card>
           )}
 
-          {/* Direct Messages */}
+          {/* My Alerts */}
+          <Card className="order-1">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div><CardTitle>My Alerts</CardTitle><CardDescription>In-app alerts from event owners and the platform.</CardDescription></div>
+              {alertUnreadCount > 0 && (
+                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => markAllRead()}>Mark all read</Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {(notifications || []).length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Bell className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p>No notifications yet.</p>
+                  </div>
+                )}
+                {(notifications || []).map((n: any) => (
+                  <div key={n.id} className={`p-4 rounded-xl border transition-all ${n.read ? 'bg-muted/30 border-border/30' : 'bg-primary/5 border-primary/20'}`} data-testid={`notification-${n.id}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${n.read ? 'bg-muted-foreground/30' : 'bg-primary'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-foreground">{n.title}</p>
+                        <p className="text-sm text-muted-foreground mt-0.5">{n.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{format(new Date(n.createdAt), 'MMM d, h:mm a')}</p>
+                      </div>
+                      {n.eventId && (
+                        <Link href={`/events/${n.eventId}`}>
+                          <Button size="sm" variant="outline" className="rounded-xl h-7 text-xs">View Event</Button>
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* DIRECT MESSAGES */}
+        <TabsContent value="messages" className="mt-0 space-y-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -1746,43 +1820,6 @@ export default function ProfilePage() {
               )}
             </CardContent>
           </Card>
-
-          {/* My Alerts */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle>My Alerts</CardTitle><CardDescription>In-app alerts from event owners and the platform.</CardDescription></div>
-              {alertUnreadCount > 0 && (
-                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => markAllRead()}>Mark all read</Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {(notifications || []).length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Bell className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                    <p>No notifications yet.</p>
-                  </div>
-                )}
-                {(notifications || []).map((n: any) => (
-                  <div key={n.id} className={`p-4 rounded-xl border transition-all ${n.read ? 'bg-muted/30 border-border/30' : 'bg-primary/5 border-primary/20'}`} data-testid={`notification-${n.id}`}>
-                    <div className="flex items-start gap-3">
-                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${n.read ? 'bg-muted-foreground/30' : 'bg-primary'}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-foreground">{n.title}</p>
-                        <p className="text-sm text-muted-foreground mt-0.5">{n.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{format(new Date(n.createdAt), 'MMM d, h:mm a')}</p>
-                      </div>
-                      {n.eventId && (
-                        <Link href={`/events/${n.eventId}`}>
-                          <Button size="sm" variant="outline" className="rounded-xl h-7 text-xs">View Event</Button>
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* DM Compose Dialog */}
@@ -1832,7 +1869,7 @@ export default function ProfilePage() {
               ) : (
                 <>
                   <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/40 border border-border/40">
-                    <button onClick={() => setDmRecipient(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                    <button onClick={() => setDmRecipient(null)} aria-label="Back to conversations" title="Back to conversations" className="text-muted-foreground hover:text-foreground transition-colors">
                       <ArrowLeft className="w-4 h-4" />
                     </button>
                     <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">

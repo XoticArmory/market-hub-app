@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 import { useUserRegistrations } from "@/hooks/use-registrations";
+import { MissingPhoto } from "@/components/missing-photo";
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
@@ -105,6 +106,7 @@ function ShareButton({ event }: { event: any }) {
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
           className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
           title="Share event"
+          aria-label={`Share ${eventTitle}`}
           data-testid={`button-share-event-${eventId}`}
         >
           <Share2 className="w-3.5 h-3.5" />
@@ -195,6 +197,7 @@ function CalendarButton({ event }: { event: any }) {
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
           className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
           title="Add to calendar"
+          aria-label={`Add ${title} to calendar`}
           data-testid={`button-calendar-${event.id}`}
         >
           <CalendarPlus className="w-3.5 h-3.5" />
@@ -564,14 +567,17 @@ export default function Home() {
                             </div>
                           )}
                           {uniqueVendors.length > 0 && (
-                            <div className="absolute bottom-4 left-4 flex -space-x-2">
+                            <div className="absolute bottom-4 left-4 flex items-center" role="group" aria-label={`${uniqueVendors.length} vendors listing at ${event.title}`} title="Vendors listing at this market">
+                              <div className="flex -space-x-2" aria-hidden="true">
                               {eventPosts.slice(0, 3).map((post: any) => (
-                                <Avatar key={post.id} className="w-8 h-8 border-2 border-background ring-2 ring-primary/20">
+                                <Avatar key={post.id} title={post.vendorName || "Vendor"} className="w-8 h-8 border-2 border-background ring-2 ring-primary/20">
                                   <AvatarImage src={post.vendorAvatar || ""} />
                                   <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{post.vendorName?.charAt(0) || "V"}</AvatarFallback>
                                 </Avatar>
                               ))}
                               {uniqueVendors.length > 3 && <div className="w-8 h-8 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-bold text-muted-foreground">+{uniqueVendors.length - 3}</div>}
+                              </div>
+                              <span className="ml-2 rounded-full bg-background/90 px-2 py-1 text-[10px] font-semibold text-foreground">Vendors</span>
                             </div>
                           )}
                         </div>
@@ -598,6 +604,7 @@ export default function Home() {
                                   href={`mailto:${cardContactEmail}`}
                                   className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                   title={`Email organizer: ${cardContactEmail}`}
+                                   aria-label={`Email organizer of ${event.title}`}
                                   data-testid={`link-event-email-${event.id}`}
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -610,6 +617,7 @@ export default function Home() {
                                   href={`mailto:${cardRegUrl}`}
                                   className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                   title={`Apply via email: ${cardRegUrl}`}
+                                   aria-label={`Apply to ${event.title} by email`}
                                   data-testid={`link-event-reg-email-${event.id}`}
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -622,6 +630,7 @@ export default function Home() {
                                   href={`tel:${cardRegUrl.replace(/\s/g, '')}`}
                                   className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                   title={`Apply via phone: ${cardRegUrl}`}
+                                   aria-label={`Apply to ${event.title} by phone`}
                                   data-testid={`link-event-reg-phone-${event.id}`}
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -640,6 +649,7 @@ export default function Home() {
                                     cardRegUrl && cardRegType !== 'email' && cardRegType !== 'phone' ? "Visit market website / registration" :
                                     "Visit organizer's website"
                                   }
+                                   aria-label={`Visit website for ${event.title}`}
                                   data-testid={`link-event-website-${event.id}`}
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
@@ -654,6 +664,7 @@ export default function Home() {
                               rel="noopener noreferrer"
                               className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                               title="Get directions on Google Maps"
+                               aria-label={`Get directions to ${event.title}`}
                               data-testid={`link-event-maps-${event.id}`}
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -777,7 +788,7 @@ export default function Home() {
 
                               return null;
                             })()}
-                            <Link href={`/events/${event.id}`}>
+                            <Link href={`/events/${event.id}`} aria-label={`View ${event.title} details`}>
                               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
                                 <ArrowRight className="w-4 h-4" />
                               </div>
@@ -808,11 +819,9 @@ export default function Home() {
                   <div className="group bg-card rounded-2xl overflow-hidden border border-border/50 shadow-sm hover:shadow-md transition-all cursor-pointer">
                     <div className="aspect-square bg-muted relative">
                       {post.imageUrl ? (
-                        <img src={post.imageUrl} alt={post.vendorName || "Vendor item"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <img src={post.imageUrl} alt={`Items from ${post.vendorName || "a vendor"}: ${post.itemsDescription || "Community listing"}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/40">
-                          <Package className="w-10 h-10 mb-2" /><span className="text-xs uppercase tracking-tighter">No Photo</span>
-                        </div>
+                        <MissingPhoto name={post.itemsDescription || post.vendorName || "Local goods"} />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
                         <p className="text-white text-xs font-medium line-clamp-1">{post.vendorName}</p>

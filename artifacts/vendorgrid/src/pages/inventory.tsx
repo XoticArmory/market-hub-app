@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import { useProfile } from "@/hooks/use-profile";
 import { useToast } from "@/hooks/use-toast";
+import { MissingPhoto } from "@/components/missing-photo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -387,7 +388,7 @@ export default function InventoryPage() {
                     {variations.map((v, i) => (
                       <span key={i} className="flex items-center gap-1 bg-primary/10 text-primary text-sm px-2.5 py-1 rounded-full">
                         {v}
-                        <button type="button" onClick={() => setVariations(vs => vs.filter((_, j) => j !== i))} className="ml-0.5 hover:text-destructive transition-colors">
+                        <button type="button" aria-label={`Remove ${v} variation`} title={`Remove ${v} variation`} onClick={() => setVariations(vs => vs.filter((_, j) => j !== i))} className="ml-0.5 hover:text-destructive transition-colors">
                           <X className="w-3 h-3" />
                         </button>
                       </span>
@@ -438,8 +439,11 @@ export default function InventoryPage() {
                 <div className="flex flex-wrap gap-2">
                   {images.map((url, i) => (
                     <div key={i} className="relative">
-                      <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border" />
+                      <img src={url} alt={`Preview of ${form.itemName || "catalog item"} photo ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border" />
                       <button
+                        type="button"
+                        aria-label={`Remove photo ${i + 1}`}
+                        title={`Remove photo ${i + 1}`}
                         className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center"
                         onClick={() => setImages(imgs => imgs.filter((_, j) => j !== i))}
                       >
@@ -479,8 +483,8 @@ export default function InventoryPage() {
                   {item.images?.[0] || item.imageUrl ? (
                     <img src={item.images?.[0] || item.imageUrl!} alt={item.itemName} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
                   ) : (
-                    <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-                      <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                    <div className="w-14 h-14 flex-shrink-0">
+                      <MissingPhoto name={item.itemName} compact />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -511,10 +515,10 @@ export default function InventoryPage() {
                     </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { openEdit(item); setViewOpen(false); }}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Edit ${item.itemName}`} title={`Edit ${item.itemName}`} onClick={() => { openEdit(item); setViewOpen(false); }}>
                       <Tag className="w-4 h-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => deleteItem.mutate(item.id)}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" aria-label={`Delete ${item.itemName}`} title={`Delete ${item.itemName}`} onClick={() => deleteItem.mutate(item.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -696,6 +700,10 @@ export default function InventoryPage() {
                     <div className="flex items-center gap-2 p-3 hover:bg-muted/20 transition-colors">
                       <button
                         className="flex-1 text-left"
+                        aria-expanded={isMultiDay ? isExpanded : undefined}
+                        aria-label={isMultiDay
+                          ? `${isExpanded ? "Collapse" : "Expand"} dates for ${ev.title}`
+                          : `View inventory for ${ev.title}`}
                         onClick={() => {
                           if (isMultiDay) {
                             setManageExpandedId(isExpanded ? null : ev.id);

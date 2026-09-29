@@ -196,6 +196,8 @@ export default function DocumentsPage() {
                   <button
                     className="ml-2 p-1 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                     onClick={e => { e.stopPropagation(); setForm(f => ({ ...f, file: null })); }}
+                    aria-label={`Remove selected file ${form.file.name}`}
+                    title="Remove selected file"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -419,6 +421,7 @@ export default function DocumentsPage() {
                         disabled={deleteMutation.isPending}
                         onClick={() => deleteMutation.mutate(doc.id)}
                         data-testid={`button-delete-doc-${doc.id}`}
+                        aria-label={`Delete document ${doc.title}`}
                         title="Delete document"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

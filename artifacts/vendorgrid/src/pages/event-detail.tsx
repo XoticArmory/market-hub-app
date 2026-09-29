@@ -827,6 +827,7 @@ export default function EventDetail() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                    aria-label={`Get directions to ${event.location} on Google Maps`}
                     title="Get directions on Google Maps"
                     data-testid="link-event-detail-maps"
                   >
@@ -959,6 +960,7 @@ export default function EventDetail() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1 rounded-lg hover:text-primary hover:bg-primary/10 transition-colors"
+                    aria-label={`Visit ${event.creatorName}'s website`}
                     title="Visit organizer's website"
                     data-testid="link-creator-website-detail"
                   >
@@ -1522,6 +1524,8 @@ export default function EventDetail() {
                       <button
                         onClick={() => { setSelectedProUser(null); setAddVendorName(""); setProUserResults([]); }}
                         className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                        aria-label={`Remove selected vendor ${selectedProUser.businessName || selectedProUser.name}`}
+                        title="Remove selected vendor"
                         data-testid="button-clear-pro-user"
                       >
                         <X className="w-4 h-4" />
@@ -1698,6 +1702,7 @@ export default function EventDetail() {
                         onClick={() => removeVendorEntry.mutate(entry.id)}
                         disabled={removeVendorEntry.isPending}
                         className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                        aria-label={`Remove vendor ${entry.name}`}
                         title="Remove vendor"
                         data-testid={`button-remove-entry-${entry.id}`}
                       >
@@ -1738,6 +1743,7 @@ export default function EventDetail() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
+                              aria-label={`Visit ${post.vendorName || "vendor"}'s website`}
                               title="Visit vendor's website"
                               data-testid={`link-vendor-website-${post.id}`}
                             >
@@ -1757,6 +1763,7 @@ export default function EventDetail() {
                             <button
                               className="w-full h-full block focus:outline-none"
                               onClick={() => setLightbox({ images: allImages, index: idx })}
+                              aria-label={`View photo ${idx + 1} from ${post.vendorName || "vendor"} full size`}
                               title="View full size"
                             >
                               <img src={imgUrl} alt={`Vendor photo ${idx + 1}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
@@ -1765,6 +1772,7 @@ export default function EventDetail() {
                               <button
                                 onClick={() => handleRemovePhoto(postImages.indexOf(imgUrl))}
                                 className="absolute top-1 right-1 w-6 h-6 bg-black/70 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                aria-label={`Remove photo ${idx + 1} from ${post.vendorName || "vendor"}`}
                                 title="Remove photo"
                               >
                                 <X className="w-3 h-3" />
@@ -1796,6 +1804,7 @@ export default function EventDetail() {
                                     <button
                                       className="w-10 h-10 rounded-lg overflow-hidden shrink-0 focus:outline-none focus:ring-2 focus:ring-primary hover:opacity-80 transition-opacity"
                                       onClick={() => setLightbox({ images: productImages, index: imgIndex >= 0 ? imgIndex : 0 })}
+                                      aria-label={`View ${a.item.itemName} photo full size`}
                                       title="View full size"
                                     >
                                       <img src={a.item.imageUrl} alt={a.item.itemName} className="w-full h-full object-cover" />
@@ -1860,6 +1869,7 @@ export default function EventDetail() {
                   key={`gallery-${post.id}-${idx}`}
                   className="group relative aspect-square rounded-2xl overflow-hidden border border-border/50 bg-muted focus:outline-none w-full"
                   onClick={() => setLightbox({ images: allGalleryUrls, index: allGalleryUrls.indexOf(imgUrl) })}
+                  aria-label={`View photo ${idx + 1} from ${post.vendorName || "vendor"} full size`}
                   title="View full size"
                 >
                   <img src={imgUrl} alt={post.vendorName || "Vendor item"} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -2039,6 +2049,7 @@ export default function EventDetail() {
                 type="button"
                 data-testid="button-copy-email"
                 className="shrink-0 p-1.5 rounded-lg hover:bg-background transition-colors"
+                aria-label={emailCopied ? "Email address copied" : "Copy email address"}
                 onClick={() => {
                   if (regUrl) {
                     navigator.clipboard.writeText(regUrl).then(() => {
@@ -2091,6 +2102,7 @@ export default function EventDetail() {
                 type="button"
                 data-testid="button-copy-phone"
                 className="shrink-0 p-1.5 rounded-lg hover:bg-background transition-colors"
+                aria-label={phoneCopied ? "Phone number copied" : "Copy phone number"}
                 onClick={() => {
                   if (regUrl) {
                     navigator.clipboard.writeText(regUrl).then(() => {

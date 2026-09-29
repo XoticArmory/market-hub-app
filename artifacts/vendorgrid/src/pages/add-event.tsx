@@ -181,8 +181,9 @@ export default function AddEvent() {
               )} />
 
               <div>
-                <label className="text-base font-semibold flex items-center gap-2 mb-2"><CalendarDays className="w-4 h-4 text-muted-foreground" />End Time <span className="text-muted-foreground font-normal text-sm">(Optional)</span></label>
+                <label htmlFor="event-end-time" className="text-base font-semibold flex items-center gap-2 mb-2"><CalendarDays className="w-4 h-4 text-muted-foreground" />End Time <span className="text-muted-foreground font-normal text-sm">(Optional)</span></label>
                 <Input
+                  id="event-end-time"
                   data-testid="input-event-end-time"
                   type="datetime-local"
                   value={(form.watch as any)("endTime") || ""}
@@ -498,7 +499,7 @@ export default function AddEvent() {
                         <span className="text-sm text-muted-foreground">{new Date(d.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </>
                     )}
-                    <button type="button" onClick={() => setExtraDates(extraDates.filter((_, j) => j !== i))} className="ml-auto text-muted-foreground hover:text-foreground">
+                    <button type="button" onClick={() => setExtraDates(extraDates.filter((_, j) => j !== i))} aria-label={`Remove additional date ${new Date(d.date).toLocaleDateString()}`} className="ml-auto text-muted-foreground hover:text-foreground">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -508,8 +509,9 @@ export default function AddEvent() {
                 <p className="text-xs text-muted-foreground font-medium">Add another day</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Start date &amp; time</label>
+                    <label htmlFor="extra-date" className="text-xs text-muted-foreground mb-1 block">Start Date &amp; Time</label>
                     <Input
+                      id="extra-date"
                       data-testid="input-extra-date"
                       type="datetime-local"
                       value={newDate}
@@ -518,8 +520,9 @@ export default function AddEvent() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">End time <span className="opacity-60">(Optional)</span></label>
+                    <label htmlFor="extra-end-time" className="text-xs text-muted-foreground mb-1 block">End Time <span className="opacity-60">(Optional)</span></label>
                     <Input
+                      id="extra-end-time"
                       data-testid="input-extra-end-time"
                       type="datetime-local"
                       value={newEndTime}
@@ -528,9 +531,10 @@ export default function AddEvent() {
                     />
                   </div>
                 </div>
-                <Button type="button" variant="outline" onClick={addExtraDate} disabled={!newDate} className="rounded-xl h-10 w-full sm:w-auto" data-testid="button-add-date">
+                <Button type="button" variant="outline" onClick={addExtraDate} disabled={!newDate} aria-describedby={!newDate ? "add-date-hint" : undefined} className="rounded-xl h-10 w-full sm:w-auto" data-testid="button-add-date">
                   <Plus className="w-4 h-4 mr-1" /> Add Date
                 </Button>
+                {!newDate && <p id="add-date-hint" className="text-xs text-muted-foreground">Choose a start date and time above to add another date.</p>}
               </div>
             </div>
 

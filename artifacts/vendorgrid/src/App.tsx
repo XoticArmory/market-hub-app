@@ -405,10 +405,11 @@ function NotificationBell() {
       href="/profile?tab=notifications"
       className="relative flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors"
       data-testid="link-notifications-bell"
+      aria-label={count > 0 ? `Notifications, ${count} unread` : "Notifications"}
     >
-      <Bell className="w-5 h-5 text-foreground" />
+      <Bell className="w-5 h-5 text-foreground" aria-hidden="true" />
       {count > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none" data-testid="badge-unread-count">
+        <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none" data-testid="badge-unread-count">
           {count > 99 ? "99+" : count}
         </span>
       )}

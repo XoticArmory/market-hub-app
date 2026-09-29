@@ -86,6 +86,7 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
               <button
                 onClick={() => setPreviewTier(null)}
                 className="opacity-60 hover:opacity-100 transition-opacity"
+                aria-label="Exit preview mode"
                 title="Exit preview mode"
                 data-testid="button-exit-preview"
               >
@@ -136,17 +137,10 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={location === "/profile"} className={`mb-1 transition-all duration-200 ${location === "/profile" ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10 hover:text-primary'}`}>
-                      <Link href="/profile" className="flex items-center gap-3 px-3 py-2.5 rounded-lg" data-testid="link-profile">
-                        <div className="relative">
-                          <User className="w-5 h-5" />
-                          {unreadCount > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-destructive rounded-full text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
-                              {unreadCount > 9 ? '9+' : unreadCount}
-                            </span>
-                          )}
-                        </div>
+                      <Link href="/profile" className="flex items-center gap-3 px-3 py-2.5 rounded-lg" data-testid="link-profile" aria-label={unreadCount > 0 ? `My Profile, ${unreadCount} unread notifications` : "My Profile"}>
+                        <User className="w-5 h-5" />
                         <span className="font-medium">My Profile</span>
-                        {unreadCount > 0 && <Badge className="ml-auto h-5 text-[10px] bg-destructive">{unreadCount}</Badge>}
+                        {unreadCount > 0 && <Badge aria-hidden="true" className="ml-auto h-5 text-[10px] bg-destructive">{unreadCount > 99 ? "99+" : unreadCount}</Badge>}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -198,7 +192,7 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
                   </span>
                 </div>
               </Link>
-              <button onClick={() => logout()} className="p-2 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10 shrink-0" title="Logout" data-testid="button-logout">
+              <button onClick={() => logout()} className="p-2 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10 shrink-0" aria-label="Log out" title="Log out" data-testid="button-logout">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>

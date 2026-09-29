@@ -332,7 +332,7 @@ export default function AdminPage() {
             <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-400/30 text-amber-700 dark:text-amber-300 text-xs font-medium px-3 py-1.5 rounded-lg" data-testid="banner-preview-active">
               <ShieldCheck className="w-3.5 h-3.5" />
               Previewing as: <span className="font-semibold capitalize">{previewTier.replace(/_/g, " ")}</span>
-              <button className="ml-1 opacity-60 hover:opacity-100" onClick={() => setPreviewTier(null)}>✕</button>
+              <button className="ml-1 opacity-60 hover:opacity-100" onClick={() => setPreviewTier(null)} aria-label="Exit preview mode" title="Exit preview mode">✕</button>
             </div>
           )}
         </div>

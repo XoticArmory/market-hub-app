@@ -155,7 +155,7 @@ export default function InventoryEventPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/inventory")}>
+        <Button variant="ghost" size="icon" aria-label="Back to inventory" title="Back to inventory" onClick={() => setLocation("/inventory")}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
@@ -287,6 +287,12 @@ export default function InventoryEventPage() {
                           variant="outline"
                           className="h-8 w-8"
                           disabled={(pendingSales[item.catalogItemId] ?? 0) <= 0}
+                          aria-label={(pendingSales[item.catalogItemId] ?? 0) <= 0
+                            ? `Cannot decrease pending sales for ${item.itemName}: no pending sales`
+                            : `Decrease pending sales for ${item.itemName}`}
+                          title={(pendingSales[item.catalogItemId] ?? 0) <= 0
+                            ? "No pending sales to remove"
+                            : `Decrease pending sales for ${item.itemName}`}
                           onClick={() => decrement(item.catalogItemId)}
                         >
                           <Minus className="w-3.5 h-3.5" />
@@ -299,6 +305,12 @@ export default function InventoryEventPage() {
                           variant="outline"
                           className="h-8 w-8"
                           disabled={remaining - (pendingSales[item.catalogItemId] ?? 0) <= 0}
+                          aria-label={remaining - (pendingSales[item.catalogItemId] ?? 0) <= 0
+                            ? `Cannot add a sale for ${item.itemName}: all assigned units are tallied as sold`
+                            : `Add one pending sale for ${item.itemName}`}
+                          title={remaining - (pendingSales[item.catalogItemId] ?? 0) <= 0
+                            ? "No remaining assigned units to tally"
+                            : `Add one pending sale for ${item.itemName}`}
                           onClick={() => increment(item)}
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -307,6 +319,16 @@ export default function InventoryEventPage() {
                           size="icon"
                           className="h-8 w-8 bg-emerald-600 hover:bg-emerald-700"
                           disabled={(pendingSales[item.catalogItemId] ?? 0) <= 0 || submitting[item.catalogItemId]}
+                          aria-label={submitting[item.catalogItemId]
+                            ? `Saving sale for ${item.itemName}`
+                            : (pendingSales[item.catalogItemId] ?? 0) <= 0
+                              ? `Cannot confirm sale for ${item.itemName}: no pending sales`
+                              : `Confirm ${pendingSales[item.catalogItemId]} sale${pendingSales[item.catalogItemId] === 1 ? "" : "s"} for ${item.itemName}`}
+                          title={submitting[item.catalogItemId]
+                            ? "Sale is being saved"
+                            : (pendingSales[item.catalogItemId] ?? 0) <= 0
+                              ? "Add pending sales before confirming"
+                              : `Confirm ${pendingSales[item.catalogItemId]} pending sale${pendingSales[item.catalogItemId] === 1 ? "" : "s"}`}
                           onClick={() => confirmSale(item)}
                         >
                           {submitting[item.catalogItemId]

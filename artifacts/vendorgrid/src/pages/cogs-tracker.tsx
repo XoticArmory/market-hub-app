@@ -119,6 +119,7 @@ function CogsEntryRow({ category, amountCents, onUpdate, onDelete, isPending }: 
             className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all"
             onClick={onDelete}
             disabled={isPending}
+            aria-label={`Remove ${category} COGS entry`}
             title="Remove this COGS entry"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -344,6 +345,8 @@ function ItemCogsSection({ item, eventId, overheadPerItemCents, totalItems, onSa
       <button
         className="w-full px-5 py-4 flex items-center gap-3 hover:bg-muted/30 transition-colors text-left"
         onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "Collapse" : "Expand"} COGS details for ${item.itemName}`}
         data-testid={`button-expand-item-${item.catalogItemId}`}
       >
         <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -489,6 +492,8 @@ function InventoryItemCard({ item, onSaved }: { item: InventoryItem; onSaved: ()
       <button
         className="w-full px-5 py-4 flex items-center gap-3 hover:bg-muted/30 transition-colors text-left"
         onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "Collapse" : "Expand"} inventory details for ${item.itemName}`}
         data-testid={`button-expand-inv-${item.catalogItemId}`}
       >
         <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">

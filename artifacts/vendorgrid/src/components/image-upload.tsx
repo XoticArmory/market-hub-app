@@ -73,6 +73,8 @@ export function ImageUpload({ value, onChange, disabled, "data-testid": testId }
               type="button"
               onClick={() => onChange("")}
               className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+              aria-label="Remove uploaded image"
+              title="Remove uploaded image"
               data-testid={testId ? `${testId}-remove` : undefined}
             >
               <X className="w-4 h-4" />

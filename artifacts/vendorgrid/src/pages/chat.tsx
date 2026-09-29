@@ -211,6 +211,7 @@ export default function Chat() {
                         onClick={() => deleteMessage.mutate(msg.id)}
                         disabled={deleteMessage.isPending}
                         data-testid={`button-delete-message-${msg.id}`}
+                        aria-label={`Delete message from ${msg.senderName || "vendor"}`}
                         title="Delete message"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -227,6 +228,7 @@ export default function Chat() {
                         onClick={() => deleteMessage.mutate(msg.id)}
                         disabled={deleteMessage.isPending}
                         data-testid={`button-delete-message-${msg.id}`}
+                        aria-label="Delete your message"
                         title="Delete message"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -251,9 +253,10 @@ export default function Chat() {
             className="flex-1 h-14 rounded-2xl bg-muted/50 border-transparent focus-visible:ring-primary/20 px-6 text-base pr-16"
             disabled={isPending}
           />
-          <Button type="submit" size="icon" disabled={!content.trim() || isPending} className="absolute right-2 w-10 h-10 rounded-xl bg-primary text-white shadow-md shadow-primary/20" data-testid="button-send">
+          <Button type="submit" size="icon" disabled={!content.trim() || isPending} aria-label={isPending ? "Sending message" : "Send message"} aria-describedby={!content.trim() ? "chat-send-hint" : undefined} className="absolute right-2 w-10 h-10 rounded-xl bg-primary text-white shadow-md shadow-primary/20" data-testid="button-send">
             {isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
           </Button>
+          {!content.trim() && <span id="chat-send-hint" className="sr-only">Enter a message to enable sending.</span>}
         </form>
       </div>
     </div>
