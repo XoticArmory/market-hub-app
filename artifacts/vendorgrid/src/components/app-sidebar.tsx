@@ -26,7 +26,7 @@ const TIER_LABELS: Record<string, string> = {
   vendor_pro: "VendorGrid Pro",
 };
 
-export function AppSidebar() {
+export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boolean; setContactOpen: (open: boolean) => void }) {
   const [location] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
   const { data: profileData } = useProfile();
@@ -41,7 +41,6 @@ export function AppSidebar() {
   const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const unreadCount = unreadData?.count || 0;
 
-  const [contactOpen, setContactOpen] = useState(false);
   const [contactForm, setContactForm] = useState({ subject: "", message: "" });
 
   const { mutate: sendContact, isPending: isSending } = useMutation({
@@ -226,8 +225,11 @@ export function AppSidebar() {
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="w-5 h-5 text-primary" />Contact Us</DialogTitle>
-            <DialogDescription>Send a message directly to the VendorGrid team. We'll respond via your profile notifications.</DialogDescription>
+            <DialogDescription>{isAuthenticated
+              ? "Send a message directly to the VendorGrid team. We'll respond via your profile notifications."
+              : "Sign in to send a message to the VendorGrid team and receive a reply in your notifications."}</DialogDescription>
           </DialogHeader>
+          {isAuthenticated ? (<>
           <div className="space-y-4 py-2">
             <div>
               <label className="text-sm font-semibold mb-1.5 block">Subject</label>
@@ -263,6 +265,11 @@ export function AppSidebar() {
               {isSending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Send className="w-4 h-4 mr-2" />Send Message</>}
             </Button>
           </DialogFooter>
+          </>) : (
+            <Button asChild className="w-full rounded-xl">
+              <Link href="/auth" onClick={() => setContactOpen(false)}>Sign In to Contact Us</Link>
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
     </>

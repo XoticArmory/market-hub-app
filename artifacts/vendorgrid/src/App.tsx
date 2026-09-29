@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import SiteFooter from "@/components/site-footer";
 import { useEffect, useState } from "react";
 import { Bell, Lightbulb, X, Send, Loader2, CheckCircle2, Rocket, Plus, Pencil, Trash2, Calendar, Users, Clock } from "lucide-react";
 import { useUnreadCount } from "@/hooks/use-notifications";
@@ -39,6 +40,8 @@ import InventoryAnalyticsPage from "@/pages/inventory-analytics";
 import NotFound from "@/pages/not-found";
 import PrivacyPolicyPage from "@/pages/privacy-policy";
 import TermsOfServicePage from "@/pages/terms-of-service";
+import AboutPage from "@/pages/about";
+import FAQPage from "@/pages/faq";
 import ManageMarketsPage from "@/pages/manage-markets";
 
 function OnboardingGuard() {
@@ -435,12 +438,15 @@ function Router() {
       <Route path="/inventory/analytics" component={InventoryAnalyticsPage} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
       <Route path="/terms" component={TermsOfServicePage} />
+      <Route path="/about" component={AboutPage} />
+      <Route path="/faq" component={FAQPage} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
+  const [contactOpen, setContactOpen] = useState(false);
   return (
     <QueryClientProvider client={queryClient}>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
@@ -448,7 +454,7 @@ function App() {
       <TooltipProvider>
         <SidebarProvider>
           <div className="flex min-h-screen w-full bg-background">
-            <AppSidebar />
+            <AppSidebar contactOpen={contactOpen} setContactOpen={setContactOpen} />
             <div className="flex flex-col flex-1 w-full overflow-hidden relative">
               <header className="flex h-14 items-center px-4 border-b border-border/50 bg-background/80 backdrop-blur sticky top-0 z-20 justify-between">
                 <div className="flex items-center gap-3">
@@ -461,11 +467,12 @@ function App() {
                   <NotificationBell />
                 </div>
               </header>
-              <main className="flex-1 overflow-x-hidden overflow-y-auto">
-                <div className="p-4 md:p-8 lg:p-12 h-full">
+              <main className="flex flex-col flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
+                <div className="p-4 md:p-8 lg:p-12 flex-1">
                   <OnboardingGuard />
                   <Router />
                 </div>
+                <SiteFooter onContact={() => setContactOpen(true)} />
               </main>
             </div>
           </div>
