@@ -108,7 +108,7 @@ export default function InventoryAnalyticsPage() {
         <BarChart3 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
         <h2 className="text-2xl font-semibold mb-2">Inventory Analytics</h2>
         <p className="text-muted-foreground mb-6">Upgrade to VendorGrid Pro to view analytics.</p>
-        <Button onClick={() => setLocation("/upgrade")}>Upgrade to Pro</Button>
+        <Button onClick={() => setLocation("/pro")}>Explore Pro</Button>
       </div>
     );
   }

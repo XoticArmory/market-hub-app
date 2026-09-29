@@ -145,7 +145,7 @@ export default function AddEvent() {
         <h2 className="text-3xl font-display font-bold mb-3">VendorGrid Pro Required</h2>
         <p className="text-muted-foreground mb-8">Hosting market events requires a VendorGrid Pro subscription. Upgrade to start listing your events on VendorGrid.</p>
         <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full bg-gradient-to-r from-amber-500 to-primary" data-testid="button-upgrade-to-host">
-          <a href="/upgrade">Upgrade to VendorGrid Pro</a>
+          <a href="/pro">Explore VendorGrid Pro</a>
         </Button>
       </div>
     );

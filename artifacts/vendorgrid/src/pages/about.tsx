@@ -86,7 +86,7 @@ export default function AboutPage() {
           </div>
           <div className="py-4 last:pb-0">
             <h3 className="font-semibold">Go further with Pro</h3>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Optional Pro tools include vendor cards, event insights, inventory tracking, and more. <Link href="/upgrade" data-testid="link-about-pro" className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80">Explore Pro</Link></p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Optional Pro tools include vendor cards, event insights, inventory tracking, and more. <Link href="/pro" data-testid="link-about-pro" className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80">Explore Pro</Link></p>
           </div>
         </div>
       </section>

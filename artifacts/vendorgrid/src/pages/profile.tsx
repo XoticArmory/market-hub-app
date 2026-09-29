@@ -1247,7 +1247,7 @@ export default function ProfilePage() {
           </div>
         </div>
         {!hasActivePro && (
-          <Button className="rounded-xl bg-gradient-to-r from-primary to-amber-500 shadow-lg" onClick={() => setLocation("/upgrade")} data-testid="button-upgrade">
+          <Button className="rounded-xl bg-gradient-to-r from-primary to-amber-500 shadow-lg" onClick={() => setLocation("/pro")} data-testid="button-upgrade">
             <Crown className="w-4 h-4 mr-2" />Upgrade to Pro
           </Button>
         )}
@@ -2003,7 +2003,7 @@ export default function ProfilePage() {
                   <p className="text-xs text-muted-foreground">Canceling keeps your Pro access until the end of the current billing period. No partial refunds.</p>
                 </div>
               ) : !hasActivePro ? (
-                <Button onClick={() => setLocation("/upgrade")} className="rounded-xl bg-gradient-to-r from-primary to-amber-500 shadow-lg" data-testid="button-go-upgrade">
+                <Button onClick={() => setLocation("/pro")} className="rounded-xl bg-gradient-to-r from-primary to-amber-500 shadow-lg" data-testid="button-go-upgrade">
                   <Crown className="w-4 h-4 mr-2" />View Pro Plans
                 </Button>
               ) : null}

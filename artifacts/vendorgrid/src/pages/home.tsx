@@ -752,7 +752,7 @@ export default function Home() {
                                     size="sm"
                                     variant="outline"
                                     className="rounded-xl gap-1.5 h-8 text-xs border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                    onClick={(e) => { e.preventDefault(); navigate("/upgrade"); }}
+                                    onClick={(e) => { e.preventDefault(); navigate("/pro"); }}
                                     data-testid={`button-upgrade-card-${event.id}`}
                                   >
                                     <Crown className="w-3.5 h-3.5" />Register

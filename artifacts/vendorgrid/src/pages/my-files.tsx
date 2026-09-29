@@ -157,7 +157,7 @@ export default function MyFilesPage() {
               Your private file folder is a VendorGrid Pro feature. Upgrade to store documents,
               contracts, and files — and share them instantly when VendorGrid requests them.
             </p>
-            <Link href="/upgrade">
+            <Link href="/pro">
               <Button className="rounded-xl gap-2" size="lg" data-testid="button-upgrade-for-files">
                 <Crown className="w-4 h-4" />Upgrade to Pro
               </Button>

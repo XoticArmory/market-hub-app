@@ -42,6 +42,7 @@ export default function SiteFooter({ onContact }: SiteFooterProps) {
             <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.17em] text-[#ffb477]">Company</h2>
             <ul>
               <li><Link href="/about" className={footerLink} data-testid="link-footer-about">About</Link></li>
+              <li><Link href="/pro" className={footerLink} data-testid="link-footer-pro">VendorGrid Pro</Link></li>
               <li><Link href="/faq" className={footerLink} data-testid="link-footer-faq">FAQ / Help</Link></li>
               <li>
                 <button

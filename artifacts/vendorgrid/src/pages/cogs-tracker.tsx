@@ -678,7 +678,7 @@ export default function CogsTrackerPage() {
           <h2 className="text-2xl font-bold text-foreground">Pro Feature</h2>
           <p className="text-muted-foreground mt-1 max-w-sm">The COGS & Profit Tracker is available for VendorGrid Pro subscribers.</p>
         </div>
-        <Link href="/upgrade">
+        <Link href="/pro">
           <Button className="rounded-xl gap-2">
             <Crown className="w-4 h-4" />Upgrade to Pro
           </Button>

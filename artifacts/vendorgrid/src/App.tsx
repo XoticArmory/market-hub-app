@@ -31,6 +31,7 @@ import SetupPage from "@/pages/setup";
 import TourPage from "@/pages/tour";
 import AuthPage from "@/pages/auth";
 import UpgradePage from "@/pages/upgrade";
+import ProPage from "@/pages/pro";
 import CogsTrackerPage from "@/pages/cogs-tracker";
 import DocumentsPage from "@/pages/documents";
 import MyFilesPage from "@/pages/my-files";
@@ -51,7 +52,7 @@ function OnboardingGuard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (location === "/tour" || location === "/setup" || location === "/upgrade" || location === "/auth" || location.startsWith("/api")) return;
+    if (location === "/tour" || location === "/setup" || location === "/upgrade" || location === "/pro" || location === "/auth" || location.startsWith("/api")) return;
     const profileLoaded = profileData !== undefined;
     if (!profileLoaded) return;
     const profile = profileData?.profile;
@@ -430,6 +431,7 @@ function Router() {
       <Route path="/tour" component={TourPage} />
       <Route path="/setup" component={SetupPage} />
       <Route path="/upgrade" component={UpgradePage} />
+      <Route path="/pro" component={ProPage} />
       <Route path="/cogs" component={CogsTrackerPage} />
       <Route path="/documents" component={DocumentsPage} />
       <Route path="/my-files" component={MyFilesPage} />

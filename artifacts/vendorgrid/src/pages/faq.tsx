@@ -38,7 +38,7 @@ const questions = [
   {
     id: "pro",
     question: "What does VendorGrid Pro include?",
-    answer: <>Pro offers additional tools such as vendor cards, inventory tracking, event analytics, and ways to connect with vendors and event owners. See the current features and plan details on the <Link href="/upgrade" className={answerLink} data-testid="link-faq-pro">Pro page</Link>.</>,
+    answer: <>Pro offers additional tools such as vendor cards, inventory tracking, event analytics, and ways to connect with vendors and event owners. See the current features and plan details on the <Link href="/pro" className={answerLink} data-testid="link-faq-pro">Pro page</Link>.</>,
   },
   {
     id: "necessary",
