@@ -20,6 +20,7 @@ import { useProfile } from "@/hooks/use-profile";
 import { useUserRegistrations } from "@/hooks/use-registrations";
 import { MissingPhoto } from "@/components/missing-photo";
 import { EventDiscoveryMap } from "@/components/event-discovery-map";
+import { compareNewestAdded } from "@/lib/event-sort";
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
@@ -298,7 +299,7 @@ export default function Home() {
   const [radiusInput, setRadiusInput] = useState("");
   const [radiusFilter, setRadiusFilter] = useState<number | undefined>(undefined);
   const [stateFilter, setStateFilter] = useState<string>("");
-  const [sortOrder, setSortOrder] = useState<"nearest" | "furthest">("nearest");
+  const [sortOrder, setSortOrder] = useState<"nearest" | "furthest" | "newest">("nearest");
   const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(radiusFilter ? undefined : areaFilter);
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -372,6 +373,7 @@ export default function Home() {
   const sortedEvents = [...locationFilteredEvents]
     .filter(e => !stateFilter || (e.areaCode && zipToState(e.areaCode) === stateFilter))
     .sort((a, b) => {
+      if (sortOrder === "newest") return compareNewestAdded(a, b);
       const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
       return sortOrder === "nearest" ? diff : -diff;
     });
@@ -428,7 +430,7 @@ export default function Home() {
             <h2 className="text-3xl font-display font-bold text-foreground">Community Board</h2>
             <p className="text-muted-foreground mt-2">Explore registered markets and vendor collections.</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
             <div className="flex items-center gap-2 flex-wrap">
               <Select
                 value={stateFilter}
@@ -482,10 +484,11 @@ export default function Home() {
                 </Button>
               )}
             </div>
-            <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-xl p-1 h-10">
+            <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-xl p-1 h-10" role="group" aria-label="Sort events">
               <Button
                 size="sm"
                 variant={sortOrder === "nearest" ? "default" : "ghost"}
+                aria-pressed={sortOrder === "nearest"}
                 className="rounded-lg h-8 px-3 gap-1.5 text-xs font-medium"
                 onClick={() => setSortOrder("nearest")}
                 data-testid="button-sort-nearest"
@@ -495,11 +498,22 @@ export default function Home() {
               <Button
                 size="sm"
                 variant={sortOrder === "furthest" ? "default" : "ghost"}
+                aria-pressed={sortOrder === "furthest"}
                 className="rounded-lg h-8 px-3 gap-1.5 text-xs font-medium"
                 onClick={() => setSortOrder("furthest")}
                 data-testid="button-sort-furthest"
               >
                 <ArrowDown className="w-3 h-3" />Furthest
+              </Button>
+              <Button
+                size="sm"
+                variant={sortOrder === "newest" ? "default" : "ghost"}
+                aria-pressed={sortOrder === "newest"}
+                className="rounded-lg h-8 px-3 gap-1.5 text-xs font-medium"
+                onClick={() => setSortOrder("newest")}
+                data-testid="button-sort-newest"
+              >
+                <CalendarPlus className="w-3 h-3" />Newest added
               </Button>
             </div>
             <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-xl p-1 h-10" role="group" aria-label="Event view">
