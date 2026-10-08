@@ -1,13 +1,12 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { installAppRefresh } from "./lib/app-refresh";
+import { queryClient } from "./lib/queryClient";
 
-// When a new service worker takes control (after an update is deployed),
-// reload the page so users get the latest version automatically.
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    window.location.reload();
-  });
-}
+installAppRefresh({
+  serviceWorkerUrl: import.meta.env.PROD ? `${import.meta.env.BASE_URL}sw.js` : undefined,
+  onResume: () => { void queryClient.invalidateQueries(); },
+});
 
 createRoot(document.getElementById("root")!).render(<App />);

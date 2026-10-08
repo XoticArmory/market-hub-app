@@ -8,7 +8,7 @@ export function useEvents(areaCode?: string) {
   return useQuery({
     queryKey: [api.events.list.path, areaCode],
     queryFn: async () => {
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(url, { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch events");
       return (await res.json()) as EventResponse[];
     },
@@ -20,7 +20,7 @@ export function useEvent(id: number) {
     queryKey: [api.events.get.path, id],
     queryFn: async () => {
       const url = buildUrl(api.events.get.path, { id });
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(url, { credentials: "include", cache: "no-store" });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch event");
       return (await res.json()) as EventResponse;

@@ -1,5 +1,6 @@
 import React, { useRef, useState, useCallback } from "react";
 import {
+  AppState,
   BackHandler,
   Platform,
   StyleSheet,
@@ -46,6 +47,22 @@ export default function WebViewScreen() {
     }
   }, [handleBackPress]);
 
+  React.useEffect(() => {
+    if (Platform.OS === "web") return;
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && previousState !== "active") {
+        // Ask the website to refresh data/check its version instead of blindly
+        // reloading a WebView that may contain an unfinished form or checkout.
+        webViewRef.current?.injectJavaScript(
+          "window.dispatchEvent(new Event('vendorgrid:foreground')); true;"
+        );
+      }
+      previousState = nextState;
+    });
+    return () => subscription.remove();
+  }, []);
+
   const handleReload = useCallback(() => {
     setHasError(false);
     setErrorDetail(null);
@@ -83,6 +100,8 @@ export default function WebViewScreen() {
         style={styles.webview}
         javaScriptEnabled
         domStorageEnabled
+        cacheEnabled={false}
+        cacheMode="LOAD_NO_CACHE"
         startInLoadingState={true}
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback

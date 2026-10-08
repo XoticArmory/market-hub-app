@@ -43,6 +43,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
+      cache: "no-store",
     });
 
     if (res.status === 401) {
@@ -62,8 +63,11 @@ export const queryClient = new QueryClient({
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
+      // app-refresh handles focus, visibility, bfcache and native resumes once.
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      refetchOnMount: "always",
+      refetchOnReconnect: "always",
+      staleTime: 0,
       retry: false,
     },
     mutations: {

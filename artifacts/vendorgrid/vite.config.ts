@@ -33,7 +33,8 @@ export default defineConfig({
     runtimeErrorOverlay(),
     VitePWA({
       registerType: "autoUpdate",
-      injectRegister: "auto",
+      // Registration is managed by app-refresh so foreground visits also check.
+      injectRegister: false,
       includeAssets: ["favicon.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
       manifest: {
         name: "VendorGrid",
@@ -52,9 +53,22 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        navigateFallback: "index.html",
-        navigateFallbackDenylist: [/^\/api\//],
+        // Never pin the app shell to a precached HTML version. Fetch the current
+        // page online, retaining a fallback for pages previously visited offline.
+        globPatterns: ["**/*.{js,css,ico,png,svg,woff2}"],
+        navigateFallback: null,
+        runtimeCaching: [{
+          urlPattern: ({ request, url }) =>
+            request.mode === "navigate" && !url.pathname.startsWith("/api/"),
+          handler: "NetworkFirst",
+          options: {
+            cacheName: "vendorgrid-pages",
+            networkTimeoutSeconds: 4,
+            fetchOptions: { cache: "no-store" },
+            cacheableResponse: { statuses: [200] },
+            expiration: { maxEntries: 30, maxAgeSeconds: 7 * 24 * 60 * 60 },
+          },
+        }],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
