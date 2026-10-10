@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useEvents } from "@/hooks/use-events";
 import { Link, useLocation } from "wouter";
-import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation, Smartphone, X, Phone, ClipboardList, List, Map as MapIcon } from "lucide-react";
+import { Calendar, CalendarPlus, MapPin, ArrowRight, Loader2, Sparkles, Package, Users, Image as ImageIcon, Filter, Hash, ExternalLink, Share2, Link2, Check, ShieldCheck, Crown, ArrowUpDown, ArrowUp, ArrowDown, Mail, Download, Navigation, Smartphone, X, Phone, ClipboardList, List, Map as MapIcon, Search } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +21,7 @@ import { useUserRegistrations } from "@/hooks/use-registrations";
 import { MissingPhoto } from "@/components/missing-photo";
 import { EventDiscoveryMap } from "@/components/event-discovery-map";
 import { compareNewestAdded } from "@/lib/event-sort";
+import { matchesEventSearch } from "@/lib/event-search";
 
 function normalizeUrl(url: string): string {
   if (!url) return url;
@@ -294,6 +295,12 @@ export default function Home() {
     () => new URLSearchParams(window.location.search).get("view") === "map" ? "map" : "list"
   );
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearchQuery(searchInput.trim()), 250);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
   const [areaInput, setAreaInput] = useState("");
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
   const [radiusInput, setRadiusInput] = useState("");
@@ -372,6 +379,7 @@ export default function Home() {
     : (events || []);
   const sortedEvents = [...locationFilteredEvents]
     .filter(e => !stateFilter || (e.areaCode && zipToState(e.areaCode) === stateFilter))
+    .filter(e => matchesEventSearch(e, searchQuery, e.areaCode ? cityMap[e.areaCode] : ""))
     .sort((a, b) => {
       if (sortOrder === "newest") return compareNewestAdded(a, b);
       const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
@@ -394,6 +402,21 @@ export default function Home() {
     }
     setAreaFilter(zip || undefined);
     setRadiusFilter(radiusInput ? parsedRadius : undefined);
+  };
+
+  const hasActiveFilters = !!(searchInput.trim() || searchQuery || stateFilter || areaFilter || radiusFilter);
+  const clearSearch = () => {
+    setSearchInput("");
+    setSearchQuery("");
+  };
+  const resetFilters = () => {
+    clearSearch();
+    setAreaFilter(undefined);
+    setAreaInput("");
+    setRadiusInput("");
+    setRadiusFilter(undefined);
+    setStateFilter("");
+    setSelectedEventId(null);
   };
 
   return (
@@ -425,13 +448,36 @@ export default function Home() {
 
       {/* Tabs */}
       <Tabs defaultValue="markets" className="space-y-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-3xl font-display font-bold text-foreground">Community Board</h2>
             <p className="text-muted-foreground mt-2">Explore registered markets and vendor collections.</p>
           </div>
           <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex w-full items-center gap-2 flex-wrap">
+              <div className="relative w-full sm:flex-1 sm:min-w-64">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+                <Input
+                  role="searchbox"
+                  aria-label="Search events by name, venue, city, or description"
+                  placeholder="Search events, venues, cities..."
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  className="pl-9 pr-10 rounded-xl h-10 text-sm"
+                  data-testid="input-event-search"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    aria-label="Clear keyword search"
+                    onClick={clearSearch}
+                    className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    data-testid="button-clear-event-search"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
               <Select
                 value={stateFilter}
                 onValueChange={val => setStateFilter(val === "__all__" ? "" : val)}
@@ -478,8 +524,8 @@ export default function Home() {
               <Button size="sm" variant="outline" onClick={handleApplyFilters} className="rounded-xl h-10" data-testid="button-filter">
                 <Filter className="w-4 h-4" />
               </Button>
-              {(areaFilter || stateFilter) && (
-                <Button size="sm" variant="ghost" onClick={() => { setAreaFilter(undefined); setAreaInput(""); setRadiusInput(""); setRadiusFilter(undefined); setStateFilter(""); }} className="rounded-xl h-10 text-muted-foreground text-sm" data-testid="button-clear-filters">
+              {hasActiveFilters && (
+                <Button size="sm" variant="ghost" onClick={resetFilters} className="rounded-xl h-10 text-muted-foreground text-sm" data-testid="button-clear-filters">
                   Clear
                 </Button>
               )}
@@ -536,6 +582,12 @@ export default function Home() {
         </div>
 
         <TabsContent value="markets" className="mt-0">
+          {!isLoadingEvents && !isLoadingRadiusCoordinates && !eventsError && (
+            <p role="status" aria-live="polite" className="mb-4 text-sm text-muted-foreground" data-testid="event-result-count">
+              <span className="font-semibold text-foreground">{sortedEvents.length}</span>{" "}
+              {sortedEvents.length === 1 ? "event" : "events"} found
+            </p>
+          )}
           {(stateFilter || areaFilter) && (
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               {stateFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><MapPin className="w-3 h-3 mr-1" />State: {US_STATES.find(s => s.abbr === stateFilter)?.name ?? stateFilter}</Badge>}
@@ -559,16 +611,16 @@ export default function Home() {
             <div className="text-center py-20 bg-card rounded-2xl border border-dashed border-border">
               <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-semibold text-foreground mb-2">
-                {radiusFilter && areaFilter
-                  ? `No events within ${radiusFilter} miles of ${areaFilter}`
-                  : areaFilter
-                    ? `No events in area ${areaFilter}`
-                    : stateFilter
-                      ? `No events in ${US_STATES.find(s => s.abbr === stateFilter)?.name ?? stateFilter}`
-                      : "No events scheduled"}
+                {hasActiveFilters ? "No events match" : "No events scheduled"}
               </h3>
-              <p className="text-muted-foreground mb-6">Be the first to add a local market event to the board.</p>
-              <Link href="/events/new" className="text-primary font-medium hover:underline">Create an event</Link>
+              <p className="text-muted-foreground mb-6">
+                {hasActiveFilters
+                  ? "Try another keyword or reset your filters to see all events."
+                  : "Be the first to add a local market event to the board."}
+              </p>
+              {hasActiveFilters
+                ? <Button onClick={resetFilters} className="rounded-xl" data-testid="button-reset-event-filters">Reset filters</Button>
+                : <Link href="/events/new" className="text-primary font-medium hover:underline">Create an event</Link>}
             </div>
           ) : (
             <div className="space-y-5">
