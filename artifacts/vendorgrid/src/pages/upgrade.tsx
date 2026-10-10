@@ -126,7 +126,8 @@ export default function UpgradePage() {
 
   const handleUpgrade = (planId: string) => {
     if (!isAuthenticated) {
-      const checkoutPath = `/upgrade?plan=${planId}&checkout=1`;
+      const organizerReturn = new URLSearchParams(search).get("returnTo") === "/events/new";
+      const checkoutPath = `/upgrade?plan=${planId}&checkout=1${organizerReturn ? "&returnTo=%2Fevents%2Fnew" : ""}`;
       window.location.href = `/auth?mode=signup&next=${encodeURIComponent(checkoutPath)}`;
       return;
     }
@@ -164,7 +165,8 @@ export default function UpgradePage() {
       tier: selectedPlan.tier,
       billingInterval: selectedPlan.billingInterval,
       promoCode: promoResult?.valid ? promoInput.trim() : undefined,
-      returnTo: isOnboarding ? "/setup" : "/profile",
+      returnTo: new URLSearchParams(search).get("returnTo") === "/events/new"
+        ? "/setup?next=%2Fevents%2Fnew" : isOnboarding ? "/setup" : "/profile",
     });
   };
 

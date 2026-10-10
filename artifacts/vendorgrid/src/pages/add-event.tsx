@@ -9,12 +9,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell, Image as ImageIcon, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/image-upload";
 import { PendingEventDocumentEditor, uploadEventDocument, type PendingEventDocument } from "@/components/event-document-editor";
 import { useToast } from "@/hooks/use-toast";
+import { ORGANIZER_EVENT_PATH, organizerAuthPath, organizerTrialPath } from "@/lib/organizer-flow";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -132,8 +133,11 @@ export default function AddEvent() {
     return (
       <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
         <Store className="w-16 h-16 text-primary mx-auto mb-6" />
-        <h2 className="text-3xl font-display font-bold mb-4">Login Required</h2>
-        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><a href="/auth">Login to Continue</a></Button>
+        <h2 className="text-3xl font-display font-bold mb-4">Post your event on VendorGrid</h2>
+        <p className="text-muted-foreground mb-6">Create an account or sign in to begin your event listing. We'll bring you back to your organizer setup.</p>
+        <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full"><Link href={organizerAuthPath(ORGANIZER_EVENT_PATH)}>Create an account</Link></Button>
+        <Link href={organizerAuthPath(ORGANIZER_EVENT_PATH, "login")} className="block mt-4 text-primary font-medium">Already have an account? Sign in</Link>
+        <Link href="/organizers" className="block mt-4 text-muted-foreground text-sm underline">See what organizers get</Link>
       </div>
     );
   }
@@ -145,7 +149,7 @@ export default function AddEvent() {
         <h2 className="text-3xl font-display font-bold mb-3">VendorGrid Pro Required</h2>
         <p className="text-muted-foreground mb-8">Hosting market events requires a VendorGrid Pro subscription. Upgrade to start listing your events on VendorGrid.</p>
         <Button asChild size="lg" className="rounded-xl px-8 h-14 w-full bg-gradient-to-r from-amber-500 to-primary" data-testid="button-upgrade-to-host">
-          <a href="/pro">Explore VendorGrid Pro</a>
+          <Link href={organizerTrialPath()}>Start free trial</Link>
         </Button>
       </div>
     );

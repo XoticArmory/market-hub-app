@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { useUpsertProfile } from "@/hooks/use-profile";
+import { useProfile, useUpsertProfile } from "@/hooks/use-profile";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Store, Package, Users, ArrowRight, Loader2, Crown } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 const TYPES = [
   {
@@ -37,12 +38,23 @@ const TYPES = [
 
 export default function SetupPage() {
   const { user, isAuthenticated } = useAuth();
-  const { mutate: upsertProfile } = useUpsertProfile();
+  const { data: profileData } = useProfile();
+  const { mutateAsync: upsertProfile } = useUpsertProfile();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const organizerNext = new URLSearchParams(search).get("next") === "/events/new";
+  useEffect(() => {
+    if (organizerNext && isAuthenticated && profileData?.profile?.onboardingComplete) {
+      setLocation("/events/new");
+    }
+  }, [organizerNext, isAuthenticated, profileData, setLocation]);
 
-  const [step, setStep] = useState(1);
-  const [profileType, setProfileType] = useState("");
+  // Organizer intent reaches setup only after Pro is active; do not send a
+  // newly subscribed host back through the generic role/upgrade selection.
+  const [step, setStep] = useState(organizerNext ? 2 : 1);
+  const [profileType, setProfileType] = useState(organizerNext ? "pro" : "");
   const [areaCode, setAreaCode] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [bio, setBio] = useState("");
@@ -89,12 +101,15 @@ export default function SetupPage() {
   const handleSave = async () => {
     if (!profileType) return;
     setIsSaving(true);
-    await new Promise<void>(resolve => {
-      upsertProfile({ profileType, areaCode: areaCode || undefined, bio: bio || undefined, businessName: businessName || undefined }, { onSettled: () => resolve() });
-    });
-    await completeOnboarding.mutateAsync();
-    setIsSaving(false);
-    setLocation("/");
+    try {
+      await upsertProfile({ profileType, areaCode: areaCode || undefined, bio: bio || undefined, businessName: businessName || undefined });
+      await completeOnboarding.mutateAsync();
+      setLocation(organizerNext ? "/events/new" : "/");
+    } catch (error) {
+      toast({ title: "Couldn't finish setup", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

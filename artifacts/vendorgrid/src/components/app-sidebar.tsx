@@ -59,6 +59,7 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
 
   const navItems = [
     { title: "Market Events", url: "/", icon: CalendarDays },
+    { title: "For Organizers", url: "/organizers", icon: CalendarDays },
     ...(isAuthenticated ? [{ title: "Manage Your Markets", url: "/manage-markets", icon: Store }] : []),
     { title: "Community Chat", url: "/chat", icon: MessageCircle },
     ...(isEventOwnerPro ? [{ title: "Add Event", url: "/events/new", icon: PlusCircle }] : []),

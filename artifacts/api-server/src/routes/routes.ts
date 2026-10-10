@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "../storage";
+import { subscriptionSuccessUrl } from "../lib/subscription-return";
 import { generateReportsForEvent } from "../services/market-report";
 import { api, PRO_TIERS } from "../shared-routes";
 import { z } from "zod";
@@ -3053,7 +3054,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           trial_period_days: 14,
           metadata: { userId, tier, billingInterval },
         },
-        success_url: `${getHost(req)}${returnTo || '/profile'}?subscribed=${tier}&session_id={CHECKOUT_SESSION_ID}`,
+        success_url: subscriptionSuccessUrl(getHost(req), tier, returnTo),
         cancel_url: `${getHost(req)}/upgrade`,
         metadata: { userId, tier, billingInterval },
       };

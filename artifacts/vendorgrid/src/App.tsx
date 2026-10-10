@@ -44,6 +44,8 @@ import TermsOfServicePage from "@/pages/terms-of-service";
 import AboutPage from "@/pages/about";
 import FAQPage from "@/pages/faq";
 import ManageMarketsPage from "@/pages/manage-markets";
+import OrganizersPage from "@/pages/organizers";
+import { ORGANIZER_EVENT_PATH, organizerTrialPath } from "@/lib/organizer-flow";
 
 function OnboardingGuard() {
   const { isAuthenticated } = useAuth();
@@ -52,12 +54,18 @@ function OnboardingGuard() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (location === "/tour" || location === "/setup" || location === "/upgrade" || location === "/pro" || location === "/auth" || location.startsWith("/api")) return;
+    if (location === "/tour" || location === "/setup" || location === "/upgrade" || location === "/pro" || location === "/organizers" || location === "/auth" || location.startsWith("/api")) return;
     const profileLoaded = profileData !== undefined;
     if (!profileLoaded) return;
     const profile = profileData?.profile;
     if (!profile || !profile.onboardingComplete) {
       const hasActiveSub = profile?.subscriptionStatus === "active" && profile?.subscriptionTier !== "free";
+      if (location === ORGANIZER_EVENT_PATH) {
+        setLocation(hasActiveSub || profile?.isAdmin
+          ? `/setup?next=${encodeURIComponent(ORGANIZER_EVENT_PATH)}`
+          : organizerTrialPath());
+        return;
+      }
       setLocation(hasActiveSub ? "/setup" : "/tour");
     }
   }, [isAuthenticated, profileData, location]);
@@ -421,6 +429,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/organizers" component={OrganizersPage} />
       <Route path="/events/new" component={AddEvent} />
       <Route path="/events/:id" component={EventDetail} />
       <Route path="/manage-markets" component={ManageMarketsPage} />
