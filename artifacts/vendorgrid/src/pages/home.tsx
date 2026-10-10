@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { SiX, SiFacebook, SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useOrganizerActions } from "@/hooks/use-organizer-actions";
 import { useProfile } from "@/hooks/use-profile";
 import { useUserRegistrations } from "@/hooks/use-registrations";
 import { MissingPhoto } from "@/components/missing-photo";
@@ -291,6 +292,7 @@ function PwaInstallBanner() {
 }
 
 export default function Home() {
+  const { hostAccess, retryAccess } = useOrganizerActions();
   const [viewMode, setViewMode] = useState<"list" | "map">(
     () => new URLSearchParams(window.location.search).get("view") === "map" ? "map" : "list"
   );
@@ -434,9 +436,11 @@ export default function Home() {
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold text-foreground mb-6 leading-tight">Discover & Connect with Local Markets</h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-lg">See what vendors are bringing to upcoming events, claim your spot, and chat with fellow artisans in your community.</p>
           <div className="flex flex-wrap gap-4">
-            <Link href="/organizers" className="px-6 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2">
+            {hostAccess.status === "ready" ? <Link href={hostAccess.href!} data-testid="link-host-event" className="px-6 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2">
               Host an Event <ArrowRight className="w-4 h-4" />
-            </Link>
+            </Link> : <button type="button" data-testid="button-host-event-pending" disabled={hostAccess.status === "loading"} onClick={retryAccess} aria-busy={hostAccess.status === "loading"} className="px-6 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center gap-2 disabled:opacity-60">
+              {hostAccess.status === "loading" ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />Checking account…</> : "Account check failed — retry"}
+            </button>}
             <Link href="/chat" className="px-6 py-3.5 rounded-xl bg-secondary text-secondary-foreground font-semibold hover:bg-secondary/80 transition-all duration-200">
               Join the Chat
             </Link>

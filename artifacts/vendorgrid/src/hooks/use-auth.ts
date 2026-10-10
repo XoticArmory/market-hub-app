@@ -12,7 +12,7 @@ async function fetchUser(): Promise<User | null> {
 export function useAuth() {
   const queryClient = useQueryClient();
 
-  const { data: user, isLoading } = useQuery<User | null>({
+  const { data: user, isLoading, isFetching, isError, refetch } = useQuery<User | null>({
     queryKey: ["/api/auth/user"],
     queryFn: fetchUser,
     retry: false,
@@ -30,6 +30,9 @@ export function useAuth() {
   return {
     user,
     isLoading,
+    isFetching,
+    isError,
+    refetch,
     isAuthenticated: !!user,
     logout,
     isLoggingOut: false,

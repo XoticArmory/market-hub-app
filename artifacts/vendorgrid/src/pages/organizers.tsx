@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ArrowRight, CalendarPlus, ClipboardList, CreditCard, Smartphone, Check, Store, MapPinned } from "lucide-react";
 import { useOrganizerActions } from "@/hooks/use-organizer-actions";
 
@@ -19,14 +19,36 @@ const steps = [
 export default function OrganizersPage() {
   const [shown, setShown] = useState(false);
   const [annual, setAnnual] = useState(false);
-  const { startTrialHref, postEventHref, actionsReady } = useOrganizerActions(annual ? "annual" : "monthly");
+  const { startTrialHref, postEventHref, actionsReady, hostAccess, retryAccess } = useOrganizerActions(annual ? "annual" : "monthly");
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
+    if (hostAccess.status === "ready" && hostAccess.canHost) {
+      setLocation("/events/new", { replace: true });
+    }
+  }, [hostAccess.status, hostAccess.canHost, setLocation]);
+
+  useEffect(() => {
+    if (hostAccess.status !== "ready" || hostAccess.canHost) return;
     const t = document.title;
     document.title = "For Organizers | VendorGrid";
     const id = requestAnimationFrame(() => setShown(true));
     return () => { document.title = t; cancelAnimationFrame(id); };
-  }, []);
+  }, [hostAccess.status, hostAccess.canHost]);
+
+  if (hostAccess.status === "error") {
+    return <div className="mx-auto max-w-md py-16 text-center" role="alert">
+      <h1 className="font-display text-2xl font-bold">Couldn't check your account</h1>
+      <p className="mt-3 text-muted-foreground">Please try again so we can take you to the right place.</p>
+      <button type="button" onClick={retryAccess} className="mt-5 min-h-12 rounded-xl bg-primary px-6 font-semibold text-primary-foreground">Try again</button>
+    </div>;
+  }
+  if (hostAccess.status === "loading" || hostAccess.canHost) {
+    return <div className="flex min-h-64 items-center justify-center gap-3 text-muted-foreground" role="status" aria-live="polite" data-testid="organizer-access-loading">
+      <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-r-transparent" aria-hidden="true" />
+      {hostAccess.canHost ? "Opening event form…" : "Checking your account…"}
+    </div>;
+  }
 
   const base = "inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 aria-disabled:pointer-events-none aria-disabled:opacity-50";
   const primary = `${base} bg-primary text-primary-foreground hover:bg-primary/90`;
