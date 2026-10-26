@@ -417,15 +417,19 @@ export default function Home() {
     longitude: event.areaCode ? zipCoordinates[event.areaCode]?.longitude ?? null : null,
   }));
 
-  const handleApplyFilters = () => {
-    const zip = areaInput.trim();
-    const parsedRadius = Number(radiusInput);
-    if (radiusInput && (!/^\d{5}$/.test(zip) || !Number.isFinite(parsedRadius) || parsedRadius <= 0)) {
+  // ZIP/radius apply immediately on change like the state filter does.
+  // Overrides let the radius Select apply with its new value before the
+  // radiusInput state update lands.
+  const handleApplyFilters = (zipOverride?: string, radiusOverride?: string) => {
+    const zip = (zipOverride ?? areaInput).trim();
+    const radiusValue = radiusOverride ?? radiusInput;
+    const parsedRadius = Number(radiusValue);
+    if (radiusValue && (!/^\d{5}$/.test(zip) || !Number.isFinite(parsedRadius) || parsedRadius <= 0)) {
       toast({ title: "Enter a valid ZIP code", description: "A 5-digit ZIP code is needed to search by radius.", variant: "destructive" });
       return;
     }
     setAreaFilter(zip || undefined);
-    setRadiusFilter(radiusInput ? parsedRadius : undefined);
+    setRadiusFilter(radiusValue ? parsedRadius : undefined);
   };
 
   const hasActiveFilters = !!(searchInput.trim() || searchQuery || stateFilter || areaFilter || radiusFilter);
@@ -528,13 +532,14 @@ export default function Home() {
                   placeholder="Zip code..."
                   value={areaInput}
                   onChange={e => setAreaInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') setAreaFilter(areaInput || undefined); }}
+                  onKeyDown={e => { if (e.key === 'Enter') handleApplyFilters(); }}
+                  onBlur={() => handleApplyFilters()}
                   className="pl-9 rounded-xl h-10 w-36 text-sm"
                 />
               </div>
               <Select
                 value={radiusInput}
-                onValueChange={val => setRadiusInput(val === "__exact__" ? "" : val)}
+                onValueChange={val => { const next = val === "__exact__" ? "" : val; setRadiusInput(next); handleApplyFilters(undefined, next); }}
               >
                 <SelectTrigger className="rounded-xl h-10 w-32 text-sm" data-testid="select-radius-filter">
                   <SelectValue placeholder="Radius" />
@@ -548,8 +553,8 @@ export default function Home() {
                   <SelectItem value="100">Within 100 mi</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="sm" variant="outline" onClick={handleApplyFilters} className="rounded-xl h-10" data-testid="button-filter">
-                <Filter className="w-4 h-4" />
+              <Button size="sm" variant="outline" onClick={() => handleApplyFilters()} aria-label="Apply filters" className="rounded-xl h-10" data-testid="button-filter">
+                <Filter className="w-4 h-4 mr-1" /> Apply filters
               </Button>
               {hasActiveFilters && (
                 <Button size="sm" variant="ghost" onClick={resetFilters} className="rounded-xl h-10 text-muted-foreground text-sm" data-testid="button-clear-filters">
@@ -647,7 +652,7 @@ export default function Home() {
               </p>
               {hasActiveFilters
                 ? <Button onClick={resetFilters} className="rounded-xl" data-testid="button-reset-event-filters">Reset filters</Button>
-                : <Link href="/events/new" className="text-primary font-medium hover:underline">Create an event</Link>}
+                : <Link href={hostAccess.status === "ready" ? hostAccess.href! : "/organizers"} className="text-primary font-medium hover:underline">Create an event</Link>}
             </div>
           ) : (
             <div className="space-y-5">

@@ -57,7 +57,7 @@ function formatPrice(cents: number) {
 
 export default function InventoryPage() {
   const [, setLocation] = useLocation();
-  const { data: profileData } = useProfile();
+  const { data: profileData, isLoading: profileLoading } = useProfile();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -254,6 +254,13 @@ export default function InventoryPage() {
   }
 
   const batchHasAny = allocateRows.some(r => Number(r.qty) > 0);
+
+  // Never flash the Pro upsell while the profile is still resolving — a
+  // Pro user mid-load would see "Upgrade to Pro" for a state that isn't
+  // theirs. Neutral skeleton first, then the real gate decision.
+  if (profileLoading) {
+    return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+  }
 
   if (!hasActivePro) {
     return (
