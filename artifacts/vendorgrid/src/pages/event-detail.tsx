@@ -56,6 +56,7 @@ const editEventSchema = z.object({
   registrationCode: z.string().optional(),
   contactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   eventWebsiteUrl: z.string().optional(),
+  category: z.string().optional(),
   showApplicantsPublic: z.boolean().optional(),
 });
 type EditEventValues = z.infer<typeof editEventSchema>;
@@ -86,6 +87,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       registrationCode: event?.registrationCode || "",
       contactEmail: event?.contactEmail || "",
       eventWebsiteUrl: event?.eventWebsiteUrl || "",
+      category: event?.category || "",
       showApplicantsPublic: event?.showApplicantsPublic === true,
     },
   });
@@ -133,6 +135,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       registrationCode: vals.registrationCode || null,
       contactEmail: vals.contactEmail || null,
       eventWebsiteUrl: vals.eventWebsiteUrl || null,
+      category: vals.category || null,
       showApplicantsPublic: vals.showApplicantsPublic === true,
       bannerUrl,
       extraDates: extraDates.map((d) => ({
@@ -372,6 +375,28 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
                   <FormLabel className="flex items-center gap-1.5"><ExternalLink className="w-3.5 h-3.5 text-primary" />Event Website</FormLabel>
                   <FormControl><Input {...field} type="url" placeholder="https://yourevent.com" data-testid="input-edit-event-website" /></FormControl>
                   <p className="text-xs text-muted-foreground">The main link on your event card — shown first when visitors click the website icon.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="category" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">Category</FormLabel>
+                  <FormControl>
+                    <select
+                      data-testid="input-edit-category"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={field.value ?? ""}
+                      onChange={(e) => field.onChange(e.target.value || undefined)}
+                    >
+                      <option value="">No category</option>
+                      <option value="Farmers Market">Farmers Market</option>
+                      <option value="Craft Fair">Craft Fair</option>
+                      <option value="Festival">Festival</option>
+                      <option value="Pop-up">Pop-up</option>
+                      <option value="Flea Market">Flea Market</option>
+                    </select>
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">Powers the board's category filter. Leave blank to leave the listing uncategorized.</p>
                   <FormMessage />
                 </FormItem>
               )} />

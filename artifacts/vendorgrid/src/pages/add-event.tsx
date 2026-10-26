@@ -30,6 +30,7 @@ const formSchema = z.object({
   spotPrice: z.coerce.number().min(0).default(0),
   contactEmail: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
   eventWebsiteUrl: z.string().optional(),
+  category: z.string().optional(),
   registrationCode: z.string().optional(),
   vendorRegistrationType: z.enum(["vendorgrid", "external", "form", "email", "phone"]).optional(),
   vendorRegistrationUrl: z.string().optional(),
@@ -86,6 +87,7 @@ export default function AddEvent() {
       spotPrice: 0,
       contactEmail: "",
       eventWebsiteUrl: "",
+      category: "",
       registrationCode: "",
       vendorRegistrationType: undefined,
       vendorRegistrationUrl: "",
@@ -284,6 +286,30 @@ export default function AddEvent() {
                   />
                 </FormControl>
                 <p className="text-xs text-muted-foreground">The main link shown on your event card for visitors to learn more about your event.</p>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            {/* Category — optional, powers the board's category filter */}
+            <FormField control={form.control} name="category" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base font-semibold">Category <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                <FormControl>
+                  <select
+                    data-testid="input-event-category"
+                    className="flex h-14 w-full rounded-xl border border-input bg-background px-3 text-base"
+                    value={field.value ?? ""}
+                    onChange={(e) => field.onChange(e.target.value || undefined)}
+                  >
+                    <option value="">Choose a category (optional)</option>
+                    <option value="Farmers Market">Farmers Market</option>
+                    <option value="Craft Fair">Craft Fair</option>
+                    <option value="Festival">Festival</option>
+                    <option value="Pop-up">Pop-up</option>
+                    <option value="Flea Market">Flea Market</option>
+                  </select>
+                </FormControl>
+                <p className="text-xs text-muted-foreground">Helps vendors find your event with the board's category filter.</p>
                 <FormMessage />
               </FormItem>
             )} />

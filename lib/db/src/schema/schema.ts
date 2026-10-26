@@ -46,6 +46,7 @@ export const events = pgTable("events", {
   vendorRegistrationType: text("vendor_registration_type"),
   vendorRegistrationUrl: text("vendor_registration_url"),
   bannerUrl: text("banner_url"),
+  category: text("category"),
   contactEmail: text("contact_email"),
   eventWebsiteUrl: text("event_website_url"),
   // Applicant-name visibility (Fix 17): false = applicant names stay
