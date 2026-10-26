@@ -1028,14 +1028,17 @@ export default function EventDetail() {
             {event.creatorName && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="w-4 h-4" />
-                <span>By <strong className="text-foreground">{event.creatorName}</strong></span>
+                {/* Names appear only on Pro-listed events; admin-listed
+                    events (including VendorGrid's own scan listings) show
+                    the role, not the account's personal name. */}
+                <span>By <strong className="text-foreground">{(event as any).pinColor === "pro" ? event.creatorName : "Organizer"}</strong></span>
                 {(event as any).creatorWebsiteUrl && (
                   <a
                     href={normalizeUrl((event as any).creatorWebsiteUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1 rounded-lg hover:text-primary hover:bg-primary/10 transition-colors"
-                    aria-label={`Visit ${event.creatorName}'s website`}
+                    aria-label={(event as any).pinColor === "pro" ? `Visit ${event.creatorName}'s website` : "Visit organizer's website"}
                     title="Visit organizer's website"
                     data-testid="link-creator-website-detail"
                   >
