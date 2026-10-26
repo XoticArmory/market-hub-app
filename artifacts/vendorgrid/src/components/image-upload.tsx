@@ -59,7 +59,7 @@ export function ImageUpload({ value, onChange, disabled, "data-testid": testId }
         ref={inputRef}
         type="file"
         accept="image/*"
-        className="hidden"
+        className="sr-only"
         onChange={onFileChange}
         disabled={disabled || uploading}
         data-testid={testId ? `${testId}-input` : undefined}

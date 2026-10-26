@@ -538,6 +538,14 @@ export default function EventDetail() {
   const handleBannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max file size is 8 MB.", variant: "destructive" });
+      return;
+    }
     setBannerUploading(true);
     try {
       const formData = new FormData();
@@ -846,7 +854,7 @@ export default function EventDetail() {
           ref={bannerInputRef}
           type="file"
           accept="image/*"
-          className="hidden"
+          className="sr-only"
           onChange={handleBannerFileChange}
           data-testid="input-banner-file"
         />
