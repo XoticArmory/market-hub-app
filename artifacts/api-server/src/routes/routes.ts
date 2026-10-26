@@ -901,7 +901,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isAdmin = profile?.isAdmin === true;
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
     if (!isPro(profile) && !isAdmin) return res.status(403).json({ message: "Pro subscription required to edit events." });
-    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'endTime', 'vendorSpaces', 'boothWidth', 'boothDepth', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail', 'bannerUrl', 'showApplicantsPublic'];
+    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'endTime', 'vendorSpaces', 'boothWidth', 'boothDepth', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail', 'eventWebsiteUrl', 'bannerUrl', 'showApplicantsPublic'];
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (key in req.body) data[key] = req.body[key];
