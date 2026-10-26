@@ -22,6 +22,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EventMapEditor } from "@/components/EventMapEditor";
+import { toLocalInputValue, fromLocalInputValue } from "@/lib/datetime";
 import { ImageUpload } from "@/components/image-upload";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -73,8 +74,8 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       description: event?.description || "",
       location: event?.location || "",
       areaCode: event?.areaCode || "",
-      date: event?.date ? new Date(event.date).toISOString().slice(0, 16) : "",
-      endTime: event?.endTime ? new Date(event.endTime).toISOString().slice(0, 16) : "",
+      date: toLocalInputValue(event?.date),
+      endTime: toLocalInputValue(event?.endTime),
       vendorSpaces: event?.vendorSpaces || 0,
       boothWidth: event?.boothWidth || 10,
       boothDepth: event?.boothDepth || 10,
@@ -87,14 +88,40 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
     },
   });
 
+  // Additional dates mirror the create form's block, kept as local
+  // wall-clock strings for the datetime-local inputs. The dialog instance
+  // persists across opens, so reset from the event whenever it opens.
+  type EditExtraDate = { date: string; endTime: string };
+  const toEditExtraDates = (dates: any[] | undefined): EditExtraDate[] =>
+    (dates || []).map((d) => ({
+      date: toLocalInputValue(d.date),
+      endTime: toLocalInputValue(d.endTime),
+    }));
+  const [extraDates, setExtraDates] = useState<EditExtraDate[]>(() => toEditExtraDates(event?.extraDates));
+  const [newExtraDate, setNewExtraDate] = useState("");
+  const [newExtraEndTime, setNewExtraEndTime] = useState("");
+  const [bannerUrl, setBannerUrl] = useState(event?.bannerUrl || "");
+  // Add Date is gated on a valid MAIN start date/time (package item 3):
+  // with an empty pending row it adds a copy of the main date.
+  const mainDateValue = form.watch("date");
+  const mainDateValid = !!mainDateValue && !isNaN(Date.parse(mainDateValue));
+  useEffect(() => {
+    if (open) {
+      setExtraDates(toEditExtraDates(event?.extraDates));
+      setNewExtraDate("");
+      setNewExtraEndTime("");
+      setBannerUrl(event?.bannerUrl || "");
+    }
+  }, [open, event?.id]);
+
   function handleSubmit(vals: EditEventValues) {
     onSubmit({
       title: vals.title,
       description: vals.description,
       location: vals.location,
       areaCode: vals.areaCode || null,
-      date: vals.date,
-      endTime: vals.endTime || null,
+      date: fromLocalInputValue(vals.date),
+      endTime: vals.endTime ? fromLocalInputValue(vals.endTime) : null,
       vendorSpaces: vals.vendorSpaces,
       boothWidth: vals.boothWidth,
       boothDepth: vals.boothDepth,
@@ -104,6 +131,11 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       registrationCode: vals.registrationCode || null,
       contactEmail: vals.contactEmail || null,
       eventWebsiteUrl: vals.eventWebsiteUrl || null,
+      bannerUrl,
+      extraDates: extraDates.map((d) => ({
+        date: fromLocalInputValue(d.date),
+        endTime: d.endTime ? fromLocalInputValue(d.endTime) : "",
+      })),
     });
   }
 
@@ -340,6 +372,49 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
                   <FormMessage />
                 </FormItem>
               )} />
+              <div className="space-y-3">
+                <label className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-primary" />Additional Dates (Optional)</label>
+                <div className="flex flex-col gap-2">
+                  {extraDates.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-muted/50 rounded-xl px-3 py-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm font-medium">{d.date ? new Date(d.date).toLocaleString() : ""}</span>
+                      {d.endTime && (
+                        <>
+                          <span className="text-xs text-muted-foreground">→</span>
+                          <span className="text-sm text-muted-foreground">{new Date(d.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </>
+                      )}
+                      <button type="button" onClick={() => setExtraDates(extraDates.filter((_, j) => j !== i))} aria-label={`Remove additional date ${i + 1}`} className="ml-auto text-muted-foreground hover:text-foreground">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
+                  <p className="text-xs text-muted-foreground font-medium">Add another day</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="edit-extra-date" className="text-xs text-muted-foreground mb-1 block">Start Date &amp; Time</label>
+                      <Input id="edit-extra-date" data-testid="input-edit-extra-date" type="datetime-local" value={newExtraDate} onChange={(e) => setNewExtraDate(e.target.value)} className="h-11 rounded-xl" />
+                    </div>
+                    <div>
+                      <label htmlFor="edit-extra-end-time" className="text-xs text-muted-foreground mb-1 block">End Time <span className="opacity-60">(Optional)</span></label>
+                      <Input id="edit-extra-end-time" data-testid="input-edit-extra-end-time" type="datetime-local" value={newExtraEndTime} onChange={(e) => setNewExtraEndTime(e.target.value)} className="h-11 rounded-xl" />
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => { if (newExtraDate) { setExtraDates([...extraDates, { date: newExtraDate, endTime: newExtraEndTime }]); setNewExtraDate(""); setNewExtraEndTime(""); } else if (mainDateValid) { setExtraDates([...extraDates, { date: mainDateValue, endTime: "" }]); } }} disabled={!mainDateValid} className="rounded-xl h-10 w-full sm:w-auto" data-testid="button-edit-add-date">
+                    <PlusCircle className="w-4 h-4 mr-1" /> Add Date
+                  </Button>
+                  {!mainDateValid && <p className="text-xs text-muted-foreground">Set the main Start Date &amp; Time above to enable Add Date.</p>}
+                  {mainDateValid && !newExtraDate && <p className="text-xs text-muted-foreground">Add Date will add the main date as another day, or enter a different date above first.</p>}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="w-4 h-4 text-primary" />Event Banner <span className="text-muted-foreground font-normal text-sm">(Optional)</span></label>
+                <p className="text-xs text-muted-foreground -mt-1">Upload a banner image for your event card.</p>
+                <ImageUpload value={bannerUrl} onChange={setBannerUrl} data-testid="input-edit-banner" />
+              </div>
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button type="submit" className="flex-1 rounded-xl" disabled={isPending} data-testid="button-save-event">

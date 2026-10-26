@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell, Image as ImageIcon, Phone } from "lucide-react";
+import { CalendarDays, Store, MapPin, Plus, X, Users, Hash, Globe, LayoutGrid, Crown, DollarSign, Key, ClipboardList, Mail, Bell, Image as ImageIcon, Phone, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/image-upload";
 import { PendingEventDocumentEditor, uploadEventDocument, type PendingEventDocument } from "@/components/event-document-editor";
 import { useToast } from "@/hooks/use-toast";
 import { ORGANIZER_EVENT_PATH, organizerAuthPath, organizerTrialPath } from "@/lib/organizer-flow";
+import { fromLocalInputValue } from "@/lib/datetime";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -56,8 +57,8 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function AddEvent() {
-  const { isAuthenticated } = useAuth();
-  const { data: profileData } = useProfile();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { data: profileData, isLoading: profileLoading } = useProfile();
   const profile = profileData?.profile;
   const { mutateAsync: createEvent, isPending } = useCreateEvent();
   const [, setLocation] = useLocation();
@@ -102,7 +103,13 @@ export default function AddEvent() {
         endTime: (data as any).endTime || undefined,
         spotPrice: Math.round((data.spotPrice || 0) * 100),
         bannerUrl: bannerUrl || undefined,
-        extraDates,
+        // Convert additional dates to ISO in the browser (local parse), the
+        // same as the main date: sending raw wall-clock strings lets the
+        // server parse them as UTC and shifts the listing by the offset.
+        extraDates: extraDates.map((d) => ({
+          date: fromLocalInputValue(d.date),
+          endTime: d.endTime ? fromLocalInputValue(d.endTime) : "",
+        })),
         notifyMessage: notifyMessage.trim() || undefined,
       });
     } catch {
@@ -121,13 +128,31 @@ export default function AddEvent() {
     }
   };
 
+  // Add Date is gated on a valid MAIN start date/time (package item 3):
+  // with an empty pending row it adds a copy of the main date.
+  const mainDateValue = form.watch("date");
+  const mainDateValid = !!mainDateValue && !isNaN(Date.parse(mainDateValue));
+
   const addExtraDate = () => {
     if (newDate) {
       setExtraDates([...extraDates, { date: newDate, endTime: newEndTime }]);
       setNewDate("");
       setNewEndTime("");
+    } else if (mainDateValid) {
+      setExtraDates([...extraDates, { date: mainDateValue, endTime: "" }]);
     }
   };
+
+  // Never flash a login or Pro gate while auth/subscription state is still
+  // resolving — show a neutral skeleton until both settle, then decide.
+  if (authLoading || profileLoading) {
+    return (
+      <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
+        <Loader2 className="w-12 h-12 text-primary mx-auto mb-6 animate-spin" />
+        <p className="text-muted-foreground">Checking your account...</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -535,10 +560,11 @@ export default function AddEvent() {
                     />
                   </div>
                 </div>
-                <Button type="button" variant="outline" onClick={addExtraDate} disabled={!newDate} aria-describedby={!newDate ? "add-date-hint" : undefined} className="rounded-xl h-10 w-full sm:w-auto" data-testid="button-add-date">
+                <Button type="button" variant="outline" onClick={addExtraDate} disabled={!mainDateValid} aria-describedby={!mainDateValid ? "add-date-hint" : undefined} className="rounded-xl h-10 w-full sm:w-auto" data-testid="button-add-date">
                   <Plus className="w-4 h-4 mr-1" /> Add Date
                 </Button>
-                {!newDate && <p id="add-date-hint" className="text-xs text-muted-foreground">Choose a start date and time above to add another date.</p>}
+                {!mainDateValid && <p id="add-date-hint" className="text-xs text-muted-foreground">Set the main Start Date &amp; Time above to enable Add Date.</p>}
+                {mainDateValid && !newDate && <p className="text-xs text-muted-foreground">Add Date will add the main date as another day, or enter a different date above first.</p>}
               </div>
             </div>
 

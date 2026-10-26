@@ -885,7 +885,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isAdmin = profile?.isAdmin === true;
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
     if (!isPro(profile) && !isAdmin) return res.status(403).json({ message: "Pro subscription required to edit events." });
-    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'endTime', 'vendorSpaces', 'boothWidth', 'boothDepth', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail'];
+    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'endTime', 'vendorSpaces', 'boothWidth', 'boothDepth', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail', 'bannerUrl'];
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (key in req.body) data[key] = req.body[key];
@@ -896,7 +896,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (data.boothWidth !== undefined) data.boothWidth = data.boothWidth ? Number(data.boothWidth) : null;
     if (data.boothDepth !== undefined) data.boothDepth = data.boothDepth ? Number(data.boothDepth) : null;
     if (data.spotPrice !== undefined) data.spotPrice = Number(data.spotPrice);
+    // Validate additional dates BEFORE any write, so a bad row can't wipe
+    // the good dates (replace happens after the main update below).
+    let parsedExtraDates: { date: Date; endTime: Date | null }[] | null = null;
+    if ('extraDates' in req.body) {
+      const incoming = req.body.extraDates;
+      if (!Array.isArray(incoming)) return res.status(400).json({ message: "extraDates must be an array" });
+      parsedExtraDates = [];
+      for (const d of incoming) {
+        if (!d || typeof d.date !== 'string' || !d.date) return res.status(400).json({ message: "Each additional date needs a start date" });
+        const start = new Date(d.date);
+        if (isNaN(start.getTime())) return res.status(400).json({ message: "Invalid additional date" });
+        let end: Date | null = null;
+        if (d.endTime) {
+          end = new Date(d.endTime);
+          if (isNaN(end.getTime())) return res.status(400).json({ message: "Invalid additional end time" });
+        }
+        parsedExtraDates.push({ date: start, endTime: end });
+      }
+    }
     const updated = await storage.updateEvent(eventId, data);
+    if (parsedExtraDates !== null) {
+      await storage.deleteEventDates(eventId);
+      for (const d of parsedExtraDates) {
+        await storage.createEventDate({ eventId, date: d.date, endTime: d.endTime });
+      }
+      const newExtraDates = await storage.getEventDates(eventId);
+      return res.json({ ...updated, extraDates: newExtraDates });
+    }
     res.json(updated);
   });
 
