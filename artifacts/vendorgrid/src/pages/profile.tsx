@@ -982,7 +982,7 @@ function AdminPromoSection({ userId }: { userId: string }) {
 }
 
 export default function ProfilePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { data: profileData, isLoading: isLoadingProfile } = useProfile();
   const { mutate: upsertProfile, isPending: isSaving } = useUpsertProfile();
   const { mutate: portal, isPending: isPortal } = usePortalSession();
@@ -1236,6 +1236,12 @@ export default function ProfilePage() {
   const alertUnreadCount = (notifications || []).filter((n: any) => !n.read).length;
   const dmUnreadCount = (dmInbox as any[]).reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0);
 
+  // Loading first: the signed-out gate below must not flash while auth or
+  // profile state is still resolving on a direct load.
+  if (authLoading || isLoadingProfile) {
+    return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="max-w-md mx-auto mt-20 text-center bg-card p-12 rounded-3xl border border-border shadow-lg">
@@ -1244,10 +1250,6 @@ export default function ProfilePage() {
         <Button asChild size="lg" className="w-full rounded-xl"><a href="/auth">Sign In</a></Button>
       </div>
     );
-  }
-
-  if (isLoadingProfile) {
-    return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
   }
 
   const currentTierLabel = isAdmin ? "All Access (Admin)" : TIER_LABELS[profile?.subscriptionTier || "free"];

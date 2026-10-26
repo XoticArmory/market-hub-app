@@ -168,7 +168,7 @@ export default function AuthPage() {
             <button
               data-testid="tab-signup"
               className={`flex-1 py-4 text-sm font-semibold transition-colors ${mode === "signup" ? "bg-primary/5 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setLocation("/tour")}
+              onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
             >
               Create Account
             </button>
@@ -294,7 +294,9 @@ export default function AuthPage() {
                 className="text-primary font-semibold hover:underline"
                 onClick={() => {
                   if (mode === "login") {
-                    setLocation("/tour");
+                    setMode("signup");
+                    setError("");
+                    setSuccess("");
                   } else {
                     setMode("login");
                     setError("");

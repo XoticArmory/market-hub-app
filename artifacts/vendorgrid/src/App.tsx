@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, useLocation, Link } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, Link, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -45,6 +45,7 @@ import AboutPage from "@/pages/about";
 import FAQPage from "@/pages/faq";
 import ManageMarketsPage from "@/pages/manage-markets";
 import OrganizersPage from "@/pages/organizers";
+import ContactPage from "@/pages/contact";
 import { ORGANIZER_EVENT_PATH, organizerTrialPath } from "@/lib/organizer-flow";
 
 function OnboardingGuard() {
@@ -432,6 +433,9 @@ function Router() {
       <Route path="/organizers" component={OrganizersPage} />
       <Route path="/events/new" component={AddEvent} />
       <Route path="/events/:id" component={EventDetail} />
+      {/* The Community Board lives at /; /events redirects there. */}
+      <Route path="/events"><Redirect to="/" /></Route>
+      <Route path="/contact" component={ContactPage} />
       <Route path="/manage-markets" component={ManageMarketsPage} />
       <Route path="/chat" component={Chat} />
       <Route path="/profile" component={ProfilePage} />

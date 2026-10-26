@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { ArrowUpRight, Mail } from "lucide-react";
+import { useOrganizerActions } from "@/hooks/use-organizer-actions";
 
 type SiteFooterProps = {
   onContact: () => void;
@@ -9,6 +10,9 @@ const footerLink =
   "inline-flex min-h-11 items-center gap-1.5 rounded-md py-2 text-sm text-[#f5e9dc] transition-colors hover:text-[#ffb477] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffb477] focus-visible:ring-offset-2 focus-visible:ring-offset-[#30251f]";
 
 export default function SiteFooter({ onContact }: SiteFooterProps) {
+  // Host an Event follows the same flow as the hero: signed-in Pro/admin
+  // go straight to the form, everyone else sees the sales page first.
+  const { hostAccess } = useOrganizerActions();
   return (
     <footer className="relative isolate overflow-hidden bg-[#30251f] text-[#f9f0e5]">
       <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-40 h-80 w-80 rounded-full border border-[#9c6a46]/30" />
@@ -34,7 +38,7 @@ export default function SiteFooter({ onContact }: SiteFooterProps) {
             <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.17em] text-[#ffb477]">Discover</h2>
             <ul>
               <li><Link href="/" className={footerLink} data-testid="link-footer-browse-events">Browse Events <ArrowUpRight className="h-3.5 w-3.5 opacity-70" aria-hidden="true" /></Link></li>
-              <li><Link href="/events/new" className={footerLink} data-testid="link-footer-host-event">Host an Event <ArrowUpRight className="h-3.5 w-3.5 opacity-70" aria-hidden="true" /></Link></li>
+              <li><Link href={hostAccess.status === "ready" ? hostAccess.href! : "/organizers"} className={footerLink} data-testid="link-footer-host-event">Host an Event <ArrowUpRight className="h-3.5 w-3.5 opacity-70" aria-hidden="true" /></Link></li>
             </ul>
           </nav>
 
