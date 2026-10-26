@@ -1,8 +1,7 @@
 import { US_STATES } from "./zip-to-state";
 
-// localStorage keys for the Community Board's state filter.
+// localStorage key for the Community Board's state filter.
 const SAVED_STATE_KEY = "vg-state-filter";
-const GEO_TRIED_KEY = "vg-geo-tried";
 
 /**
  * The state filter the visitor last had active — either auto-detected on a
@@ -30,20 +29,30 @@ export function saveStateFilter(state: string): void {
   }
 }
 
-/** True once a geolocation lookup has been attempted (granted, denied, or failed). */
-export function hasTriedGeoDetection(): boolean {
+/**
+ * The visitor's geolocation permission state, via the Permissions API.
+ * Returns "unknown" when the API is unavailable or the query fails — callers
+ * treat that like "prompt" and attempt the lookup, since a genuinely denied
+ * permission fails silently with no popup anyway.
+ */
+export async function getGeolocationPermissionState(): Promise<
+  "granted" | "prompt" | "denied" | "unknown"
+> {
   try {
-    return localStorage.getItem(GEO_TRIED_KEY) === "1";
+    if (!("permissions" in navigator)) return "unknown";
+    const status = await navigator.permissions.query({
+      name: "geolocation",
+    });
+    if (
+      status.state === "granted" ||
+      status.state === "prompt" ||
+      status.state === "denied"
+    ) {
+      return status.state;
+    }
+    return "unknown";
   } catch {
-    return false;
-  }
-}
-
-export function markGeoDetectionTried(): void {
-  try {
-    localStorage.setItem(GEO_TRIED_KEY, "1");
-  } catch {
-    // Ignore: worst case the lookup is attempted again next visit.
+    return "unknown";
   }
 }
 

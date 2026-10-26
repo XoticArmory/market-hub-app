@@ -10,7 +10,7 @@ import { useQueries } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { zipToState, US_STATES } from "@/lib/zip-to-state";
-import { getSavedStateFilter, saveStateFilter, detectUserState, hasTriedGeoDetection, markGeoDetectionTried } from "@/lib/user-state";
+import { getSavedStateFilter, saveStateFilter, detectUserState, getGeolocationPermissionState } from "@/lib/user-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -347,18 +347,24 @@ export default function Home() {
   const [cityMap, setCityMap] = useState<Record<string, string>>({});
   const [zipCoordinates, setZipCoordinates] = useState<Record<string, { latitude: number; longitude: number }>>({});
 
-  // Auto-focus the board on the visitor's home state on first visit. A saved
-  // preference (auto-detected or hand-picked) always wins, and a denied or
-  // failed lookup never re-prompts — the board just shows all states.
+  // Auto-focus the board on the visitor's home state. A saved preference
+  // (auto-detected or hand-picked) always wins. Otherwise the location
+  // prompt appears on every board visit until permission is granted — if it
+  // is already granted the lookup runs silently, and a prompt that vanishes
+  // without a decision simply asks again next visit. Only an explicit
+  // denial ("never allow") ends the asking: the browser reports it as
+  // denied, so no prompt ever appears again and the board shows all states
+  // until the visitor picks one by hand.
   useEffect(() => {
-    if (getSavedStateFilter() !== null || hasTriedGeoDetection()) return;
-    markGeoDetectionTried();
+    if (getSavedStateFilter() !== null) return;
     let cancelled = false;
-    detectUserState().then(detected => {
+    (async () => {
+      if ((await getGeolocationPermissionState()) === "denied") return;
+      const detected = await detectUserState();
       if (cancelled || !detected) return;
       setStateFilter(detected);
       saveStateFilter(detected);
-    });
+    })();
     return () => { cancelled = true; };
   }, []);
 
