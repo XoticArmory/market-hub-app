@@ -242,7 +242,7 @@ export default function ProPage() {
             ))}
           </table>
         </div>
-        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Organizer tools apply when you own an event. Vendor-space registration depends on the event’s setup; external organizer registration may remain available without Pro. Existing non-Pro in-app registrations may carry a 0.5% platform fee.</p>
+        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Organizer tools apply when you own an event. Vendor-space registration depends on the event’s setup; external organizer registration may remain available without Pro. The 0.5% platform fee applies only when a vendor without Pro registers for a space through VendorGrid, added to the space price the vendor pays. Pro members never pay it, and an organizer’s registration code waives it. Organizers always receive the full posted space price.</p>
       </section>
 
       <section className="grid gap-8 rounded-[1.75rem] bg-secondary/50 px-6 py-9 sm:px-10 sm:py-12 lg:grid-cols-[0.75fr_1.25fr] lg:gap-14" aria-labelledby="pro-faq">

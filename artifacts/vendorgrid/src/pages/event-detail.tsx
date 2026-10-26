@@ -56,6 +56,7 @@ const editEventSchema = z.object({
   registrationCode: z.string().optional(),
   contactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   eventWebsiteUrl: z.string().optional(),
+  showApplicantsPublic: z.boolean().optional(),
 });
 type EditEventValues = z.infer<typeof editEventSchema>;
 
@@ -85,6 +86,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       registrationCode: event?.registrationCode || "",
       contactEmail: event?.contactEmail || "",
       eventWebsiteUrl: event?.eventWebsiteUrl || "",
+      showApplicantsPublic: event?.showApplicantsPublic === true,
     },
   });
 
@@ -131,6 +133,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       registrationCode: vals.registrationCode || null,
       contactEmail: vals.contactEmail || null,
       eventWebsiteUrl: vals.eventWebsiteUrl || null,
+      showApplicantsPublic: vals.showApplicantsPublic === true,
       bannerUrl,
       extraDates: extraDates.map((d) => ({
         date: fromLocalInputValue(d.date),
@@ -360,7 +363,7 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
                 <FormItem>
                   <FormLabel className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-primary" />Contact Email</FormLabel>
                   <FormControl><Input {...field} type="email" placeholder="yourname@email.com" data-testid="input-edit-contact-email" /></FormControl>
-                  <p className="text-xs text-muted-foreground">Shown on the event card so anyone can email you.</p>
+                  <p className="text-xs text-muted-foreground">Shown on the event card as an Email organizer button, so anyone can reach you without your address printed on the page.</p>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -369,6 +372,24 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
                   <FormLabel className="flex items-center gap-1.5"><ExternalLink className="w-3.5 h-3.5 text-primary" />Event Website</FormLabel>
                   <FormControl><Input {...field} type="url" placeholder="https://yourevent.com" data-testid="input-edit-event-website" /></FormControl>
                   <p className="text-xs text-muted-foreground">The main link on your event card — shown first when visitors click the website icon.</p>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="showApplicantsPublic" render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-3 rounded-2xl border border-border/60 p-4">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      checked={field.value === true}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      data-testid="input-edit-show-applicants-public"
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    />
+                  </FormControl>
+                  <div>
+                    <FormLabel>Show applicant names publicly</FormLabel>
+                    <p className="text-xs text-muted-foreground">Off by default: applicant names stay private to you. When on, confirmed vendors' names appear on the event page as social proof. Payment statuses are never shown publicly.</p>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -1052,11 +1073,14 @@ export default function EventDetail() {
               <a
                 href={`mailto:${(event as any).contactEmail}`}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                title={`Email organizer: ${(event as any).contactEmail}`}
+                title="Email organizer"
                 data-testid="link-contact-email-detail"
               >
                 <Mail className="w-4 h-4 text-primary" />
-                <span>{(event as any).contactEmail}</span>
+                {/* Address stays in the mailto link, not printed on the
+                    page (Fix 15): visitors reach the organizer through
+                    this button instead of reading the raw address. */}
+                <span>Email organizer</span>
               </a>
             )}
             {/* Email registration contact — shown when contactEmail isn't already the same address */}
@@ -1064,11 +1088,11 @@ export default function EventDetail() {
               <a
                 href={`mailto:${regUrl}`}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                title={`Apply via email: ${regUrl}`}
+                title="Apply via email"
                 data-testid="link-reg-email-detail"
               >
                 <Mail className="w-4 h-4 text-primary" />
-                <span>{regUrl}</span>
+                <span>Apply via email</span>
               </a>
             )}
             {/* Phone registration contact */}
@@ -1076,11 +1100,11 @@ export default function EventDetail() {
               <a
                 href={`tel:${regUrl.replace(/\s/g, '')}`}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                title={`Apply via phone: ${regUrl}`}
+                title="Apply via phone"
                 data-testid="link-reg-phone-detail"
               >
                 <Phone className="w-4 h-4 text-primary" />
-                <span>{regUrl}</span>
+                <span>Apply via phone</span>
               </a>
             )}
           </div>
@@ -1111,23 +1135,33 @@ export default function EventDetail() {
               {/* Apply button — direct-registration types, available to ALL users (free, pro, logged-out) */}
               {!isOwner && !event.canceledAt && (isExternalReg || isFormReg || isEmailReg || isPhoneReg) && (
                 isExternalReg ? (
-                  <Button
-                    size="default"
-                    className="rounded-xl gap-2"
-                    onClick={() => window.open(regUrl!, '_blank', 'noopener,noreferrer')}
-                    data-testid="button-apply-external"
-                  >
-                    <ExternalLink className="w-4 h-4" />Apply
-                  </Button>
+                  <>
+                    <Button
+                      size="default"
+                      className="rounded-xl gap-2"
+                      onClick={() => window.open(regUrl!, '_blank', 'noopener,noreferrer')}
+                      title="Apply on the organizer's site (leaves VendorGrid)"
+                      aria-label="Apply on the organizer's site (leaves VendorGrid)"
+                      data-testid="button-apply-external"
+                    >
+                      <ExternalLink className="w-4 h-4" />Apply
+                    </Button>
+                    <p className="text-xs text-muted-foreground">You&rsquo;ll continue to the organizer&rsquo;s site to apply &mdash; VendorGrid doesn&rsquo;t manage this application.</p>
+                  </>
                 ) : isFormReg ? (
-                  <Button
-                    size="default"
-                    className="rounded-xl gap-2"
-                    onClick={() => window.open(regUrl!, '_blank', 'noopener,noreferrer')}
-                    data-testid="button-apply-form"
-                  >
-                    <ClipboardList className="w-4 h-4" />Apply
-                  </Button>
+                  <>
+                    <Button
+                      size="default"
+                      className="rounded-xl gap-2"
+                      onClick={() => window.open(regUrl!, '_blank', 'noopener,noreferrer')}
+                      title="Apply on the organizer's site (leaves VendorGrid)"
+                      aria-label="Apply on the organizer's site (leaves VendorGrid)"
+                      data-testid="button-apply-form"
+                    >
+                      <ExternalLink className="w-4 h-4" />Apply
+                    </Button>
+                    <p className="text-xs text-muted-foreground">You&rsquo;ll continue to the organizer&rsquo;s site to apply &mdash; VendorGrid doesn&rsquo;t manage this application.</p>
+                  </>
                 ) : isEmailReg ? (
                   <Button
                     size="default"
@@ -1548,7 +1582,9 @@ export default function EventDetail() {
           {(hasVendorSpaces || (canManageEvent && (registrations || []).some((r: any) => r.status === 'intent_pending'))) && (
             <TabsTrigger value="spaces" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <Package className="w-4 h-4 mr-1.5" />Vendor Spaces
-              <Badge variant="secondary" className="ml-2 text-xs">{(registrations || []).filter((r: any) => r.status === 'paid').length}</Badge>
+              {/* Spots taken, not a payment signal: the badge counts
+                  confirmed (paid or approved) spaces. */}
+              <Badge variant="secondary" className="ml-2 text-xs">{(registrations || []).filter((r: any) => r.status === 'paid' || r.status === 'approved').length}</Badge>
             </TabsTrigger>
           )}
           {hasEventMap && (
@@ -2023,13 +2059,21 @@ export default function EventDetail() {
                 </div>
               )}
 
-              {/* Confirmed registrations */}
+              {/* Confirmed registrations — applicant privacy (Fix 17):
+                  names render only for the organizer/admin or when the
+                  organizer opted into public applicant names; amounts
+                  and payment-status badges never render for other viewers. */}
               <div>
                 {canManageEvent && isFormReg && <h3 className="text-base font-semibold mb-3">Confirmed Vendors</h3>}
                 {(registrations || []).filter((r: any) => r.status !== 'awaiting_approval' && r.status !== 'intent_pending').length === 0 ? (
                   <div className="text-center py-12 bg-card rounded-2xl border border-dashed">
                     <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
                     <p className="text-muted-foreground">No vendors registered yet.</p>
+                  </div>
+                ) : !(canManageEvent || (event as any).showApplicantsPublic === true) ? (
+                  <div className="text-center py-12 bg-card rounded-2xl border border-dashed">
+                    <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-muted-foreground">{(registrations || []).filter((r: any) => r.status !== 'awaiting_approval' && r.status !== 'intent_pending').length} vendors registered. Applicant names are private to the organizer.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -2040,15 +2084,19 @@ export default function EventDetail() {
                           <p className="font-semibold truncate">{r.vendorName || "Vendor"}</p>
                           {r.spotName && <p className="text-sm text-muted-foreground">Spot: {r.spotName}</p>}
                         </div>
-                        <div className="text-right shrink-0">
-                          {r.amountCents > 0 && <p className="text-sm font-medium">${(r.amountCents / 100).toFixed(2)}</p>}
-                        </div>
-                        <Badge
-                          variant={r.status === 'paid' || r.status === 'approved' ? 'default' : r.status === 'rejected' ? 'destructive' : r.status === 'canceled' ? 'destructive' : 'outline'}
-                          className={r.status === 'paid' || r.status === 'approved' ? 'bg-green-500' : ''}
-                        >
-                          {r.status === 'paid' ? 'Paid' : r.status === 'approved' ? 'Approved' : r.status === 'rejected' ? 'Declined' : r.status === 'canceled' ? 'Canceled' : r.status}
-                        </Badge>
+                        {canManageEvent && (
+                          <>
+                            <div className="text-right shrink-0">
+                              {r.amountCents > 0 && <p className="text-sm font-medium">${(r.amountCents / 100).toFixed(2)}</p>}
+                            </div>
+                            <Badge
+                              variant={r.status === 'paid' || r.status === 'approved' ? 'default' : r.status === 'rejected' ? 'destructive' : r.status === 'canceled' ? 'destructive' : 'outline'}
+                              className={r.status === 'paid' || r.status === 'approved' ? 'bg-green-500' : ''}
+                            >
+                              {r.status === 'paid' ? 'Paid' : r.status === 'approved' ? 'Approved' : r.status === 'rejected' ? 'Declined' : r.status === 'canceled' ? 'Canceled' : r.status}
+                            </Badge>
+                          </>
+                        )}
                         {r.isPro && <Badge variant="outline" className="text-blue-600 border-blue-300 text-xs gap-1"><Crown className="w-3 h-3" />Pro</Badge>}
                       </div>
                     ))}
