@@ -10,6 +10,7 @@ import { useQueries } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { zipToState, US_STATES } from "@/lib/zip-to-state";
+import { getSavedStateFilter, saveStateFilter, detectUserState, hasTriedGeoDetection, markGeoDetectionTried } from "@/lib/user-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -307,7 +308,7 @@ export default function Home() {
   const [areaFilter, setAreaFilter] = useState<string | undefined>(undefined);
   const [radiusInput, setRadiusInput] = useState("");
   const [radiusFilter, setRadiusFilter] = useState<number | undefined>(undefined);
-  const [stateFilter, setStateFilter] = useState<string>("");
+  const [stateFilter, setStateFilter] = useState<string>(() => getSavedStateFilter() ?? "");
   const [sortOrder, setSortOrder] = useState<"nearest" | "furthest" | "newest">("nearest");
   const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(radiusFilter ? undefined : areaFilter);
   const [, navigate] = useLocation();
@@ -345,6 +346,21 @@ export default function Home() {
 
   const [cityMap, setCityMap] = useState<Record<string, string>>({});
   const [zipCoordinates, setZipCoordinates] = useState<Record<string, { latitude: number; longitude: number }>>({});
+
+  // Auto-focus the board on the visitor's home state on first visit. A saved
+  // preference (auto-detected or hand-picked) always wins, and a denied or
+  // failed lookup never re-prompts — the board just shows all states.
+  useEffect(() => {
+    if (getSavedStateFilter() !== null || hasTriedGeoDetection()) return;
+    markGeoDetectionTried();
+    let cancelled = false;
+    detectUserState().then(detected => {
+      if (cancelled || !detected) return;
+      setStateFilter(detected);
+      saveStateFilter(detected);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const eventZips = (events || []).map(e => e.areaCode).filter(Boolean) as string[];
@@ -418,6 +434,7 @@ export default function Home() {
     setRadiusInput("");
     setRadiusFilter(undefined);
     setStateFilter("");
+    saveStateFilter("");
     setSelectedEventId(null);
   };
 
@@ -484,7 +501,7 @@ export default function Home() {
               </div>
               <Select
                 value={stateFilter}
-                onValueChange={val => setStateFilter(val === "__all__" ? "" : val)}
+                onValueChange={val => { const next = val === "__all__" ? "" : val; setStateFilter(next); saveStateFilter(next); }}
               >
                 <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-state-filter">
                   <SelectValue placeholder="All states" />
