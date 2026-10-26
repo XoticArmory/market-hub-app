@@ -16,6 +16,7 @@ import { ImageUpload } from "@/components/image-upload";
 import { PendingEventDocumentEditor, uploadEventDocument, type PendingEventDocument } from "@/components/event-document-editor";
 import { useToast } from "@/hooks/use-toast";
 import { ORGANIZER_EVENT_PATH, organizerAuthPath, organizerTrialPath } from "@/lib/organizer-flow";
+import { fromLocalInputValue } from "@/lib/datetime";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -102,7 +103,13 @@ export default function AddEvent() {
         endTime: (data as any).endTime || undefined,
         spotPrice: Math.round((data.spotPrice || 0) * 100),
         bannerUrl: bannerUrl || undefined,
-        extraDates,
+        // Convert additional dates to ISO in the browser (local parse), the
+        // same as the main date: sending raw wall-clock strings lets the
+        // server parse them as UTC and shifts the listing by the offset.
+        extraDates: extraDates.map((d) => ({
+          date: fromLocalInputValue(d.date),
+          endTime: d.endTime ? fromLocalInputValue(d.endTime) : "",
+        })),
         notifyMessage: notifyMessage.trim() || undefined,
       });
     } catch {

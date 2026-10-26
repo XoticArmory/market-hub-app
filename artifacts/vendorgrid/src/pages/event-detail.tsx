@@ -22,6 +22,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EventMapEditor } from "@/components/EventMapEditor";
+import { toLocalInputValue, fromLocalInputValue } from "@/lib/datetime";
 import { ImageUpload } from "@/components/image-upload";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -73,8 +74,8 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       description: event?.description || "",
       location: event?.location || "",
       areaCode: event?.areaCode || "",
-      date: event?.date ? new Date(event.date).toISOString().slice(0, 16) : "",
-      endTime: event?.endTime ? new Date(event.endTime).toISOString().slice(0, 16) : "",
+      date: toLocalInputValue(event?.date),
+      endTime: toLocalInputValue(event?.endTime),
       vendorSpaces: event?.vendorSpaces || 0,
       boothWidth: event?.boothWidth || 10,
       boothDepth: event?.boothDepth || 10,
@@ -93,8 +94,8 @@ function EditEventDialog({ event, open, onOpenChange, onSubmit, isPending, onDoc
       description: vals.description,
       location: vals.location,
       areaCode: vals.areaCode || null,
-      date: vals.date,
-      endTime: vals.endTime || null,
+      date: fromLocalInputValue(vals.date),
+      endTime: vals.endTime ? fromLocalInputValue(vals.endTime) : null,
       vendorSpaces: vals.vendorSpaces,
       boothWidth: vals.boothWidth,
       boothDepth: vals.boothDepth,
