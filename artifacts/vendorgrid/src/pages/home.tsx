@@ -309,6 +309,9 @@ export default function Home() {
   const [radiusInput, setRadiusInput] = useState("");
   const [radiusFilter, setRadiusFilter] = useState<number | undefined>(undefined);
   const [stateFilter, setStateFilter] = useState<string>(() => getSavedStateFilter() ?? "");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [dateFilter, setDateFilter] = useState<string>("");
+  const [monthFilter, setMonthFilter] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<"nearest" | "furthest" | "newest">("nearest");
   const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(radiusFilter ? undefined : areaFilter);
   const [, navigate] = useLocation();
@@ -401,9 +404,40 @@ export default function Home() {
       return !!eventCoordinates && distanceInMiles(radiusCenter, eventCoordinates) <= radiusFilter;
     })
     : (events || []);
+  // Date filter: an event matches if its main date OR any extra date falls
+  // in range. All comparisons use the visitor's LOCAL calendar day.
+  const localDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const eventDays = (e: any): Date[] => {
+    const days = [localDay(new Date(e.date))];
+    for (const d of (e.extraDates || [])) days.push(localDay(new Date(d.date)));
+    return days;
+  };
+  const matchesDateFilter = (e: any): boolean => {
+    if (!dateFilter) return true;
+    const today = localDay(new Date());
+    const dayMs = 24 * 60 * 60 * 1000;
+    let start: Date, end: Date;
+    if (dateFilter === "weekend") {
+      const dow = today.getDay();
+      if (dow === 6) { start = today; end = new Date(today.getTime() + dayMs); }
+      else if (dow === 0) { start = today; end = today; }
+      else { start = new Date(today.getTime() + (6 - dow) * dayMs); end = new Date(start.getTime() + dayMs); }
+    } else if (dateFilter === "7days") {
+      start = today; end = new Date(today.getTime() + 6 * dayMs);
+    } else if (dateFilter === "30days") {
+      start = today; end = new Date(today.getTime() + 29 * dayMs);
+    } else if (dateFilter === "month") {
+      if (!monthFilter) return true;
+      const [y, m] = monthFilter.split("-").map(Number);
+      return eventDays(e).some(d => d.getFullYear() === y && d.getMonth() === m - 1);
+    } else return true;
+    return eventDays(e).some(d => d >= start && d <= end);
+  };
   const sortedEvents = [...locationFilteredEvents]
     .filter(e => !stateFilter || (e.areaCode && zipToState(e.areaCode) === stateFilter))
     .filter(e => matchesEventSearch(e, searchQuery, e.areaCode ? cityMap[e.areaCode] : ""))
+    .filter(e => !categoryFilter || (e as any).category === categoryFilter)
+    .filter(e => matchesDateFilter(e))
     .sort((a, b) => {
       if (sortOrder === "newest") return compareNewestAdded(a, b);
       const diff = getNextDate(a).getTime() - getNextDate(b).getTime();
@@ -433,7 +467,7 @@ export default function Home() {
     setRadiusFilter(radiusValue ? parsedRadius : undefined);
   };
 
-  const hasActiveFilters = !!(searchInput.trim() || searchQuery || stateFilter || areaFilter || radiusFilter);
+  const hasActiveFilters = !!(searchInput.trim() || searchQuery || stateFilter || areaFilter || radiusFilter || categoryFilter || dateFilter);
   const clearSearch = () => {
     setSearchInput("");
     setSearchQuery("");
@@ -446,6 +480,9 @@ export default function Home() {
     setRadiusFilter(undefined);
     setStateFilter("");
     saveStateFilter("");
+    setCategoryFilter("");
+    setDateFilter("");
+    setMonthFilter("");
     setSelectedEventId(null);
   };
 
@@ -554,6 +591,53 @@ export default function Home() {
                   <SelectItem value="100">Within 100 mi</SelectItem>
                 </SelectContent>
               </Select>
+              <Select
+                value={categoryFilter || "__all__"}
+                onValueChange={val => setCategoryFilter(val === "__all__" ? "" : val)}
+              >
+                <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-category-filter">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All categories</SelectItem>
+                  <SelectItem value="Farmers Market">Farmers Market</SelectItem>
+                  <SelectItem value="Craft Fair">Craft Fair</SelectItem>
+                  <SelectItem value="Festival">Festival</SelectItem>
+                  <SelectItem value="Pop-up">Pop-up</SelectItem>
+                  <SelectItem value="Flea Market">Flea Market</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={dateFilter || "__all__"}
+                onValueChange={val => {
+                  const next = val === "__all__" ? "" : val;
+                  setDateFilter(next);
+                  if (next === "month" && !monthFilter) {
+                    const now = new Date();
+                    setMonthFilter(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+                  }
+                }}
+              >
+                <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-date-filter">
+                  <SelectValue placeholder="All dates" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All dates</SelectItem>
+                  <SelectItem value="weekend">This weekend</SelectItem>
+                  <SelectItem value="7days">Next 7 days</SelectItem>
+                  <SelectItem value="30days">Next 30 days</SelectItem>
+                  <SelectItem value="month">Choose month</SelectItem>
+                </SelectContent>
+              </Select>
+              {dateFilter === "month" && (
+                <Input
+                  data-testid="input-month-filter"
+                  type="month"
+                  value={monthFilter}
+                  onChange={e => setMonthFilter(e.target.value)}
+                  className="rounded-xl h-10 w-36 text-sm"
+                />
+              )}
               <Button size="sm" variant="outline" onClick={() => handleApplyFilters()} aria-label="Apply filters" className="rounded-xl h-10" data-testid="button-filter">
                 <Filter className="w-4 h-4 mr-1" /> Apply filters
               </Button>
@@ -621,12 +705,14 @@ export default function Home() {
               {sortedEvents.length === 1 ? "event" : "events"} found
             </p>
           )}
-          {(stateFilter || areaFilter) && (
+          {(stateFilter || areaFilter || categoryFilter || dateFilter) && (
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               {stateFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><MapPin className="w-3 h-3 mr-1" />State: {US_STATES.find(s => s.abbr === stateFilter)?.name ?? stateFilter}</Badge>}
               {areaFilter && radiusFilter
                 ? <Badge variant="secondary" className="text-sm py-1.5 px-3"><Navigation className="w-3 h-3 mr-1" />Within {radiusFilter} mi of {areaFilter}</Badge>
                 : areaFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><Hash className="w-3 h-3 mr-1" />Zip: {areaFilter}</Badge>}
+              {categoryFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3">Category: {categoryFilter}</Badge>}
+              {dateFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3">{dateFilter === "weekend" ? "This weekend" : dateFilter === "7days" ? "Next 7 days" : dateFilter === "30days" ? "Next 30 days" : `Month: ${monthFilter}`}</Badge>}
             </div>
           )}
           {isLoadingEvents || isLoadingRadiusCoordinates ? (
