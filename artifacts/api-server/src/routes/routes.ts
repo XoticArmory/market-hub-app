@@ -810,7 +810,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { registrationCode: rawCode, ...eventWithoutCode } = event;
     const responseEvent = canSeeCode ? { ...event } : { ...eventWithoutCode };
     const eventDocuments = await visibleEventDocuments(event, requesterId);
-    res.json({ ...responseEvent, vendorSpacesUsed: approvedCount, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees, registrations, isFeatured, pinColor, documents: eventDocuments });
+    // Applicant privacy (Fix 17): the public payload never carries other
+    // vendors' identities or payment data. Owners/admins see everything;
+    // everyone else sees only their own record, plus taken spots reduced
+    // to spotId + 'approved' (the page needs that to mark spots
+    // unavailable — the paid/approved distinction is not public). The
+    // vendor-attendee list is public only when the organizer opted in.
+    const isOwnerOrAdmin = isRequesterAdmin || requesterId === event.createdBy;
+    const publicRegistrations = isOwnerOrAdmin
+      ? registrations
+      : registrations.flatMap((r: any) =>
+          r.vendorId === requesterId
+            ? [r]
+            : (r.status === 'paid' || r.status === 'approved')
+              ? [{ spotId: r.spotId, status: 'approved' }]
+              : []);
+    const publicAttendees = (isOwnerOrAdmin || (event as any).showApplicantsPublic === true) ? vendorAttendees : [];
+    res.json({ ...responseEvent, vendorSpacesUsed: approvedCount, creatorName: creator.name, creatorTier: creatorProfile?.subscriptionTier, creatorWebsiteUrl, extraDates, attendingCount, interestedCount, userStatus, vendorAttendees: publicAttendees, registrations: publicRegistrations, isFeatured, pinColor, documents: eventDocuments });
   });
 
   app.post(api.events.create.path, isAuthenticated, async (req: any, res) => {
@@ -885,7 +901,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const isAdmin = profile?.isAdmin === true;
     if (event.createdBy !== userId && !isAdmin) return res.status(403).json({ message: "Forbidden" });
     if (!isPro(profile) && !isAdmin) return res.status(403).json({ message: "Pro subscription required to edit events." });
-    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'endTime', 'vendorSpaces', 'boothWidth', 'boothDepth', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail', 'bannerUrl'];
+    const allowed = ['title', 'description', 'location', 'areaCode', 'date', 'endTime', 'vendorSpaces', 'boothWidth', 'boothDepth', 'spotPrice', 'registrationCode', 'vendorRegistrationType', 'vendorRegistrationUrl', 'contactEmail', 'bannerUrl', 'showApplicantsPublic'];
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (key in req.body) data[key] = req.body[key];
@@ -2111,13 +2127,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get(api.vendorRegistrations.listByEvent.path, async (req, res) => {
     const eventId = Number(req.params.eventId);
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    const requesterId = (req as any).user?.claims?.sub;
+    const requesterProfile = requesterId ? await storage.getUserProfile(requesterId) : null;
+    const isOwnerOrAdmin = requesterProfile?.isAdmin === true || requesterId === event.createdBy;
+    const showPublic = (event as any).showApplicantsPublic === true;
     const regs = await storage.getVendorRegistrations(eventId);
     const enriched = await Promise.all(regs.map(async r => {
       const u = await enrichUser(r.vendorId);
       const vp = await storage.getUserProfile(r.vendorId);
       return { ...r, vendorName: vp?.businessName || u.name, vendorAvatar: u.avatar };
     }));
-    res.json(enriched);
+    if (isOwnerOrAdmin) return res.json(enriched);
+    // Public view (Fix 17): own records in full; other vendors' booked
+    // spots only, with names only when the organizer opted into public
+    // applicant names. Amounts, fees, payment intents, and pending or
+    // rejected applications never leave the server for other vendors.
+    const visible = enriched.flatMap((r: any) =>
+      r.vendorId === requesterId
+        ? [r]
+        : (r.status === 'paid' || r.status === 'approved')
+          ? [{
+              id: r.id,
+              spotId: r.spotId,
+              spotName: r.spotName,
+              status: 'approved',
+              ...(showPublic ? { vendorName: r.vendorName, vendorAvatar: r.vendorAvatar } : {}),
+            }]
+          : []);
+    return res.json(visible);
   });
 
   app.post(api.vendorRegistrations.create.path, isAuthenticated, async (req: any, res) => {

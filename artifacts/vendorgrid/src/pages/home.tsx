@@ -731,7 +731,7 @@ export default function Home() {
                                 <a
                                   href={`mailto:${cardContactEmail}`}
                                   className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  title={`Email organizer: ${cardContactEmail}`}
+                                  title="Email organizer"
                                    aria-label={`Email organizer of ${event.title}`}
                                   data-testid={`link-event-email-${event.id}`}
                                   onClick={(e) => e.stopPropagation()}
@@ -744,7 +744,7 @@ export default function Home() {
                                 <a
                                   href={`mailto:${cardRegUrl}`}
                                   className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  title={`Apply via email: ${cardRegUrl}`}
+                                  title="Apply via email"
                                    aria-label={`Apply to ${event.title} by email`}
                                   data-testid={`link-event-reg-email-${event.id}`}
                                   onClick={(e) => e.stopPropagation()}
@@ -757,7 +757,7 @@ export default function Home() {
                                 <a
                                   href={`tel:${cardRegUrl.replace(/\s/g, '')}`}
                                   className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  title={`Apply via phone: ${cardRegUrl}`}
+                                  title="Apply via phone"
                                    aria-label={`Apply to ${event.title} by phone`}
                                   data-testid={`link-event-reg-phone-${event.id}`}
                                   onClick={(e) => e.stopPropagation()}
@@ -858,12 +858,17 @@ export default function Home() {
                                     window.open(normalizeUrl(regUrl!), '_blank', 'noopener,noreferrer');
                                   }
                                 };
-                                const ApplyIcon = regType === 'email' ? Mail : regType === 'phone' ? Phone : regType === 'form' ? ClipboardList : ExternalLink;
+                                // External apply (form/site): the button leaves
+                                // VendorGrid — say so with icon + label.
+                                const isExternalApply = regType !== 'email' && regType !== 'phone';
+                                const ApplyIcon = regType === 'email' ? Mail : regType === 'phone' ? Phone : ExternalLink;
                                 return (
                                   <Button
                                     size="sm"
                                     className="rounded-xl gap-1.5 h-8 text-xs"
                                     onClick={handleApply}
+                                    title={isExternalApply ? "Apply on the organizer's site (leaves VendorGrid)" : undefined}
+                                    aria-label={isExternalApply ? `Apply to ${event.title} on the organizer's site (leaves VendorGrid)` : undefined}
                                     data-testid={`button-apply-card-${event.id}`}
                                   >
                                     <ApplyIcon className="w-3.5 h-3.5" />Apply

@@ -48,6 +48,11 @@ export const events = pgTable("events", {
   bannerUrl: text("banner_url"),
   contactEmail: text("contact_email"),
   eventWebsiteUrl: text("event_website_url"),
+  // Applicant-name visibility (Fix 17): false = applicant names stay
+  // private to the organizer (default, including all existing listings);
+  // true = names may appear publicly as social proof. Payment statuses
+  // are never public regardless of this setting.
+  showApplicantsPublic: boolean("show_applicants_public").default(false).notNull(),
   createdBy: varchar("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   canceledAt: timestamp("canceled_at"),

@@ -28,8 +28,8 @@ export interface EventDiscoveryMapProps {
 }
 
 const PIN_LABELS: Record<EventPinColor, string> = {
-  admin: "Admin-owned",
-  pro: "Pro-owned",
+  admin: "Listed by VendorGrid",
+  pro: "Listed by organizer",
   default: "Other events",
 };
 

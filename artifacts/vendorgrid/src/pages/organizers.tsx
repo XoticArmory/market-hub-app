@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, CalendarPlus, ClipboardList, CreditCard, Smartphone, Check, Store, MapPinned } from "lucide-react";
+import { ArrowRight, CalendarPlus, Camera, ClipboardList, CreditCard, Package, Smartphone, Check, Store, MapPinned } from "lucide-react";
 import { useOrganizerActions } from "@/hooks/use-organizer-actions";
 
 const benefits = [
@@ -8,6 +8,8 @@ const benefits = [
   { icon: ClipboardList, title: "Vendor applications", body: "Collect applications in one place, review who wants a booth, and keep your vendor list tidy." },
   { icon: CreditCard, title: "Stripe and Square registration payments", body: "Connect your own Stripe or Square account so registration fees go to you." },
   { icon: Smartphone, title: "Made for the phone in your pocket", body: "Every step works on mobile, whether you are at your desk or loading in at the lot." },
+  { icon: Package, title: "Inventory management", body: "Track what you make and what you sell, so your booth stock and your listings stay in step." },
+  { icon: Camera, title: "Photo listings of your wares", body: "Show shoppers what you sell — a potter's mugs, a quilter's table runners — with photo listings that travel with you to every market." },
 ];
 
 const steps = [
@@ -70,9 +72,9 @@ export default function OrganizersPage() {
         <div className="pointer-events-none absolute -right-9 -top-20 h-[20rem] w-[20rem] rounded-full border border-[#b87343]/25" aria-hidden="true" />
         <div className={`relative grid gap-10 px-6 py-12 sm:px-10 sm:py-16 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:gap-16 lg:px-16 lg:py-20 ${reveal}`}>
           <div>
-            <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-[#ffb477]"><MapPinned className="h-4 w-4" aria-hidden="true" /> For organizers</span>
+            <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-[#ffb477]"><MapPinned className="h-4 w-4" aria-hidden="true" /> For vendors and organizers — one membership</span>
             <h1 id="org-title" className="mt-6 max-w-2xl font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">Host your market. Skip the spreadsheet.</h1>
-            <p className="mt-6 max-w-xl text-base leading-relaxed text-[#f1d9c8] sm:text-lg">VendorGrid helps neighborhood market organizers list events, take vendor applications, and collect registration payments, with no commission to us on registrations.</p>
+            <p className="mt-6 max-w-xl text-base leading-relaxed text-[#f1d9c8] sm:text-lg">VendorGrid helps neighborhood market organizers list events, take vendor applications, and collect registration payments, with no commission to us on registrations. And if you sell at markets, the same membership manages your inventory, shows off your wares with photos, and alerts you when a new event opens near you.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               {cta("post-event-hero", "Post an event", postEventHref, `${base} bg-[#fff3e7] text-[#412b22] hover:bg-[#ffe3c9]`, true)}
               {cta("start-trial-hero", "Start free trial", startTrialHref, `${base} border border-[#d9b9a1]/50 text-[#fff3e7] hover:bg-[#583c2f]`)}
@@ -136,7 +138,7 @@ export default function OrganizersPage() {
               <span className="text-sm text-muted-foreground">{annual ? "/ year" : "/ month"}</span>
             </div>
             <ul className="mt-6 space-y-3 text-sm">
-              {["14-day free trial", "0% platform commission on registrations", "Event listings and vendor applications", "Stripe and Square registration payments"].map((f) => (
+              {["14-day free trial", "0% platform commission on registrations", "Event listings and vendor applications", "Stripe and Square registration payments", "Inventory management and photo listings of your wares", "Notifications of new events in your area"].map((f) => (
                 <li key={f} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />{f}</li>
               ))}
             </ul>
