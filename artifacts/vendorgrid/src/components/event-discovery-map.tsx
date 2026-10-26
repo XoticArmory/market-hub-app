@@ -11,6 +11,7 @@ export interface DiscoveryMapEvent {
   latitude?: number | string | null;
   longitude?: number | string | null;
   pinColor?: EventPinColor | null;
+  organizerName?: string | null;
   date?: string | Date | null;
   endTime?: string | Date | null;
   location?: string | null;
@@ -34,6 +35,15 @@ const PIN_LABELS: Record<EventPinColor, string> = {
 
 function pinColor(value: DiscoveryMapEvent["pinColor"]): EventPinColor {
   return value === "admin" || value === "pro" ? value : "default";
+}
+
+// Popup/title attribution: admin pins show the role, Pro pins show the
+// organizer's name. The legend keeps PIN_LABELS (Paste 4 relabels it).
+function popupLabel(event: DiscoveryMapEvent): string {
+  const color = pinColor(event.pinColor);
+  if (color === "admin") return "Organizer";
+  if (color === "pro") return event.organizerName || "Pro-owned";
+  return PIN_LABELS.default;
 }
 
 function coordinates(event: DiscoveryMapEvent): L.LatLngTuple | null {
@@ -87,7 +97,7 @@ function makePopup(event: DiscoveryMapEvent): HTMLElement {
   body.className = "vg-map-popup__body";
   const eyebrow = document.createElement("div");
   eyebrow.className = "vg-map-popup__eyebrow";
-  eyebrow.textContent = PIN_LABELS[pinColor(event.pinColor)];
+  eyebrow.textContent = popupLabel(event);
   body.append(eyebrow);
   const title = document.createElement("h3");
   title.className = "vg-map-popup__title";
@@ -178,7 +188,7 @@ export function EventDiscoveryMap({ events, selectedEventId, className = "" }: E
       const marker = L.marker(point, {
         icon: createPin(pinColor(event.pinColor), id === selectedRef.current),
         keyboard: true,
-        title: `${event.title} — ${PIN_LABELS[pinColor(event.pinColor)]}`,
+        title: `${event.title} — ${popupLabel(event)}`,
         alt: `${event.title} map pin`,
       }).addTo(layer);
       marker.bindPopup(makePopup(event), {

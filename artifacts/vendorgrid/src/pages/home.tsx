@@ -413,6 +413,7 @@ export default function Home() {
     ...event,
     date: getNextDate(event),
     pinColor: event.pinColor ?? "default",
+    organizerName: (event as any).creatorName ?? null,
     latitude: event.areaCode ? zipCoordinates[event.areaCode]?.latitude ?? null : null,
     longitude: event.areaCode ? zipCoordinates[event.areaCode]?.longitude ?? null : null,
   }));
