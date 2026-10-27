@@ -436,7 +436,7 @@ export default function Home() {
   const sortedEvents = [...locationFilteredEvents]
     .filter(e => !stateFilter || (e.areaCode && zipToState(e.areaCode) === stateFilter))
     .filter(e => matchesEventSearch(e, searchQuery, e.areaCode ? cityMap[e.areaCode] : ""))
-    .filter(e => !categoryFilter || (e as any).category === categoryFilter)
+    .filter(e => !categoryFilter || (categoryFilter === "__uncategorized__" ? !(e as any).category : (e as any).category === categoryFilter))
     .filter(e => matchesDateFilter(e))
     .sort((a, b) => {
       if (sortOrder === "newest") return compareNewestAdded(a, b);
@@ -605,6 +605,7 @@ export default function Home() {
                   <SelectItem value="Festival">Festival</SelectItem>
                   <SelectItem value="Pop-up">Pop-up</SelectItem>
                   <SelectItem value="Flea Market">Flea Market</SelectItem>
+                  <SelectItem value="__uncategorized__">Uncategorized</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -711,7 +712,7 @@ export default function Home() {
               {areaFilter && radiusFilter
                 ? <Badge variant="secondary" className="text-sm py-1.5 px-3"><Navigation className="w-3 h-3 mr-1" />Within {radiusFilter} mi of {areaFilter}</Badge>
                 : areaFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3"><Hash className="w-3 h-3 mr-1" />Zip: {areaFilter}</Badge>}
-              {categoryFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3">Category: {categoryFilter}</Badge>}
+              {categoryFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3">Category: {categoryFilter === "__uncategorized__" ? "Uncategorized" : categoryFilter}</Badge>}
               {dateFilter && <Badge variant="secondary" className="text-sm py-1.5 px-3">{dateFilter === "weekend" ? "This weekend" : dateFilter === "7days" ? "Next 7 days" : dateFilter === "30days" ? "Next 30 days" : `Month: ${monthFilter}`}</Badge>}
             </div>
           )}
