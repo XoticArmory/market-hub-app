@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { HelpBot } from "@/components/help-bot";
 import SiteFooter from "@/components/site-footer";
 import { useEffect, useState } from "react";
 import { Bell, Lightbulb, X, Send, Loader2, CheckCircle2, Rocket, Plus, Pencil, Trash2, Calendar, Users, Clock } from "lucide-react";
@@ -490,6 +491,7 @@ function App() {
                 </div>
                 <SiteFooter onContact={() => setContactOpen(true)} />
               </main>
+              <HelpBot />
             </div>
           </div>
         </SidebarProvider>
