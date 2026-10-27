@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /events/new
+Disallow: /manage-markets
+Disallow: /chat
+Disallow: /profile
+Disallow: /auth
+Disallow: /tour
+Disallow: /setup
+Disallow: /upgrade
+Disallow: /cogs
+Disallow: /documents
+Disallow: /my-files
+Disallow: /inventory
+
+Sitemap: https://www.vendorgrid.net/sitemap.xml
