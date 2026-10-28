@@ -17,3 +17,4 @@ Disallow: /inventory
 
 Sitemap: https://www.vendorgrid.net/sitemap.xml
 Sitemap: https://www.vendorgrid.net/sitemap-events.xml
+Sitemap: https://www.vendorgrid.net/sitemap-locations.xml
