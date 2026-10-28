@@ -357,6 +357,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(stats);
   });
 
+  // ---- RETURNING-USER PAGE-OPEN TRACKING (signed-in users only) ----
+  app.post('/api/track/page-open', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      if (await isAdminUser(userId)) return res.json({ ok: true }); // admins are never counted
+      await storage.recordUserPageOpen(userId);
+      return res.json({ ok: true });
+    } catch {
+      return res.json({ ok: true }); // silently succeed even on error
+    }
+  });
+
+  // ---- APP-INSTALL TRACKING (public, no auth required) ----
+  app.post('/api/track/app-install', async (req, res) => {
+    try {
+      await storage.recordAppInstall();
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: true }); // silently succeed even on error
+    }
+  });
+
+  app.get('/api/admin/returning-users', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const stats = await storage.getReturningUserStats();
+    return res.json(stats);
+  });
+
+  app.get('/api/admin/app-installs', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const stats = await storage.getAppInstallStats();
+    return res.json(stats);
+  });
+
   // ---- ENSURE SUPABASE STORAGE BUCKETS EXIST ----
   (async () => {
     const supabase = getStorageClient();

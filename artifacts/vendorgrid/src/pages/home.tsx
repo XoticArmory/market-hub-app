@@ -63,7 +63,10 @@ function PwaInstallBanner() {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
-    if (outcome === "accepted") setInstallPrompt(null);
+    if (outcome === "accepted") {
+      setInstallPrompt(null);
+      fetch("/api/track/app-install", { method: "POST" }).catch(() => {});
+    }
   };
 
   const handleDismiss = () => {
