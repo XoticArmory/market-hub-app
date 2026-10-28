@@ -3577,6 +3577,56 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ---- Dynamic event sitemap ----
+  // One URL per event the public board shows: storage.getEvents() already
+  // encodes the board's rules (an upcoming date on the event or one of its
+  // additional dates, no drafts, recently-cancelled grace period), so the
+  // sitemap can never drift from what visitors see. Served at the site root
+  // beside the static /sitemap.xml; robots.txt points crawlers here.
+  // URLs use the canonical www host (not the request host) so the sitemap
+  // never lists the bare domain, which has no www redirect yet.
+  app.get("/sitemap-events.xml", async (req: any, res) => {
+    if (circuitIsOpen()) {
+      return res.status(503).json({ message: "Database temporarily unavailable — retrying shortly" });
+    }
+    try {
+      // Hard 5-second timeout, mirroring the public events list route.
+      const dbTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => {
+          const err = new Error("DB connection timeout") as any;
+          err.code = "ETIMEOUT";
+          reject(err);
+        }, 5_000)
+      );
+      const events = await Promise.race([storage.getEvents(), dbTimeout]);
+      circuitSuccess();
+      const base = "https://www.vendorgrid.net";
+      const urls = events.map((e) => {
+        const lastmod = e.createdAt ? new Date(e.createdAt).toISOString().slice(0, 10) : "";
+        return (
+          `  <url>\n    <loc>${base}/events/${e.id}</loc>\n` +
+          (lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : "") +
+          `    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`
+        );
+      }).join("\n");
+      const xml =
+        `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+        (urls ? urls + "\n" : "") +
+        `</urlset>\n`;
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      // Overrides app.ts's global no-store: event lists change at most
+      // daily (the scan), so an hour of caching is safe and keeps crawler
+      // traffic off the database.
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.send(xml);
+    } catch (err: any) {
+      circuitFailure();
+      req.log.warn({ errCode: err.code, errMsg: err.message }, "events sitemap DB error — circuit recorded");
+      return res.status(503).json({ message: "Database temporarily unavailable — please refresh in a moment" });
+    }
+  });
+
   // Railway runs VendorGrid as one service and copies the frontend build into
   // the API bundle. Replit artifact deployments serve the web artifact
   // separately, so enabling this there would look for a nonexistent directory
