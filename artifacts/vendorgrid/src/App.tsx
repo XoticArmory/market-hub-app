@@ -76,6 +76,33 @@ function OnboardingGuard() {
   return null;
 }
 
+// Records one page open per calendar day per browser for signed-in
+// non-admin users, powering the admin "Returning Users" tracker. Never
+// throws, never blocks rendering, never redirects.
+const PAGE_OPEN_DATE_KEY = "vg_page_open_date";
+
+function PageOpenTracker() {
+  const { isAuthenticated } = useAuth();
+  const { data: profileData } = useProfile();
+  const [location] = useLocation();
+
+  useEffect(() => {
+    try {
+      if (!isAuthenticated) return;
+      if (profileData === undefined) return; // profile still loading
+      if (profileData?.profile?.isAdmin) return;
+      const today = new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
+      if (localStorage.getItem(PAGE_OPEN_DATE_KEY) === today) return;
+      localStorage.setItem(PAGE_OPEN_DATE_KEY, today); // set when sending so failures don't spam
+      fetch("/api/track/page-open", { method: "POST", credentials: "include" }).catch(() => {});
+    } catch {
+      // never throw
+    }
+  }, [isAuthenticated, profileData, location]);
+
+  return null;
+}
+
 function FeedbackButton() {
   const { isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
@@ -494,6 +521,7 @@ function App() {
               <main className="flex flex-col flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
                 <div className="p-4 md:p-8 lg:p-12 flex-1">
                   <OnboardingGuard />
+                  <PageOpenTracker />
                   <Router />
                 </div>
                 <SiteFooter onContact={() => setContactOpen(true)} />

@@ -4,7 +4,7 @@ import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, vendorInventorySales, roadmapItems,
-  promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries,
+  promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries, userPageOpens, appInstalls,
   vendorItemCogs, vendorEventOverhead, documents, eventDocuments, userFiles, directMessages,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
@@ -114,6 +114,12 @@ export interface IStorage {
   getAdminStats(): Promise<any>;
   recordAnonymousClick(eventId: number, sessionId: string): Promise<void>;
   getAnonymousClickStats(): Promise<any>;
+
+  // Returning Users + App Downloads (admin trackers)
+  recordUserPageOpen(userId: string): Promise<void>;
+  getReturningUserStats(): Promise<any>;
+  recordAppInstall(): Promise<void>;
+  getAppInstallStats(): Promise<any>;
 
   // Profile Views
   recordProfileView(profileUserId: string, viewerUserId?: string): Promise<void>;
@@ -770,6 +776,62 @@ export class DatabaseStorage implements IStorage {
 
   async recordAnonymousClick(eventId: number, sessionId: string): Promise<void> {
     await db.insert(anonymousEventClicks).values({ eventId, sessionId });
+  }
+
+  async recordUserPageOpen(userId: string): Promise<void> {
+    await db.insert(userPageOpens).values({ userId, day: sql`CURRENT_DATE` }).onConflictDoNothing({ target: [userPageOpens.userId, userPageOpens.day] });
+  }
+
+  async getReturningUserStats(): Promise<any> {
+    // A non-admin user counts in a window when they have page opens on at
+    // least 2 distinct days overall AND at least one open inside the window.
+    // Admins are excluded via the user_profiles join (a missing profile is
+    // treated as non-admin, matching the "exclude is_admin = true" rule).
+    const result = await pool.query(`
+      SELECT
+        count(*) FILTER (WHERE today_active)::int AS today,
+        count(*) FILTER (WHERE week_active)::int  AS week,
+        count(*) FILTER (WHERE month_active)::int AS month
+      FROM (
+        SELECT upo.user_id,
+          bool_or(upo.day >= CURRENT_DATE)::boolean AS today_active,
+          bool_or(upo.created_at >= NOW() - INTERVAL '7 days')::boolean AS week_active,
+          bool_or(upo.created_at >= NOW() - INTERVAL '30 days')::boolean AS month_active
+        FROM user_page_opens upo
+        LEFT JOIN user_profiles up ON up.user_id = upo.user_id
+        WHERE up.is_admin IS NOT TRUE
+        GROUP BY upo.user_id
+        HAVING count(DISTINCT upo.day) >= 2
+      ) t
+    `);
+    const row = result.rows[0] ?? {};
+    return {
+      today: row.today ?? 0,
+      week: row.week ?? 0,
+      month: row.month ?? 0,
+    };
+  }
+
+  async recordAppInstall(): Promise<void> {
+    await db.insert(appInstalls).values({});
+  }
+
+  async getAppInstallStats(): Promise<any> {
+    const result = await pool.query(`
+      SELECT
+        count(*)::int                                                            AS total,
+        count(*) FILTER (WHERE created_at >= CURRENT_DATE)::int                 AS today_total,
+        count(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int    AS week_total,
+        count(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int   AS month_total
+      FROM app_installs
+    `);
+    const row = result.rows[0] ?? {};
+    return {
+      total: row.total ?? 0,
+      todayTotal: row.today_total ?? 0,
+      weekTotal: row.week_total ?? 0,
+      monthTotal: row.month_total ?? 0,
+    };
   }
 
   async getAnonymousClickStats(): Promise<any> {

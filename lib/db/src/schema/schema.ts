@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, varchar, boolean, jsonb, numeric, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, varchar, boolean, jsonb, numeric, unique, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./auth";
@@ -359,6 +359,26 @@ export const anonymousEventClicks = pgTable("anonymous_event_clicks", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id").references(() => events.id, { onDelete: "set null" }),
   sessionId: text("session_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// One row per user per calendar day they opened a page. Powers the admin
+// "Returning Users" tracker: a user counts as returning once they have rows
+// on at least 2 distinct days. Rows are only written for non-admin users
+// (the API route skips admins); admin rows, if any ever appear, are excluded
+// by the stats query's join on user_profiles.
+export const userPageOpens = pgTable("user_page_opens", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  day: date("day").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => [unique("user_page_opens_user_day_unique").on(t.userId, t.day)]);
+
+// One row per accepted PWA "Install App" prompt. Powers the admin
+// "App Downloads" tracker. iPhone installs via Share -> Add to Home Screen
+// fire no prompt the site can observe, so they cannot be counted here.
+export const appInstalls = pgTable("app_installs", {
+  id: serial("id").primaryKey(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

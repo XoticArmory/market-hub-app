@@ -49,6 +49,32 @@ function useAnonymousClickStats() {
   });
 }
 
+function useReturningUserStats() {
+  return useQuery({
+    queryKey: ["/api/admin/returning-users"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/returning-users", { credentials: "include" });
+      if (res.status === 403) return null;
+      if (!res.ok) return null;
+      return res.json();
+    },
+    retry: false,
+  });
+}
+
+function useAppInstallStats() {
+  return useQuery({
+    queryKey: ["/api/admin/app-installs"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/app-installs", { credentials: "include" });
+      if (res.status === 403) return null;
+      if (!res.ok) return null;
+      return res.json();
+    },
+    retry: false,
+  });
+}
+
 function useAdminAllEvents() {
   return useQuery({
     queryKey: ["/api/admin/events"],
@@ -248,6 +274,8 @@ export default function AdminPage() {
   const { mutate: claimAdmin, isPending: claimingAdmin } = useClaimAdmin();
   const { data: stats, isLoading: loadingStats } = useAdminStats();
   const { data: anonClicks, isLoading: loadingAnonClicks } = useAnonymousClickStats();
+  const { data: returningUsers } = useReturningUserStats();
+  const { data: appInstalls } = useAppInstallStats();
   const { data: allEvents, isLoading: loadingEvents } = useAdminAllEvents();
   const { data: registrations, isLoading: loadingRegs } = useAdminRegistrations();
   const { toast } = useToast();
@@ -364,6 +392,72 @@ export default function AdminPage() {
                 <StatCard label="Vendors" value={stats.totalVendors} />
                 <StatCard label="Event Owners" value={stats.totalEventOwners} />
               </div>
+
+              {/* Returning Users */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" />
+                    Returning Users
+                  </CardTitle>
+                  <CardDescription>Non-admin users active in the window who have opened pages on at least 2 different days. Counting starts when this update deploys; earlier activity isn't recorded.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {returningUsers ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-muted/50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-foreground" data-testid="stat-returning-today">{returningUsers.today ?? 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Today</p>
+                      </div>
+                      <div className="bg-muted/50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-foreground" data-testid="stat-returning-week">{returningUsers.week ?? 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Last 7 Days</p>
+                      </div>
+                      <div className="bg-muted/50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-foreground" data-testid="stat-returning-month">{returningUsers.month ?? 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Last 30 Days</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No data available</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* App Downloads */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-primary" />
+                    App Downloads
+                  </CardTitle>
+                  <CardDescription>Counts accepted Install App prompts on Android/desktop. iPhone installs via Share → Add to Home Screen can't be counted by the site.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {appInstalls ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-muted/50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-foreground" data-testid="stat-installs-total">{appInstalls.total ?? 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Total</p>
+                      </div>
+                      <div className="bg-muted/50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-foreground" data-testid="stat-installs-today">{appInstalls.todayTotal ?? 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Today</p>
+                      </div>
+                      <div className="bg-muted/50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-foreground" data-testid="stat-installs-week">{appInstalls.weekTotal ?? 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Last 7 Days</p>
+                      </div>
+                      <div className="bg-muted/50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-bold text-foreground" data-testid="stat-installs-month">{appInstalls.monthTotal ?? 0}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Last 30 Days</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No data available</p>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Revenue breakdown */}
               <Card>
