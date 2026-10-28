@@ -867,8 +867,46 @@ export default function EventDetail() {
     );
   }
 
+  // schema.org/Event markup for search engines. Built with JSON.stringify
+  // from data the page already displays — nothing is invented. Organizer
+  // appears only for genuine Pro listings (admin listings show the generic
+  // "By Organizer" label, which is not a name). Multi-date events use the
+  // main date only. The "<" escape keeps a description from ever breaking
+  // out of the script tag; it is still valid JSON.
+  const rawBanner = (event as any).bannerUrl as string | undefined;
+  const absoluteBanner = rawBanner
+    ? (rawBanner.startsWith("http://") || rawBanner.startsWith("https://")
+      ? rawBanner
+      : `https://www.vendorgrid.net${rawBanner.startsWith("/") ? "" : "/"}${rawBanner}`)
+    : undefined;
+  const eventJsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: event.title,
+    startDate: new Date(event.date).toISOString(),
+    ...(event.endTime ? { endDate: new Date(event.endTime).toISOString() } : {}),
+    location: {
+      "@type": "Place",
+      name: event.location,
+      ...(event.areaCode
+        ? { address: { "@type": "PostalAddress", postalCode: event.areaCode } }
+        : {}),
+    },
+    description: event.description,
+    ...(absoluteBanner ? { image: absoluteBanner } : {}),
+    url: `https://www.vendorgrid.net/events/${event.id}`,
+    ...(event.canceledAt ? { eventStatus: "https://schema.org/EventCancelled" } : {}),
+    ...((event as any).pinColor === "pro" && event.creatorName
+      ? { organizer: { "@type": "Organization", name: event.creatorName } }
+      : {}),
+  };
+
   return (
     <div className="max-w-5xl mx-auto pb-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(eventJsonLd).replace(/</g, "\\u003c") }}
+      />
       <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors" data-testid="link-back">
         <ArrowLeft className="w-4 h-4" />Back to events
       </Link>

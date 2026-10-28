@@ -47,6 +47,7 @@ import FAQPage from "@/pages/faq";
 import ManageMarketsPage from "@/pages/manage-markets";
 import OrganizersPage from "@/pages/organizers";
 import ContactPage from "@/pages/contact";
+import { LocationsIndex, PlacePage } from "@/pages/locations";
 import { ORGANIZER_EVENT_PATH, organizerTrialPath } from "@/lib/organizer-flow";
 
 function OnboardingGuard() {
@@ -457,6 +458,12 @@ function Router() {
       <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/about" component={AboutPage} />
       <Route path="/faq" component={FAQPage} />
+      {/* Location pages: /locations index plus one /:place route that
+          resolves state slugs, then city slugs from live event data, and
+          renders the 404 page for anything else. Placed after every other
+          route so no existing URL is ever shadowed. */}
+      <Route path="/locations" component={LocationsIndex} />
+      <Route path="/:place" component={PlacePage} />
       <Route component={NotFound} />
     </Switch>
   );

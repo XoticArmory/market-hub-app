@@ -38,6 +38,7 @@ export default function SiteFooter({ onContact }: SiteFooterProps) {
             <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.17em] text-[#ffb477]">Discover</h2>
             <ul>
               <li><Link href="/" className={footerLink} data-testid="link-footer-browse-events">Browse Events <ArrowUpRight className="h-3.5 w-3.5 opacity-70" aria-hidden="true" /></Link></li>
+              <li><Link href="/locations" className={footerLink} data-testid="link-footer-browse-location">Browse by location <ArrowUpRight className="h-3.5 w-3.5 opacity-70" aria-hidden="true" /></Link></li>
               <li><Link href={hostAccess.status === "ready" ? hostAccess.href! : "/organizers"} className={footerLink} data-testid="link-footer-host-event">Host an Event <ArrowUpRight className="h-3.5 w-3.5 opacity-70" aria-hidden="true" /></Link></li>
             </ul>
           </nav>
