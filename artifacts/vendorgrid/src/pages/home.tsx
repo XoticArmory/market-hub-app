@@ -135,6 +135,7 @@ export default function Home() {
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string>("");
   const [monthFilter, setMonthFilter] = useState<string>("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<"nearest" | "furthest" | "newest">("nearest");
   const { data: events, isLoading: isLoadingEvents, isError: eventsError, refetch: refetchEvents } = useEvents(radiusFilter ? undefined : areaFilter);
   const [, navigate] = useLocation();
@@ -311,25 +312,27 @@ export default function Home() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-12">
-      {/* Hero */}
-      <section className="relative rounded-3xl overflow-hidden glass-panel">
+      {/* Hero — Pro-page language: a dark brown panel with the market photo
+          visible on the right (strong gradient only behind the text), instead
+          of the old near-invisible washed-out photo. */}
+      <section className="relative rounded-3xl overflow-hidden bg-[#412b22] shadow-xl">
         <div className="absolute inset-0">
-          <img src="https://images.unsplash.com/photo-1533900298318-6b8da08a523e?q=80&w=2070&auto=format&fit=crop" alt="Artisan Market" className="w-full h-full object-cover opacity-20 dark:opacity-30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent" />
+          <img src="https://images.unsplash.com/photo-1533900298318-6b8da08a523e?q=80&w=2070&auto=format&fit=crop" alt="" aria-hidden="true" className="w-full h-full object-cover opacity-40" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#412b22] via-[#412b22]/85 to-[#412b22]/15" />
         </div>
         <div className="relative z-10 p-8 md:p-12 lg:p-16 flex flex-col md:w-2/3">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary font-medium text-sm mb-6 w-fit border border-primary/20">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-[#ffcf9e] font-medium text-sm mb-6 w-fit border border-white/20">
             <Sparkles className="w-4 h-4" /><span>Support Local Creators</span>
           </div>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold text-foreground mb-6 leading-tight">Discover & Connect with Local Markets</h1>
-          <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-lg">See what vendors are bringing to upcoming events, claim your spot, and chat with fellow artisans in your community.</p>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold text-[#fff8ef] mb-6 leading-tight">Discover & Connect with Local Markets</h1>
+          <p className="text-lg md:text-xl text-white/70 mb-8 max-w-lg">See what vendors are bringing to upcoming events, claim your spot, and chat with fellow artisans in your community.</p>
           <div className="flex flex-wrap gap-4">
             {hostAccess.status === "ready" ? <Link href={hostAccess.href!} data-testid="link-host-event" className="px-6 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2">
               Host an Event <ArrowRight className="w-4 h-4" />
             </Link> : <button type="button" data-testid="button-host-event-pending" disabled={hostAccess.status === "loading"} onClick={retryAccess} aria-busy={hostAccess.status === "loading"} className="px-6 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center gap-2 disabled:opacity-60">
               {hostAccess.status === "loading" ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />Checking account…</> : "Account check failed — retry"}
             </button>}
-            <Link href="/chat" className="px-6 py-3.5 rounded-xl bg-secondary text-secondary-foreground font-semibold hover:bg-secondary/80 transition-all duration-200">
+            <Link href="/chat" className="px-6 py-3.5 rounded-xl bg-[#fff3e7] text-[#412b22] font-semibold hover:bg-[#ffe3c9] transition-all duration-200">
               Join the Chat
             </Link>
           </div>
@@ -374,7 +377,7 @@ export default function Home() {
                 value={stateFilter}
                 onValueChange={val => { const next = val === "__all__" ? "" : val; setStateFilter(next); saveStateFilter(next); }}
               >
-                <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-state-filter">
+                <SelectTrigger className="rounded-xl h-10 w-36 text-sm hidden md:flex" data-testid="select-state-filter">
                   <SelectValue placeholder="All states" />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
@@ -386,39 +389,11 @@ export default function Home() {
                   ))}
                 </SelectContent>
               </Select>
-              <div className="relative flex items-center">
-                <Hash className="absolute left-3 w-4 h-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  data-testid="input-area-filter"
-                  placeholder="Zip code..."
-                  value={areaInput}
-                  onChange={e => setAreaInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleApplyFilters(); }}
-                  onBlur={() => handleApplyFilters()}
-                  className="pl-9 rounded-xl h-10 w-36 text-sm"
-                />
-              </div>
-              <Select
-                value={radiusInput}
-                onValueChange={val => { const next = val === "__exact__" ? "" : val; setRadiusInput(next); handleApplyFilters(undefined, next); }}
-              >
-                <SelectTrigger className="rounded-xl h-10 w-32 text-sm" data-testid="select-radius-filter">
-                  <SelectValue placeholder="Radius" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__exact__">Exact ZIP</SelectItem>
-                  <SelectItem value="5">Within 5 mi</SelectItem>
-                  <SelectItem value="10">Within 10 mi</SelectItem>
-                  <SelectItem value="25">Within 25 mi</SelectItem>
-                  <SelectItem value="50">Within 50 mi</SelectItem>
-                  <SelectItem value="100">Within 100 mi</SelectItem>
-                </SelectContent>
-              </Select>
               <Select
                 value={categoryFilter || "__all__"}
                 onValueChange={val => setCategoryFilter(val === "__all__" ? "" : val)}
               >
-                <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-category-filter">
+                <SelectTrigger className="rounded-xl h-10 w-36 text-sm hidden md:flex" data-testid="select-category-filter">
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -431,39 +406,9 @@ export default function Home() {
                   <SelectItem value="__uncategorized__">Uncategorized</SelectItem>
                 </SelectContent>
               </Select>
-              <Select
-                value={dateFilter || "__all__"}
-                onValueChange={val => {
-                  const next = val === "__all__" ? "" : val;
-                  setDateFilter(next);
-                  if (next === "month" && !monthFilter) {
-                    const now = new Date();
-                    setMonthFilter(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
-                  }
-                }}
-              >
-                <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-date-filter">
-                  <SelectValue placeholder="All dates" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All dates</SelectItem>
-                  <SelectItem value="weekend">This weekend</SelectItem>
-                  <SelectItem value="7days">Next 7 days</SelectItem>
-                  <SelectItem value="30days">Next 30 days</SelectItem>
-                  <SelectItem value="month">Choose month</SelectItem>
-                </SelectContent>
-              </Select>
-              {dateFilter === "month" && (
-                <Input
-                  data-testid="input-month-filter"
-                  type="month"
-                  value={monthFilter}
-                  onChange={e => setMonthFilter(e.target.value)}
-                  className="rounded-xl h-10 w-36 text-sm"
-                />
-              )}
-              <Button size="sm" variant="outline" onClick={() => handleApplyFilters()} aria-label="Apply filters" className="rounded-xl h-10" data-testid="button-filter">
-                <Filter className="w-4 h-4 mr-1" /> Apply filters
+              <Button size="sm" variant="outline" onClick={() => setFiltersOpen(v => !v)} aria-expanded={filtersOpen} aria-controls="advanced-filters" className="rounded-xl h-10" data-testid="button-toggle-filters">
+                <Filter className="w-4 h-4 mr-1" /> Filters
+                {(areaFilter || radiusFilter || dateFilter) && <span className="ml-1 h-2 w-2 rounded-full bg-primary" aria-hidden="true" />}
               </Button>
               {hasActiveFilters && (
                 <Button size="sm" variant="ghost" onClick={resetFilters} className="rounded-xl h-10 text-muted-foreground text-sm" data-testid="button-clear-filters">
@@ -471,6 +416,112 @@ export default function Home() {
                 </Button>
               )}
             </div>
+            {/* Advanced filters — ZIP, radius and dates live here instead of
+                crowding the main row. On mobile the state/category selects
+                move in here too, so the main row is just search + Filters. */}
+            {filtersOpen && (
+              <div id="advanced-filters" className="flex w-full items-center gap-2 flex-wrap rounded-2xl border border-border/60 bg-muted/30 p-3" data-testid="panel-advanced-filters">
+                <div className="md:hidden">
+                  <Select
+                    value={stateFilter}
+                    onValueChange={val => { const next = val === "__all__" ? "" : val; setStateFilter(next); saveStateFilter(next); }}
+                  >
+                    <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-state-filter-panel">
+                      <SelectValue placeholder="All states" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      <SelectItem value="__all__">All states</SelectItem>
+                      {US_STATES.map(s => (
+                        <SelectItem key={s.abbr} value={s.abbr}>
+                          {s.abbr} — {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="md:hidden">
+                  <Select
+                    value={categoryFilter || "__all__"}
+                    onValueChange={val => setCategoryFilter(val === "__all__" ? "" : val)}
+                  >
+                    <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-category-filter-panel">
+                      <SelectValue placeholder="All categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All categories</SelectItem>
+                      <SelectItem value="Farmers Market">Farmers Market</SelectItem>
+                      <SelectItem value="Craft Fair">Craft Fair</SelectItem>
+                      <SelectItem value="Festival">Festival</SelectItem>
+                      <SelectItem value="Pop-up">Pop-up</SelectItem>
+                      <SelectItem value="Flea Market">Flea Market</SelectItem>
+                      <SelectItem value="__uncategorized__">Uncategorized</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="relative flex items-center">
+                  <Hash className="absolute left-3 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    data-testid="input-area-filter"
+                    placeholder="Zip code..."
+                    value={areaInput}
+                    onChange={e => setAreaInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleApplyFilters(); }}
+                    onBlur={() => handleApplyFilters()}
+                    className="pl-9 rounded-xl h-10 w-36 text-sm"
+                  />
+                </div>
+                <Select
+                  value={radiusInput}
+                  onValueChange={val => { const next = val === "__exact__" ? "" : val; setRadiusInput(next); handleApplyFilters(undefined, next); }}
+                >
+                  <SelectTrigger className="rounded-xl h-10 w-32 text-sm" data-testid="select-radius-filter">
+                    <SelectValue placeholder="Radius" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__exact__">Exact ZIP</SelectItem>
+                    <SelectItem value="5">Within 5 mi</SelectItem>
+                    <SelectItem value="10">Within 10 mi</SelectItem>
+                    <SelectItem value="25">Within 25 mi</SelectItem>
+                    <SelectItem value="50">Within 50 mi</SelectItem>
+                    <SelectItem value="100">Within 100 mi</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={dateFilter || "__all__"}
+                  onValueChange={val => {
+                    const next = val === "__all__" ? "" : val;
+                    setDateFilter(next);
+                    if (next === "month" && !monthFilter) {
+                      const now = new Date();
+                      setMonthFilter(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="rounded-xl h-10 w-36 text-sm" data-testid="select-date-filter">
+                    <SelectValue placeholder="All dates" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All dates</SelectItem>
+                    <SelectItem value="weekend">This weekend</SelectItem>
+                    <SelectItem value="7days">Next 7 days</SelectItem>
+                    <SelectItem value="30days">Next 30 days</SelectItem>
+                    <SelectItem value="month">Choose month</SelectItem>
+                  </SelectContent>
+                </Select>
+                {dateFilter === "month" && (
+                  <Input
+                    data-testid="input-month-filter"
+                    type="month"
+                    value={monthFilter}
+                    onChange={e => setMonthFilter(e.target.value)}
+                    className="rounded-xl h-10 w-36 text-sm"
+                  />
+                )}
+                <Button size="sm" variant="outline" onClick={() => handleApplyFilters()} aria-label="Apply filters" className="rounded-xl h-10" data-testid="button-filter">
+                  <Filter className="w-4 h-4 mr-1" /> Apply filters
+                </Button>
+              </div>
+            )}
             <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-xl p-1 h-10" role="group" aria-label="Sort events">
               <Button
                 size="sm"
@@ -565,17 +616,35 @@ export default function Home() {
                 ? <Button onClick={resetFilters} className="rounded-xl" data-testid="button-reset-event-filters">Reset filters</Button>
                 : <Link href={hostAccess.status === "ready" ? hostAccess.href! : "/organizers"} className="text-primary font-medium hover:underline">Create an event</Link>}
             </div>
-          ) : (
+          ) : viewMode === "map" ? (
             <div className="space-y-5">
-              {viewMode === "map" && (
-                <EventDiscoveryMap
-                  events={mapEvents}
-                  selectedEventId={selectedEventId}
-                />
-              )}
-              <div className={viewMode === "map"
-                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[640px] overflow-y-auto pr-2 pb-2"
-                : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
+              {/* Map is now the full view, not a section above the card list:
+                  pins select an event, and its card previews below the map. */}
+              <EventDiscoveryMap
+                events={mapEvents}
+                selectedEventId={selectedEventId}
+                className="vg-discovery-map--fullview"
+              />
+              {(() => {
+                const selectedEvent = sortedEvents.find(e => e.id === selectedEventId);
+                return selectedEvent ? (
+                  <div className="max-w-xl">
+                    <EventCard
+                      event={selectedEvent}
+                      index={0}
+                      posts={postsByEventId.get(selectedEvent.id) || []}
+                      cityName={selectedEvent.areaCode ? cityMap[selectedEvent.areaCode] : null}
+                      mapMode
+                      onSelect={() => setSelectedEventId(selectedEvent.id)}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Tap a pin on the map to preview an event here, or switch back to List to browse every card.</p>
+                );
+              })()}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sortedEvents.map((event, i) => (
                 <EventCard
                   key={event.id}
@@ -583,11 +652,9 @@ export default function Home() {
                   index={i}
                   posts={postsByEventId.get(event.id) || []}
                   cityName={event.areaCode ? cityMap[event.areaCode] : null}
-                  mapMode={viewMode === "map"}
                   onSelect={() => setSelectedEventId(event.id)}
                 />
               ))}
-              </div>
             </div>
           )}
         </TabsContent>
