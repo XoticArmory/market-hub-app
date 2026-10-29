@@ -258,7 +258,7 @@ export const directMessages = pgTable("direct_messages", {
 export const promoCodes = pgTable("promo_codes", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
-  type: text("type").notNull(), // "discount" | "temp_admin"
+  type: text("type").notNull(), // "discount" | "temp_admin" | "referral"
   discountPercent: integer("discount_percent"), // 1-100, only for discount type
   discountDurationMonths: integer("discount_duration_months"), // null = forever, else months Stripe coupon lasts per subscriber
   applicableTier: text("applicable_tier"), // "event_owner_pro" | "vendor_pro" | null = all tiers
@@ -276,6 +276,19 @@ export const promoCodeUses = pgTable("promo_code_uses", {
   userId: varchar("user_id").notNull().references(() => users.id),
   tier: text("tier"),
   usedAt: timestamp("used_at").defaultNow().notNull(),
+});
+
+// One row per referral reward granted. stripeSubscriptionId is unique so a
+// referred subscription can only ever earn its referrer one free month, even
+// if Stripe redelivers the invoice.paid webhook.
+export const referralRewards = pgTable("referral_rewards", {
+  id: serial("id").primaryKey(),
+  referralCodeId: integer("referral_code_id").notNull().references(() => promoCodes.id),
+  referrerUserId: varchar("referrer_user_id").notNull().references(() => users.id),
+  referredUserId: varchar("referred_user_id").notNull().references(() => users.id),
+  stripeSubscriptionId: text("stripe_subscription_id").notNull().unique(),
+  amountCents: integer("amount_cents").notNull(),
+  grantedAt: timestamp("granted_at").defaultNow().notNull(),
 });
 
 // ---- Schemas ----

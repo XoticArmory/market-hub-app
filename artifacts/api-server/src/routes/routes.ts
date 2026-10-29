@@ -3102,11 +3102,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     let redeemedPromo: any = null;
     let stripeCouponId: string | null = null;
+    let referralCode: any = null;
 
     if (promoCode) {
       const validation = await storage.validatePromoCode(promoCode, tier);
       if (!validation.valid) return res.status(400).json({ message: validation.error });
-      if (validation.promoCode?.type === 'discount') {
+      if (validation.promoCode?.type === 'referral') {
+        const refValidation = await storage.validateReferralCode(promoCode, userId);
+        if (!refValidation.valid) return res.status(400).json({ message: refValidation.error });
+        referralCode = refValidation.promoCode;
+      } else if (validation.promoCode?.type === 'discount') {
         const discount = validation.promoCode.discountPercent || 0;
         redeemedPromo = validation.promoCode;
 
@@ -3151,12 +3156,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           quantity: 1,
         }],
         subscription_data: {
-          trial_period_days: 14,
-          metadata: { userId, tier, billingInterval },
+          // A referral gift code stretches the trial: 14 days + 1 free month.
+          trial_period_days: referralCode ? 44 : 14,
+          metadata: referralCode
+            ? { userId, tier, billingInterval, referralCodeId: String(referralCode.id), referrerId: referralCode.createdBy }
+            : { userId, tier, billingInterval },
         },
         success_url: subscriptionSuccessUrl(getHost(req), tier, returnTo),
         cancel_url: `${getHost(req)}/upgrade`,
-        metadata: { userId, tier, billingInterval },
+        metadata: referralCode
+          ? { userId, tier, billingInterval, referralCodeId: String(referralCode.id), referrerId: referralCode.createdBy }
+          : { userId, tier, billingInterval },
       };
       if (stripeCouponId) {
         sessionParams.discounts = [{ coupon: stripeCouponId }];
@@ -3168,6 +3178,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const session = await stripe.checkout.sessions.create(sessionParams);
       if (!session.url) return res.status(500).json({ message: "Failed to create Stripe checkout session." });
+      // Discount codes redeem at session creation (existing behavior). Referral
+      // codes redeem at checkout.session.completed instead, so an abandoned
+      // checkout doesn't count as a use.
       if (redeemedPromo) await storage.redeemPromoCode(promoCode, userId, tier);
       res.json({ url: session.url });
     } catch (e: any) {
@@ -3240,7 +3253,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 stripeSubscriptionId: subscriptionId || undefined,
                 profileType: tierToProfileType(tier) as any,
               });
+              // A referred signup counts as a code use once the subscription
+              // actually exists — not when the checkout session was created.
+              if (session.metadata?.referralCodeId) {
+                await storage.recordReferralRedemption(Number(session.metadata.referralCodeId), userId, tier);
+              }
               sendWelcomeLetterIfEnabled(userId, 'pro');
+            }
+          }
+          break;
+        }
+        case 'invoice.paid': {
+          const invoice = event.data.object as Stripe.Invoice;
+          // The subscription id lives on `subscription` in older API versions
+          // and under `parent.subscription_details` in newer ones — read both.
+          const invoiceWithSub = invoice as Stripe.Invoice & {
+            subscription?: string | { id: string } | null;
+            parent?: { subscription_details?: { subscription?: string | null } | null } | null;
+          };
+          const rawSub = invoiceWithSub.subscription;
+          const subId = typeof rawSub === 'string' ? rawSub : rawSub?.id
+            ?? invoiceWithSub.parent?.subscription_details?.subscription ?? undefined;
+          // Only the FIRST paid invoice of a referred subscription earns the
+          // referrer a free month. billing_reason is 'subscription_cycle' when
+          // a trial converts; 'subscription_create' is accepted defensively.
+          // The referral_rewards row (unique per subscription) makes this
+          // idempotent across webhook redeliveries, and banked credit is
+          // uncapped by design — a prolific referrer can earn a lifetime
+          // free account.
+          if (subId && invoice.amount_paid > 0 &&
+              (invoice.billing_reason === 'subscription_cycle' || invoice.billing_reason === 'subscription_create')) {
+            const existing = await storage.getReferralRewardForSubscription(subId);
+            if (!existing) {
+              const sub = await stripe.subscriptions.retrieve(subId);
+              const referralCodeId = sub.metadata?.referralCodeId;
+              const referrerId = sub.metadata?.referrerId;
+              const referredUserId = sub.metadata?.userId;
+              if (referralCodeId && referrerId && referredUserId) {
+                const referrerProfile = await storage.getUserProfile(referrerId);
+                if (referrerProfile?.stripeCustomerId) {
+                  await stripe.customers.createBalanceTransaction(referrerProfile.stripeCustomerId, {
+                    amount: -1495, // one month of Pro free, flat for monthly and annual referrers
+                    currency: 'usd',
+                    description: 'VendorGrid referral reward — 1 free month of Pro',
+                  });
+                  await storage.recordReferralReward({
+                    referralCodeId: Number(referralCodeId),
+                    referrerUserId: referrerId,
+                    referredUserId,
+                    stripeSubscriptionId: subId,
+                    amountCents: 1495,
+                  });
+                }
+              }
             }
           }
           break;
@@ -3338,7 +3403,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { code, tier } = req.body;
     if (!code || !tier) return res.status(400).json({ message: "Code and tier required." });
     const result = await storage.validatePromoCode(code, tier);
-    res.json(result);
+    if (result.valid && result.promoCode?.type === 'referral') {
+      const refResult = await storage.validateReferralCode(code, req.user.claims.sub);
+      if (!refResult.valid) return res.json(refResult);
+    }
+    return res.json(result);
+  });
+
+  // ---- Referral gift codes ----
+  app.get('/api/referral-code', isAuthenticated, async (req: any, res) => {
+    const code = await storage.getReferralCodeForUser(req.user.claims.sub);
+    res.json(code || { code: null });
+  });
+
+  app.post('/api/referral-code', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const profile = await storage.getUserProfile(userId);
+    if (!isPro(profile)) return res.status(403).json({ message: "An active Pro subscription is required to create a gift code." });
+    const { code } = req.body;
+    if (!code || typeof code !== 'string') return res.status(400).json({ message: "Code required." });
+    try {
+      const created = await storage.createReferralCode(userId, code);
+      return res.json(created);
+    } catch (e: any) {
+      if (e.message?.includes('unique')) return res.status(409).json({ message: "That gift code is already taken. Try another one." });
+      return res.status(400).json({ message: e.message || "Could not create gift code." });
+    }
   });
 
   app.post('/api/promo-codes/redeem-admin', isAuthenticated, async (req: any, res) => {
