@@ -4,7 +4,7 @@ import {
   events, vendorPosts, messages, eventDates, eventAttendance, userProfiles, adminSettings,
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, vendorInventorySales, roadmapItems,
-  promoCodes, promoCodeUses, anonymousEventClicks, eventVendorEntries, userPageOpens, appInstalls,
+  promoCodes, promoCodeUses, referralRewards, anonymousEventClicks, eventVendorEntries, userPageOpens, appInstalls,
   vendorItemCogs, vendorEventOverhead, documents, eventDocuments, userFiles, directMessages,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
@@ -164,6 +164,14 @@ export interface IStorage {
   validatePromoCode(code: string, tier: string): Promise<{ valid: boolean; promoCode?: any; error?: string }>;
   redeemPromoCode(code: string, userId: string, tier: string): Promise<any>;
   revokePromoCodeAccess(promoCodeId: number): Promise<void>;
+
+  // Referral gift codes — a "referral" promo code owned by a Pro user.
+  createReferralCode(userId: string, code: string): Promise<any>;
+  getReferralCodeForUser(userId: string): Promise<any | null>;
+  validateReferralCode(code: string, redeemerId: string): Promise<{ valid: boolean; promoCode?: any; error?: string }>;
+  recordReferralRedemption(promoCodeId: number, userId: string, tier: string): Promise<void>;
+  getReferralRewardForSubscription(stripeSubscriptionId: string): Promise<any | null>;
+  recordReferralReward(data: { referralCodeId: number; referrerUserId: string; referredUserId: string; stripeSubscriptionId: string; amountCents: number }): Promise<any>;
 
   // Event Vendor Entries (owner-added)
   getEventVendorEntries(eventId: number): Promise<EventVendorEntry[]>;
@@ -1271,6 +1279,66 @@ export class DatabaseStorage implements IStorage {
       await db.update(userProfiles).set({ isAdmin: false }).where(eq(userProfiles.userId, uid));
     }
     await db.update(promoCodes).set({ isActive: false }).where(eq(promoCodes.id, promoCodeId));
+  }
+
+  // ---- Referral gift codes ----
+  async createReferralCode(userId: string, code: string): Promise<any> {
+    // One active referral code per user: return the existing one if present.
+    const existing = await this.getReferralCodeForUser(userId);
+    if (existing) return existing;
+    const normalized = code.toUpperCase().trim();
+    if (!/^[A-Z0-9-]{3,24}$/.test(normalized)) {
+      throw new Error("Gift codes must be 3–24 characters: letters, numbers, and hyphens only.");
+    }
+    const [created] = await db.insert(promoCodes).values({
+      code: normalized,
+      type: 'referral',
+      maxUses: null, // unlimited — no cap on how many people a referrer can bring in
+      createdBy: userId,
+    }).returning();
+    return created;
+  }
+
+  async getReferralCodeForUser(userId: string): Promise<any | null> {
+    const [pc] = await db.select().from(promoCodes)
+      .where(and(eq(promoCodes.createdBy, userId), eq(promoCodes.type, 'referral'), eq(promoCodes.isActive, true)));
+    if (!pc) return null;
+    const rewards = await db.select().from(referralRewards).where(eq(referralRewards.referrerUserId, userId));
+    return { ...pc, rewardsGranted: rewards.length };
+  }
+
+  async validateReferralCode(code: string, redeemerId: string): Promise<{ valid: boolean; promoCode?: any; error?: string }> {
+    const [pc] = await db.select().from(promoCodes)
+      .where(and(eq(promoCodes.code, code.toUpperCase().trim()), eq(promoCodes.type, 'referral'), eq(promoCodes.isActive, true)));
+    if (!pc) return { valid: false, error: "Invalid or inactive gift code." };
+    if (pc.createdBy === redeemerId) return { valid: false, error: "You can't use your own gift code." };
+    const [priorUse] = await db.select().from(promoCodeUses)
+      .where(and(eq(promoCodeUses.promoCodeId, pc.id), eq(promoCodeUses.userId, redeemerId)));
+    if (priorUse) return { valid: false, error: "You've already used this gift code." };
+    const referrer = await this.getUserProfile(pc.createdBy);
+    const referrerIsPro = !!referrer && referrer.subscriptionStatus === 'active' && referrer.subscriptionTier !== 'free';
+    if (!referrerIsPro && !referrer?.isAdmin) return { valid: false, error: "This gift code is no longer active." };
+    return { valid: true, promoCode: pc };
+  }
+
+  async recordReferralRedemption(promoCodeId: number, userId: string, tier: string): Promise<void> {
+    // Idempotent: a webhook redelivery must not double-count the use.
+    const [prior] = await db.select().from(promoCodeUses)
+      .where(and(eq(promoCodeUses.promoCodeId, promoCodeId), eq(promoCodeUses.userId, userId)));
+    if (prior) return;
+    await db.insert(promoCodeUses).values({ promoCodeId, userId, tier });
+    const [pc] = await db.select().from(promoCodes).where(eq(promoCodes.id, promoCodeId));
+    if (pc) await db.update(promoCodes).set({ usesCount: pc.usesCount + 1 }).where(eq(promoCodes.id, promoCodeId));
+  }
+
+  async getReferralRewardForSubscription(stripeSubscriptionId: string): Promise<any | null> {
+    const [row] = await db.select().from(referralRewards).where(eq(referralRewards.stripeSubscriptionId, stripeSubscriptionId));
+    return row || null;
+  }
+
+  async recordReferralReward(data: { referralCodeId: number; referrerUserId: string; referredUserId: string; stripeSubscriptionId: string; amountCents: number }): Promise<any> {
+    const [row] = await db.insert(referralRewards).values(data).returning();
+    return row;
   }
 
   // ---- Event Vendor Entries ----

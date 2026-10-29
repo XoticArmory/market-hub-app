@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUpgradeCheckout, useValidatePromo, useRedeemAdminCode } from "@/hooks/use-upgrade";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
@@ -103,7 +103,12 @@ export default function UpgradePage() {
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   const [promoInput, setPromoInput] = useState("");
-  const [promoResult, setPromoResult] = useState<{ valid?: boolean; discount?: number; error?: string } | null>(null);
+  const [promoResult, setPromoResult] = useState<{ valid?: boolean; discount?: number; trialDays?: number; error?: string } | null>(null);
+
+  // A shared referral link (?ref=CODE) prefills the promo field so the
+  // recipient doesn't have to type the code.
+  const refParam = new URLSearchParams(search).get("ref")?.toUpperCase() || "";
+  const autoValidatedRef = useRef<string | null>(null);
 
   const [adminCodeOpen, setAdminCodeOpen] = useState(false);
   const [adminCode, setAdminCode] = useState("");
@@ -117,22 +122,30 @@ export default function UpgradePage() {
     const planId = params.get("plan");
     if (params.get("checkout") !== "1" || (planId !== "monthly" && planId !== "annual") || hasActivePro) return;
     setSelectedPlanId(planId);
-    setPromoInput("");
+    setPromoInput(refParam);
     setPromoResult(null);
     setTermsScrolled(false);
     setTermsAccepted(false);
     setTermsOpen(true);
   }, [search, hasActivePro]);
 
+  // Auto-validate a prefilled referral code once the checkout dialog opens.
+  useEffect(() => {
+    if (termsOpen && selectedPlanId && refParam && !promoResult && autoValidatedRef.current !== `${selectedPlanId}:${refParam}`) {
+      autoValidatedRef.current = `${selectedPlanId}:${refParam}`;
+      handleValidatePromo();
+    }
+  }, [termsOpen, selectedPlanId]);
+
   const handleUpgrade = (planId: string) => {
     if (!isAuthenticated) {
       const organizerReturn = new URLSearchParams(search).get("returnTo") === "/events/new";
-      const checkoutPath = `/upgrade?plan=${planId}&checkout=1${organizerReturn ? "&returnTo=%2Fevents%2Fnew" : ""}`;
+      const checkoutPath = `/upgrade?plan=${planId}&checkout=1${organizerReturn ? "&returnTo=%2Fevents%2Fnew" : ""}${refParam ? `&ref=${refParam}` : ""}`;
       window.location.href = `/auth?mode=signup&next=${encodeURIComponent(checkoutPath)}`;
       return;
     }
     setSelectedPlanId(planId);
-    setPromoInput("");
+    setPromoInput(refParam);
     setPromoResult(null);
     setTermsOpen(true);
     setTermsScrolled(false);
@@ -146,6 +159,8 @@ export default function UpgradePage() {
       onSuccess: (data) => {
         if (data.valid && data.promoCode?.type === 'discount') {
           setPromoResult({ valid: true, discount: data.promoCode.discountPercent });
+        } else if (data.valid && data.promoCode?.type === 'referral') {
+          setPromoResult({ valid: true, trialDays: 44 });
         } else if (data.valid && data.promoCode?.type === 'temp_admin') {
           setPromoResult({ valid: false, error: "That code is a temporary admin access code. Use it in the admin access field below." });
         } else {
@@ -323,8 +338,9 @@ export default function UpgradePage() {
               <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400" data-testid="promo-success">
                 <CheckCircle className="w-4 h-4" />
                 <span>
-                  {promoResult.discount}% discount applied — {discountedPrice(PLANS.find(plan => plan.id === selectedPlanId)?.price || "$0")}
-                  {PLANS.find(plan => plan.id === selectedPlanId)?.period}
+                  {promoResult.trialDays
+                    ? "Gift code applied — your free trial is 44 days (14 days + 1 free month)."
+                    : `${promoResult.discount}% discount applied — ${discountedPrice(PLANS.find(plan => plan.id === selectedPlanId)?.price || "$0")}${PLANS.find(plan => plan.id === selectedPlanId)?.period}`}
                 </span>
               </div>
             )}

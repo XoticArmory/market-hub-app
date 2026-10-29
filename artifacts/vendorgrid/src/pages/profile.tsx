@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { ImageUpload } from "@/components/image-upload";
 import { useProfile, useUpsertProfile } from "@/hooks/use-profile";
+import { useReferralCode, useCreateReferralCode } from "@/hooks/use-referral";
 import { useAuth } from "@/hooks/use-auth";
 import { usePortalSession } from "@/hooks/use-stripe";
 import { useNotifications, useMarkAllRead } from "@/hooks/use-notifications";
@@ -17,7 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle, MessageSquare, MessageCircle, Search, ArrowLeft } from "lucide-react";
+import { User, Package, Users, CreditCard, CheckCircle, Loader2, MapPin, ShieldCheck, Bell, Map, Star, Crown, Send, TrendingUp, Eye, ShoppingBag, Plus, Pencil, Trash2, DollarSign, Tag, XCircle, MessageSquare, MessageCircle, Search, ArrowLeft, Gift, Copy } from "lucide-react";
 import { useLocation, useSearch, Link } from "wouter";
 import { useEvents } from "@/hooks/use-events";
 import { format } from "date-fns";
@@ -1282,6 +1283,8 @@ export default function ProfilePage() {
         )}
       </div>
 
+      {hasActivePro && <ReferralGiftCard />}
+
       <Tabs value={activeTab} onValueChange={selectTab} className="space-y-6">
         <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap gap-1">
           <TabsTrigger value="profile" className="rounded-lg px-5 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm" data-testid="tab-profile">Profile</TabsTrigger>
@@ -2191,5 +2194,64 @@ export default function ProfilePage() {
         )}
       </Tabs>
     </div>
+  );
+}
+
+function ReferralGiftCard() {
+  const { data, isLoading } = useReferralCode();
+  const { mutate: createCode, isPending } = useCreateReferralCode();
+  const [codeInput, setCodeInput] = useState("");
+  const [copied, setCopied] = useState(false);
+  const code = data?.code;
+  const shareLink = code ? `${window.location.origin}/upgrade?ref=${code}` : "";
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(shareLink); } catch { /* clipboard unavailable — the link below is still selectable */ }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Gift className="w-5 h-5 text-primary" />Gift Pro to friends</CardTitle>
+        <CardDescription>Share your personal gift code — friends get 44 days free (14-day trial + 1 free month) when they sign up for Pro. When a friend's first payment goes through, you get a free month of Pro. No limit.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        ) : code ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/20 font-mono text-lg font-bold tracking-wider">{code}</span>
+              <Button variant="outline" size="sm" onClick={copyLink} className="rounded-xl" data-testid="button-copy-gift-link">
+                {copied ? <><CheckCircle className="w-4 h-4 mr-1 text-green-500" />Copied!</> : <><Copy className="w-4 h-4 mr-1" />Copy share link</>}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground break-all">{shareLink}</p>
+            <div className="flex gap-6 text-sm">
+              <span><strong>{data?.usesCount ?? 0}</strong> friends signed up</span>
+              <span><strong>{data?.rewardsGranted ?? 0}</strong> free months earned</span>
+            </div>
+          </>
+        ) : (
+          <div className="flex gap-2 max-w-md">
+            <Input
+              placeholder="Pick your code, e.g. TROY"
+              value={codeInput}
+              onChange={e => setCodeInput(e.target.value.toUpperCase())}
+              className="rounded-xl font-mono uppercase"
+              data-testid="input-gift-code"
+            />
+            <Button
+              onClick={() => createCode(codeInput.trim())}
+              disabled={!codeInput.trim() || isPending}
+              className="rounded-xl shrink-0"
+              data-testid="button-create-gift-code"
+            >
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create my code"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
