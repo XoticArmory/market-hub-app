@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./event-discovery-map.css";
@@ -132,6 +132,10 @@ function makePopup(event: DiscoveryMapEvent): HTMLElement {
 export function EventDiscoveryMap({ events, selectedEventId, className = "" }: EventDiscoveryMapProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  // Tiles arrive over the network; until they do (or a generous timeout
+  // passes) the canvas would first-paint as an empty beige box. Show a
+  // loading state instead, and keep it non-interactive-blocking.
+  const [tilesReady, setTilesReady] = useState(false);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const selectedRef = useRef<string | null>(null);
@@ -158,16 +162,22 @@ export function EventDiscoveryMap({ events, selectedEventId, className = "" }: E
       scrollWheelZoom: false,
     });
     L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
-    }).addTo(map);
+    });
+    tiles.on("load", () => setTilesReady(true));
+    tiles.addTo(map);
+    // If tiles stall (slow network, blocked tile host), don't leave the
+    // skeleton up forever — pins render regardless of tiles.
+    const tilesFallback = window.setTimeout(() => setTilesReady(true), 10000);
     const layer = L.layerGroup().addTo(map);
     mapRef.current = map;
     layerRef.current = layer;
     const resizeObserver = new ResizeObserver(() => map.invalidateSize());
     resizeObserver.observe(nodeRef.current);
     return () => {
+      window.clearTimeout(tilesFallback);
       resizeObserver.disconnect();
       layer.clearLayers();
       map.remove();
@@ -253,6 +263,13 @@ export function EventDiscoveryMap({ events, selectedEventId, className = "" }: E
       <p className="vg-discovery-map__footnote">Pins show approximate ZIP-code areas, not exact event addresses. Open an event for its full location.</p>
       <div className="vg-discovery-map__canvas-wrap">
         <div ref={nodeRef} className="vg-discovery-map__canvas" role="application" aria-label={`Interactive map with ${visibleEvents.length} events. Use arrow keys to pan and plus or minus to zoom.`} data-testid="map-events" />
+        {!tilesReady && (
+          <div className="vg-discovery-map__loading" role="status" data-testid="status-map-loading">
+            <span className="vg-discovery-map__loading-mark" aria-hidden="true" />
+            <strong>Loading map…</strong>
+            <span>Pins appear as soon as the map tiles arrive.</span>
+          </div>
+        )}
         {visibleEvents.length === 0 && (
           <div className="vg-discovery-map__empty" role="status" data-testid="status-map-empty">
             <span className="vg-discovery-map__empty-mark" aria-hidden="true" />

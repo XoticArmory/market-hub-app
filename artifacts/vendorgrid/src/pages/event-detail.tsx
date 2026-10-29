@@ -22,6 +22,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EventMapEditor } from "@/components/EventMapEditor";
+import { EventBannerPlaceholder } from "@/components/event-banner-placeholder";
 import { toLocalInputValue, fromLocalInputValue } from "@/lib/datetime";
 import { ImageUpload } from "@/components/image-upload";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +33,30 @@ import { SavedEventDocumentManager } from "@/components/event-document-editor";
 function normalizeUrl(url: string) {
   if (!url) return url;
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+/**
+ * Hero subtitle: the date/time/venue/host facts already live in the info
+ * chips below, so the hero shows a short description instead. Scan-style
+ * listings open with a fact recap ("Title Date, Time Venue: … Hosted by …"):
+ * when the first sentence carries a "Venue:" marker, that recap sentence is
+ * dropped and the real description follows. Presentation only — the stored
+ * description is untouched.
+ */
+function heroSubtitle(description: string | undefined): string | null {
+  if (!description) return null;
+  const text = description.trim();
+  if (!text) return null;
+  const firstBreak = text.search(/\.(\s|$)/);
+  if (firstBreak > 0) {
+    const first = text.slice(0, firstBreak);
+    if (/venue:/i.test(first)) {
+      const rest = text.slice(firstBreak + 1).trim();
+      return rest || null;
+    }
+    return first;
+  }
+  return text;
 }
 
 const postSchema = z.object({
@@ -854,6 +879,64 @@ export default function EventDetail() {
 
   const vendorSpacesLeft = (event?.vendorSpaces || 0) - (event?.vendorSpacesUsed || 0);
 
+  // Primary Apply call to action, surfaced at the top of the page, repeated
+  // below the details, and pinned on mobile. It uses only the listing's
+  // existing apply channel — no new behavior, just prominence. Logged-out
+  // visitors get a working Apply too: direct channels open directly, and
+  // VendorGrid-managed registration routes through sign-in.
+  const showDirectApplyCta = !isOwner && !event.canceledAt && (isExternalReg || isFormReg || isEmailReg || isPhoneReg);
+  const showAuthApplyCta = !isOwner && !event.canceledAt && !isAuthenticated && !showDirectApplyCta && (isVendorGridReg || !regType);
+  const showProRegisterCta = isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && !myPost && isVendorGridReg && vendorSpacesLeft > 0;
+  const renderApplyButton = (className: string, testid: string) => {
+    if (showDirectApplyCta) {
+      if (isExternalReg || isFormReg) {
+        return (
+          <Button className={className} onClick={() => window.open(regUrl!, '_blank', 'noopener,noreferrer')} title="Apply on the organizer's site (leaves VendorGrid)" aria-label="Apply on the organizer's site (leaves VendorGrid)" data-testid={testid}>
+            <ExternalLink className="w-4 h-4" />Apply now
+          </Button>
+        );
+      }
+      if (isEmailReg) {
+        return (
+          <Button className={className} onClick={() => setEmailCopyOpen(true)} data-testid={testid}>
+            <Mail className="w-4 h-4" />Apply now
+          </Button>
+        );
+      }
+      return (
+        <Button className={className} onClick={() => setPhoneCopyOpen(true)} data-testid={testid}>
+          <Phone className="w-4 h-4" />Apply now
+        </Button>
+      );
+    }
+    if (showAuthApplyCta) {
+      return (
+        <Button asChild className={className} data-testid={testid}>
+          <a href="/auth">Apply now</a>
+        </Button>
+      );
+    }
+    if (showProRegisterCta) {
+      return (
+        <Button className={className} onClick={() => setRegisterDialogOpen(true)} data-testid={testid}>
+          <ShieldCheck className="w-4 h-4" />Apply now
+        </Button>
+      );
+    }
+    return null;
+  };
+  const applyCta = (showDirectApplyCta || showAuthApplyCta || showProRegisterCta) ? (
+    <span className="flex flex-wrap items-center gap-3">
+      {renderApplyButton("rounded-xl gap-2 px-6 h-11 text-base", "button-apply-primary")}
+      {(isExternalReg || isFormReg) && (
+        <span className="text-xs text-muted-foreground">You&rsquo;ll continue to the organizer&rsquo;s site to apply.</span>
+      )}
+      {showAuthApplyCta && (
+        <span className="text-xs text-muted-foreground">Sign in to complete your application.</span>
+      )}
+    </span>
+  ) : null;
+
   if (isLoadingEvent) {
     return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
   }
@@ -902,7 +985,7 @@ export default function EventDetail() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto pb-16">
+    <div className="max-w-5xl mx-auto pb-24 md:pb-16">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(eventJsonLd).replace(/</g, "\\u003c") }}
@@ -926,11 +1009,15 @@ export default function EventDetail() {
       {/* Hero */}
       <div className="bg-card rounded-3xl overflow-hidden border border-border/50 shadow-lg mb-8">
         <div className="h-48 md:h-64 bg-muted relative">
-          <img
-            src={(event as any).bannerUrl || `https://images.unsplash.com/photo-1519999482648-25049ddd37b1?q=80&w=2000&auto=format&fit=crop&sig=${event.id}`}
-            alt={event.title}
-            className="w-full h-full object-cover"
-          />
+          {(event as any).bannerUrl ? (
+            <img
+              src={(event as any).bannerUrl}
+              alt={event.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <EventBannerPlaceholder className="h-full w-full" showWordmark={false} />
+          )}
           {canManageEvent && (
             <button
               onClick={() => bannerInputRef.current?.click()}
@@ -954,7 +1041,12 @@ export default function EventDetail() {
               </div>
             )}
             <h1 className="text-3xl md:text-5xl font-display font-bold mb-2">{event.title}</h1>
-            <p className="text-white/80 max-w-2xl line-clamp-2">{event.description}</p>
+            {(() => {
+              const subtitle = heroSubtitle(event.description);
+              return subtitle ? (
+                <p className="text-white/80 max-w-2xl line-clamp-2">{subtitle}</p>
+              ) : null;
+            })()}
           </div>
         </div>
 
@@ -1038,6 +1130,13 @@ export default function EventDetail() {
             )}
           </div>
 
+          {/* Primary Apply call to action — the page's main action, not attendance */}
+          {applyCta && (
+            <div className="flex flex-wrap items-center gap-3 mb-6" data-testid="section-apply-primary">
+              {applyCta}
+            </div>
+          )}
+
           {/* Description / Details & Guidelines */}
           {event.description && (() => {
             const THRESHOLD = 280;
@@ -1067,6 +1166,13 @@ export default function EventDetail() {
               </div>
             );
           })()}
+
+          {/* Apply again below the details, so readers don't have to scroll back up */}
+          {applyCta && (
+            <div className="flex flex-wrap items-center gap-3 mb-6" data-testid="section-apply-repeat">
+              {applyCta}
+            </div>
+          )}
 
           {/* Owner-only: Registration Code display */}
           {canManageEvent && (event as any).registrationCode && (
@@ -1611,12 +1717,22 @@ export default function EventDetail() {
               )}
             </div>
           ) : (
-            <Button asChild variant="outline" className="rounded-xl" data-testid="button-login-to-attend">
-              <a href="/auth">Login to mark attendance</a>
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              {applyCta}
+              <Button asChild variant="outline" className="rounded-xl" data-testid="button-login-to-attend">
+                <a href="/auth">Login to mark attendance</a>
+              </Button>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Sticky Apply bar — mobile only, so the main action is always in reach */}
+      {(showDirectApplyCta || showAuthApplyCta || showProRegisterCta) && (
+        <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-background/95 backdrop-blur px-4 py-3 md:hidden" data-testid="bar-apply-sticky">
+          {renderApplyButton("w-full rounded-xl gap-2 h-11", "button-apply-sticky")}
+        </div>
+      )}
 
       {(event as any).documents?.length > 0 && (
         <section className="bg-card rounded-2xl border border-border/60 p-5 md:p-6 mb-8 shadow-sm">

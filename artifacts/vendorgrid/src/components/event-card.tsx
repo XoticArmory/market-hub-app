@@ -4,8 +4,9 @@ import { motion } from "framer-motion";
 import { format } from "date-fns";
 import {
   ArrowRight, Calendar, CalendarPlus, Check, Crown, Download, ExternalLink,
-  Hash, Link2, Mail, MapPin, Navigation, Package, Phone, Share2, ShieldCheck, Users,
+  Hash, Link2, Mail, MapPin, Package, Phone, Share2, ShieldCheck, Users,
 } from "lucide-react";
+import { EventBannerPlaceholder } from "@/components/event-banner-placeholder";
 import { SiX, SiFacebook, SiWhatsapp } from "react-icons/si";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -202,19 +203,19 @@ export function EventCard({ event, index = 0, posts = [], cityName = null, mapMo
   return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08, duration: 0.4 }} onClick={() => { if (mapMode) onSelect?.(); }}>
         <div className="group h-full bg-card rounded-2xl overflow-hidden border border-border/50 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
-          {/* Image — clickable link to event */}
+          {/* Image — clickable link to event. Flyers are shown WHOLE (contain
+              over a blurred fill of themselves) so flyer text is never cropped
+              mid-word; the date badge and vendor stack live in the card body
+              instead of overlapping the image. */}
           <Link href={`/events/${event.id}`} className="block shrink-0" onClick={(e) => { if (mapMode) e.preventDefault(); else if (!isAuthenticated) trackAnonEventClick(event.id); }}>
             <div className="h-48 bg-muted relative overflow-hidden">
-              <img src={(event as any).bannerUrl || `https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=800&auto=format&fit=crop&sig=${event.id}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              {event.canceledAt ? (
-                <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
-                  CANCELED
-                </div>
+              {(event as any).bannerUrl ? (
+                <>
+                  <img src={(event as any).bannerUrl} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover blur-md scale-125 opacity-60" />
+                  <img src={(event as any).bannerUrl} alt={event.title} className="relative w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-500" />
+                </>
               ) : (
-                <div className="absolute top-4 right-4 bg-background/90 backdrop-blur text-foreground px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center">
-                  <span className="text-primary">{format(nextDate, 'MMM')}</span>
-                  <span className="text-xl leading-none">{format(nextDate, 'dd')}</span>
-                </div>
+                <EventBannerPlaceholder className="absolute inset-0 h-full w-full" />
               )}
               {event.areaCode && (
                 <div className="absolute top-4 left-4 bg-background/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-semibold text-foreground flex flex-col gap-0.5">
@@ -224,111 +225,24 @@ export function EventCard({ event, index = 0, posts = [], cityName = null, mapMo
                   )}
                 </div>
               )}
-              {uniqueVendors.length > 0 && (
-                <div className="absolute bottom-4 left-4 flex items-center" role="group" aria-label={`${uniqueVendors.length} vendors listing at ${event.title}`} title="Vendors listing at this market">
-                  <div className="flex -space-x-2" aria-hidden="true">
-                  {posts.slice(0, 3).map((post: any) => (
-                    <Avatar key={post.id} title={post.vendorName || "Vendor"} className="w-8 h-8 border-2 border-background ring-2 ring-primary/20">
-                      <AvatarImage src={post.vendorAvatar || ""} />
-                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{post.vendorName?.charAt(0) || "V"}</AvatarFallback>
-                    </Avatar>
-                  ))}
-                  {uniqueVendors.length > 3 && <div className="w-8 h-8 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-bold text-muted-foreground">+{uniqueVendors.length - 3}</div>}
-                  </div>
-                  <span className="ml-2 rounded-full bg-background/90 px-2 py-1 text-[10px] font-semibold text-foreground">Vendors</span>
-                </div>
-              )}
             </div>
           </Link>
           {/* Content */}
           <div className="p-6 flex-1 flex flex-col">
-            {/* Title row with share + optional website link */}
+            {/* Date — moved off the image so it never covers flyer headlines */}
+            <div className="flex items-center gap-2 mb-2">
+              {event.canceledAt ? (
+                <span className="bg-destructive text-destructive-foreground px-2.5 py-1 rounded-lg text-xs font-bold">CANCELED</span>
+              ) : (
+                <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-lg text-xs font-bold">{format(nextDate, 'EEE, MMM d')}</span>
+              )}
+            </div>
+            {/* Title row: only save-the-date + share stay on the card. Email,
+                phone, website and directions live on the detail page. */}
             <div className="flex items-start gap-2 mb-2">
               <Link href={`/events/${event.id}`} className="flex-1 min-w-0" onClick={(e) => { if (mapMode) e.preventDefault(); }}>
                 <h3 className="text-xl font-display font-bold text-foreground group-hover:text-primary transition-colors">{event.title}</h3>
               </Link>
-              {(() => {
-                const cardRegType = (event as any).vendorRegistrationType as string | undefined;
-                const cardRegUrl = (event as any).vendorRegistrationUrl as string | undefined;
-                const cardContactEmail = (event as any).contactEmail as string | undefined;
-                // Website URL to use in the ExternalLink icon (never use email/phone reg URLs as links)
-                const websiteUrl = (event as any).eventWebsiteUrl ||
-                  (cardRegType !== 'email' && cardRegType !== 'phone' ? cardRegUrl : undefined) ||
-                  (event as any).creatorWebsiteUrl;
-                return (<>
-                  {/* General contact email icon */}
-                  {cardContactEmail && (
-                    <a
-                      href={`mailto:${cardContactEmail}`}
-                      className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                      title="Email organizer"
-                       aria-label={`Email organizer of ${event.title}`}
-                      data-testid={`link-event-email-${event.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Mail className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                  {/* Email registration icon — only shown when contactEmail isn't already visible */}
-                  {!cardContactEmail && cardRegType === 'email' && cardRegUrl && (
-                    <a
-                      href={`mailto:${cardRegUrl}`}
-                      className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                      title="Apply via email"
-                       aria-label={`Apply to ${event.title} by email`}
-                      data-testid={`link-event-reg-email-${event.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Mail className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                  {/* Phone registration icon */}
-                  {cardRegType === 'phone' && cardRegUrl && (
-                    <a
-                      href={`tel:${cardRegUrl.replace(/\s/g, '')}`}
-                      className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                      title="Apply via phone"
-                       aria-label={`Apply to ${event.title} by phone`}
-                      data-testid={`link-event-reg-phone-${event.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                  {/* Website / external registration link */}
-                  {websiteUrl && (
-                    <a
-                      href={normalizeUrl(websiteUrl)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                      title={
-                        (event as any).eventWebsiteUrl ? "Visit event website" :
-                        cardRegUrl && cardRegType !== 'email' && cardRegType !== 'phone' ? "Visit market website / registration" :
-                        "Visit organizer's website"
-                      }
-                       aria-label={`Visit website for ${event.title}`}
-                      data-testid={`link-event-website-${event.id}`}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </>);
-              })()}
-              {event.location && (
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(event.location)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                  title="Get directions on Google Maps"
-                   aria-label={`Get directions to ${event.title}`}
-                  data-testid={`link-event-maps-${event.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                </a>
-              )}
               <CalendarButton event={event} />
               <ShareButton event={event} />
             </div>
@@ -345,10 +259,12 @@ export function EventCard({ event, index = 0, posts = [], cityName = null, mapMo
                     {(event as any).endTime && <> – {format(new Date((event as any).endTime), 'h:mm a')}</>}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Users className="w-4 h-4 shrink-0 text-primary/70" />
-                  <span>{event.attendingCount || 0} attending · {event.interestedCount || 0} interested</span>
-                </div>
+                {(event.attendingCount || 0) + (event.interestedCount || 0) > 0 && (
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Users className="w-4 h-4 shrink-0 text-primary/70" />
+                    <span>{event.attendingCount || 0} attending · {event.interestedCount || 0} interested</span>
+                  </div>
+                )}
                 {(event.vendorSpaces || 0) > 0 && (
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     <Package className="w-4 h-4 shrink-0 text-primary/70" />
@@ -358,9 +274,28 @@ export function EventCard({ event, index = 0, posts = [], cityName = null, mapMo
               </div>
             </Link>
 
+            {/* Vendors at this market — moved off the image so the stack
+                never collides with the photo edge */}
+            {uniqueVendors.length > 0 && (
+              <div className="flex items-center gap-2 mb-4" role="group" aria-label={`${uniqueVendors.length} vendors listing at ${event.title}`} title="Vendors listing at this market">
+                <div className="flex -space-x-2" aria-hidden="true">
+                  {posts.slice(0, 3).map((post: any) => (
+                    <Avatar key={post.id} title={post.vendorName || "Vendor"} className="w-8 h-8 border-2 border-background ring-2 ring-primary/20">
+                      <AvatarImage src={post.vendorAvatar || ""} />
+                      <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{post.vendorName?.charAt(0) || "V"}</AvatarFallback>
+                    </Avatar>
+                  ))}
+                  {uniqueVendors.length > 3 && <div className="w-8 h-8 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-bold text-muted-foreground">+{uniqueVendors.length - 3}</div>}
+                </div>
+                <span className="text-xs font-semibold text-muted-foreground">{uniqueVendors.length} {uniqueVendors.length === 1 ? "vendor" : "vendors"} at this market</span>
+              </div>
+            )}
+
             {/* Card footer */}
-            <div className="pt-4 border-t border-border/50 flex items-center justify-between mt-auto gap-2">
-              <span className="text-sm font-medium text-muted-foreground shrink-0">{posts.length} items listed</span>
+            <div className={`pt-4 border-t border-border/50 flex items-center ${posts.length > 0 ? "justify-between" : "justify-end"} mt-auto gap-2`}>
+              {posts.length > 0 && (
+                <span className="text-sm font-medium text-muted-foreground shrink-0">{posts.length} items listed</span>
+              )}
               <div className="flex items-center gap-2">
                 {/* Vendor Registration / Apply button — only for active, non-owned events */}
                 {!event.canceledAt && event.createdBy !== user?.id && (() => {

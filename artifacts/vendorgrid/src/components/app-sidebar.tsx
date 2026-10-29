@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, FolderOpen, Lock, Package, Search, Store } from "lucide-react";
+import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, FolderOpen, Lock, Package, Search, Store, MapPin, ArrowRight } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -130,6 +130,51 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {/* Browse by state + Pro upsell — gives the rail a job below the
+              nav instead of leaving it empty on wide screens. Static links
+              only; no new data fetching on every page. */}
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Browse by state</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {[
+                  { title: "Montana", url: "/montana" },
+                  { title: "Idaho", url: "/idaho" },
+                  { title: "North Dakota", url: "/north-dakota" },
+                  { title: "South Dakota", url: "/south-dakota" },
+                ].map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={location === item.url} className={`mb-1 transition-all duration-200 ${location === item.url ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'hover:bg-primary/10 hover:text-primary'}`}>
+                      <Link href={item.url} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                        <MapPin className="w-5 h-5" /><span className="font-medium">{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/locations"} className={`mb-1 transition-all duration-200 ${location === "/locations" ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'hover:bg-primary/10 hover:text-primary'}`}>
+                    <Link href="/locations" className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                      <MapPin className="w-5 h-5" /><span className="font-medium">All locations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          {!hasActivePro && (
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <Link href="/pro" data-testid="link-sidebar-pro-upsell" className="block mx-2 rounded-2xl bg-[#412b22] p-4 text-[#fff3e7] shadow-md hover:shadow-lg transition-shadow">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#ffb477]">VendorGrid Pro</p>
+                  <p className="font-display font-bold leading-snug mt-1.5">More room for what you&rsquo;re building.</p>
+                  <p className="text-xs text-white/70 mt-1.5">$14.95/mo or $99/yr · 14-day free trial</p>
+                  <span className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg bg-[#fff3e7] text-[#412b22] text-xs font-bold">Explore Pro <ArrowRight className="w-3.5 h-3.5" /></span>
+                </Link>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
 
           {isAuthenticated && (
             <SidebarGroup>
