@@ -160,6 +160,15 @@ async function isAdminUser(userId: string): Promise<boolean> {
   return profile?.isAdmin === true;
 }
 
+// Ghost-market access: admins, the event owner, and users with a grant row.
+// Everyone else must get a 404 (never a 403) so ghosts stay undiscoverable.
+async function canAccessGhost(event: { id: number; createdBy: string }, userId: string | undefined | null): Promise<boolean> {
+  if (!userId) return false;
+  if (event.createdBy === userId) return true;
+  if (await isAdminUser(userId)) return true;
+  return storage.hasGhostAccess(event.id, userId);
+}
+
 async function enrichUser(userId: string) {
   const u = await authStorage.getUser(userId);
   return {
@@ -456,6 +465,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const eventId = Number(req.params.eventId);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found." });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, req.user?.claims?.sub))) return res.status(404).json({ message: "Event not found." });
     res.json(await visibleEventDocuments(event, req.user?.claims?.sub));
   });
 
@@ -814,6 +824,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const requesterProfile = requesterId ? await storage.getUserProfile(requesterId) : null;
       if (!requesterProfile?.isAdmin) return res.status(404).json({ message: "Event not found" });
     }
+    if (event.status === 'ghost') {
+      const requesterId = req.user?.claims?.sub;
+      if (!(await canAccessGhost(event, requesterId))) return res.status(404).json({ message: "Event not found" });
+    }
     const creator = await enrichUser(event.createdBy);
     const creatorProfile = await storage.getUserProfile(event.createdBy);
     const pinColor = eventPinColor(creatorProfile);
@@ -1064,6 +1078,123 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (event.status !== 'draft') return res.status(400).json({ message: "Only drafts can be hard-deleted" });
     await storage.hardDeleteEvent(id);
     res.json({ ok: true });
+  });
+
+  // ---- ADMIN: GHOST MARKETS ----
+  // Ghosts are published events with status 'ghost': invisible publicly
+  // (excluded from the board/map/sitemap, detail 404s for non-viewers) but
+  // fully functional for admins, the owner, and granted users — for testing
+  // VendorGrid registration, the application form, and approvals. Ghosts
+  // never send new-event notifications. Requires the ghost_event_access
+  // table (lib/db/0002-ghost-event-access.sql, run once in Supabase SQL
+  // editor after merge) for the grant endpoints and the access check.
+  app.get('/api/admin/ghost-events', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const ghosts = await storage.getGhostEvents();
+    const enriched = await Promise.all(ghosts.map(async (e) => {
+      const creator = await enrichUser(e.createdBy);
+      const grants = await storage.getGhostAccess(e.id);
+      return { ...e, creatorName: creator.name, grantCount: grants.length };
+    }));
+    return res.json(enriched);
+  });
+
+  app.post('/api/admin/ghost-events', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const { title, description, location, areaCode, date, endTime, vendorSpaces, boothWidth, boothDepth, spotPrice, registrationCode, vendorRegistrationType, vendorRegistrationUrl, contactEmail, eventWebsiteUrl, category, extraDates } = req.body;
+    if (!title || !date || !location) return res.status(400).json({ message: "title, date and location are required" });
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) return res.status(400).json({ message: "Invalid date" });
+    const event = await storage.createEvent({
+      title: String(title),
+      description: String(description || ''),
+      location: String(location),
+      areaCode: areaCode ? String(areaCode) : null,
+      date: parsedDate,
+      endTime: endTime ? new Date(endTime) : null,
+      vendorSpaces: vendorSpaces !== undefined ? Number(vendorSpaces) : 0,
+      boothWidth: boothWidth ? Number(boothWidth) : null,
+      boothDepth: boothDepth ? Number(boothDepth) : null,
+      spotPrice: spotPrice !== undefined ? Number(spotPrice) : 0,
+      registrationCode: registrationCode ? String(registrationCode) : null,
+      vendorRegistrationType: vendorRegistrationType ? String(vendorRegistrationType) : null,
+      vendorRegistrationUrl: vendorRegistrationUrl ? String(vendorRegistrationUrl) : null,
+      contactEmail: contactEmail ? String(contactEmail) : null,
+      eventWebsiteUrl: eventWebsiteUrl ? String(eventWebsiteUrl) : null,
+      category: category ? String(category) : null,
+      createdBy: req.user.claims.sub,
+      status: 'ghost',
+    } as any);
+    if (Array.isArray(extraDates)) {
+      for (const d of extraDates) {
+        if (d?.date) await storage.createEventDate({ eventId: event.id, date: new Date(d.date), endTime: d.endTime ? new Date(d.endTime) : null });
+      }
+    }
+    // Deliberately no new-event notifications for ghosts.
+    return res.status(201).json(event);
+  });
+
+  app.get('/api/admin/ghost-events/:id/access', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'ghost') return res.status(400).json({ message: "Event is not a ghost market" });
+    const grants = await storage.getGhostAccess(id);
+    const enriched = await Promise.all(grants.map(async (g) => {
+      const u = await enrichUser(g.userId);
+      const by = await enrichUser(g.grantedBy);
+      return { ...g, userName: u.name, userEmail: u.email, userAvatar: u.avatar, grantedByName: by.name };
+    }));
+    return res.json(enriched);
+  });
+
+  app.post('/api/admin/ghost-events/:id/access', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ message: "userId required" });
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'ghost') return res.status(400).json({ message: "Event is not a ghost market" });
+    const target = await authStorage.getUser(userId);
+    if (!target) return res.status(404).json({ message: "User not found" });
+    await storage.grantGhostAccess(id, userId, req.user.claims.sub);
+    return res.status(201).json({ ok: true });
+  });
+
+  app.delete('/api/admin/ghost-events/:id/access/:userId', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'ghost') return res.status(400).json({ message: "Event is not a ghost market" });
+    await storage.revokeGhostAccess(id, req.params.userId);
+    return res.json({ ok: true });
+  });
+
+  app.post('/api/admin/ghost-events/:id/publish', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'ghost') return res.status(400).json({ message: "Event is not a ghost market" });
+    const updated = await storage.updateEvent(id, { status: 'published' });
+    // Grants are meaningless once public; clear them.
+    await storage.clearGhostAccess(id);
+    return res.json(updated);
+  });
+
+  app.delete('/api/admin/ghost-events/:id', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    const event = await storage.getEvent(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status !== 'ghost') return res.status(400).json({ message: "Only ghost markets can be deleted here" });
+    // Hard delete: test artifacts should disappear entirely, and the
+    // ON DELETE CASCADE on ghost_event_access removes their grants.
+    await storage.hardDeleteEvent(id);
+    return res.json({ ok: true });
   });
 
   // ---- ADMIN: SCRAPER ----
@@ -1522,8 +1653,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ---- EVENT VENDOR ENTRIES (owner-added) ----
   app.get('/api/events/:id/vendor-entries', async (req: any, res) => {
     const eventId = Number(req.params.id);
+    const event = await storage.getEvent(eventId);
+    if (event?.status === 'ghost' && !(await canAccessGhost(event, (req as any).user?.claims?.sub))) return res.status(404).json({ message: "Event not found" });
     const entries = await storage.getEventVendorEntries(eventId);
-    res.json(entries);
+    return res.json(entries);
   });
 
   app.post('/api/events/:id/vendor-entries/lookup-email', isAuthenticated, async (req: any, res) => {
@@ -1531,6 +1664,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const eventId = Number(req.params.id);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     const profile = await storage.getUserProfile(userId);
     if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
     const { email } = req.body;
@@ -1545,6 +1679,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const eventId = Number(req.params.id);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     const profile = await storage.getUserProfile(userId);
     if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
     if (!isPro(profile)) return res.status(403).json({ message: "Pro subscription required." });
@@ -1580,6 +1715,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const entryId = Number(req.params.entryId);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     const profile = await storage.getUserProfile(userId);
     if (event.createdBy !== userId && !profile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
     await storage.deleteEventVendorEntry(entryId);
@@ -1603,6 +1739,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, ownerId))) return res.status(404).json({ message: "Event not found" });
 
     const ownerProfile = await storage.getUserProfile(ownerId);
     if (event.createdBy !== ownerId && !ownerProfile?.isAdmin) return res.status(403).json({ message: "Forbidden" });
@@ -1645,6 +1782,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = req.user.claims.sub;
       const eventId = Number(req.params.eventId);
+      const event = await storage.getEvent(eventId);
+      if (event?.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
       const { status } = api.attendance.setStatus.input.parse(req.body);
       const existing = await storage.getUserStatusForEvent(eventId, userId);
       const result = await storage.setAttendance(eventId, userId, status);
@@ -1670,18 +1809,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete(api.attendance.removeStatus.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const eventId = Number(req.params.eventId);
+    const event = await storage.getEvent(eventId);
+    if (event?.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     const existing = await storage.getUserStatusForEvent(eventId, userId);
     if (existing === 'attending') {
       const profile = await storage.getUserProfile(userId);
       if (profile?.profileType === 'vendor') await storage.updateVendorSpacesUsed(eventId, -1);
     }
     await storage.removeAttendance(eventId, userId);
-    res.status(204).end();
+    return res.status(204).end();
   });
 
   // ---- VENDOR POSTS ----
   app.get(api.vendorPosts.listByEvent.path, async (req: any, res) => {
     const eventId = Number(req.params.eventId);
+    const event = await storage.getEvent(eventId);
+    if (event?.status === 'ghost' && !(await canAccessGhost(event, (req as any).user?.claims?.sub))) return res.status(404).json({ message: "Event not found" });
     const posts = await storage.getVendorPosts(eventId);
     const postVendorIds = new Set(posts.map(p => p.vendorId));
 
@@ -1754,7 +1897,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       })
     );
 
-    res.json([...enriched, ...syntheticPosts, ...registrationSyntheticPosts]);
+    return res.json([...enriched, ...syntheticPosts, ...registrationSyntheticPosts]);
   });
 
   app.post(api.vendorPosts.create.path, isAuthenticated, async (req: any, res) => {
@@ -1762,6 +1905,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const eventId = Number(req.params.eventId);
       const input = api.vendorPosts.create.input.parse(req.body);
       const userId = req.user.claims.sub;
+      const event = await storage.getEvent(eventId);
+      if (event?.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
       const profile = await storage.getUserProfile(userId);
       const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
       if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro subscription required to post a vendor listing." });
@@ -1804,9 +1949,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete('/api/events/:eventId/unregister', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const eventId = Number(req.params.eventId);
+    const event = await storage.getEvent(eventId);
+    if (event?.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     await storage.cancelVendorRegistration(eventId, userId);
     await storage.updateVendorSpacesUsed(eventId, -1);
-    res.json({ success: true });
+    return res.json({ success: true });
   });
 
   // ---- VENDING INTENT ----
@@ -1816,6 +1963,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const eventId = Number(req.params.eventId);
       const event = await storage.getEvent(eventId);
       if (!event) return res.status(404).json({ message: "Event not found" });
+      if (event.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
       if (event.canceledAt) return res.status(400).json({ message: "Event has been canceled." });
       if (event.createdBy === userId) return res.status(400).json({ message: "Event owners cannot declare vending intent." });
 
@@ -1861,6 +2009,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const regId = Number(req.params.regId);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     if (event.createdBy !== userId) {
       const profile = await storage.getUserProfile(userId);
       if (!profile?.isAdmin) return res.status(403).json({ message: "Only the event owner can approve applications." });
@@ -1938,6 +2087,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const regId = Number(req.params.regId);
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     if (event.createdBy !== userId) {
       const profile = await storage.getUserProfile(userId);
       if (!profile?.isAdmin) return res.status(403).json({ message: "Only the event owner can reject applications." });
@@ -2164,6 +2314,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const event = await storage.getEvent(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
     const requesterId = (req as any).user?.claims?.sub;
+    if (event.status === 'ghost' && !(await canAccessGhost(event, requesterId))) return res.status(404).json({ message: "Event not found" });
     const requesterProfile = requesterId ? await storage.getUserProfile(requesterId) : null;
     const isOwnerOrAdmin = requesterProfile?.isAdmin === true || requesterId === event.createdBy;
     const showPublic = (event as any).showApplicantsPublic === true;
@@ -2198,6 +2349,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const eventId = Number(req.params.eventId);
     const { spotId, spotName, registrationCode } = req.body;
     const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
     if (!event) return res.status(404).json({ message: "Event not found" });
 
     const profile = await storage.getUserProfile(userId);
@@ -2868,7 +3021,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get(api.admin.getEvents.path, isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
-    const allEvents = await storage.getEvents();
+    // Admin list includes ghosts (marked in the UI) but never drafts,
+    // preserving the existing draft separation.
+    const allEvents = await storage.getAdminEvents();
     const enriched = await Promise.all(allEvents.map(async e => {
       const creator = await enrichUser(e.createdBy);
       const attendance = await storage.getEventAttendance(e.id);

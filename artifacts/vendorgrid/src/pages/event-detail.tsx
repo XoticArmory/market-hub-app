@@ -994,6 +994,14 @@ export default function EventDetail() {
         <ArrowLeft className="w-4 h-4" />Back to events
       </Link>
 
+      {/* Ghost markets are hidden from the public board; only admins, the
+          owner, and granted users ever reach this page — say so plainly. */}
+      {(event as any).status === 'ghost' && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="banner-ghost-market">
+          Ghost market — hidden from the public board. Only admins, the owner, and granted users can see this page.
+        </div>
+      )}
+
       {/* Banner file input (hidden) */}
       {canManageEvent && (
         <input
