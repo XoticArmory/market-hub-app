@@ -884,9 +884,9 @@ export default function EventDetail() {
   // existing apply channel — no new behavior, just prominence. Logged-out
   // visitors get a working Apply too: direct channels open directly, and
   // VendorGrid-managed registration routes through sign-in.
-  const showDirectApplyCta = !isOwner && !event.canceledAt && (isExternalReg || isFormReg || isEmailReg || isPhoneReg);
-  const showAuthApplyCta = !isOwner && !event.canceledAt && !isAuthenticated && !showDirectApplyCta && (isVendorGridReg || !regType);
-  const showProRegisterCta = isVendorPro && !isOwner && !event.canceledAt && !alreadyRegistered && !myPost && isVendorGridReg && vendorSpacesLeft > 0;
+  const showDirectApplyCta = !isOwner && !event?.canceledAt && (isExternalReg || isFormReg || isEmailReg || isPhoneReg);
+  const showAuthApplyCta = !isOwner && !event?.canceledAt && !isAuthenticated && !showDirectApplyCta && (isVendorGridReg || !regType);
+  const showProRegisterCta = isVendorPro && !isOwner && !event?.canceledAt && !alreadyRegistered && !myPost && isVendorGridReg && vendorSpacesLeft > 0;
   const renderApplyButton = (className: string, testid: string) => {
     if (showDirectApplyCta) {
       if (isExternalReg || isFormReg) {
