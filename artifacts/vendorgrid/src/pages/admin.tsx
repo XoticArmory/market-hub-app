@@ -289,6 +289,12 @@ export default function AdminPage() {
   const [transferUserId, setTransferUserId] = useState("");
   const [userSearch, setUserSearch] = useState("");
 
+  // Admin user rows carry identity nested under `user` (same shape the All
+  // Users tab renders: u.user.firstName/lastName/email/profileImageUrl).
+  // The transfer list must read those fields, not top-level displayName/email.
+  const transferUserName = (u: any) =>
+    [u.user?.firstName, u.user?.lastName].filter(Boolean).join(" ") || u.user?.email || "";
+
   const toggleAdmin = useMutation({
     mutationFn: ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) =>
       apiRequest("POST", `/api/admin/users/${userId}/admin`, { isAdmin }),
@@ -853,7 +859,7 @@ export default function AdminPage() {
               {(users || [])
                 .filter((u: any) => {
                   const q = userSearch.toLowerCase();
-                  return !q || (u.displayName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+                  return !q || transferUserName(u).toLowerCase().includes(q) || (u.user?.email || "").toLowerCase().includes(q);
                 })
                 .map((u: any) => (
                   <button
@@ -864,12 +870,12 @@ export default function AdminPage() {
                     data-testid={`option-transfer-user-${u.userId}`}
                   >
                     <Avatar className="w-7 h-7 shrink-0">
-                      <AvatarImage src={u.avatarUrl || undefined} />
-                      <AvatarFallback className="text-xs">{(u.displayName || u.email || "?")[0].toUpperCase()}</AvatarFallback>
+                      <AvatarImage src={u.user?.profileImageUrl || undefined} />
+                      <AvatarFallback className="text-xs">{(transferUserName(u) || u.user?.email || "?")[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{u.displayName || u.email}</p>
-                      {u.displayName && <p className="text-xs opacity-70 truncate">{u.email}</p>}
+                      <p className="text-sm font-medium truncate">{transferUserName(u) || u.user?.email}</p>
+                      {transferUserName(u) && <p className="text-xs opacity-70 truncate">{u.user?.email}</p>}
                     </div>
                     {u.subscriptionTier && u.subscriptionTier !== "free" && (
                       <Badge variant="secondary" className="ml-auto shrink-0 text-xs">{TIER_LABELS[u.subscriptionTier] || u.subscriptionTier}</Badge>
@@ -878,7 +884,7 @@ export default function AdminPage() {
                 ))}
               {(users || []).filter((u: any) => {
                 const q = userSearch.toLowerCase();
-                return !q || (u.displayName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+                return !q || transferUserName(u).toLowerCase().includes(q) || (u.user?.email || "").toLowerCase().includes(q);
               }).length === 0 && <p className="text-sm text-muted-foreground text-center py-3">No users found.</p>}
             </div>
           </div>
