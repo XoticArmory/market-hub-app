@@ -8,12 +8,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck, Settings, Users, Loader2, User, BarChart3, CalendarDays, Package, Trash2, CreditCard, CheckCircle, XCircle, Tag, DollarSign } from "lucide-react";
+import { ShieldCheck, Settings, Users, Loader2, User, BarChart3, CalendarDays, Package, Trash2, CreditCard, CheckCircle, XCircle, Tag, DollarSign, Ghost } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -263,6 +264,214 @@ function PromoCodesTab() {
   );
 }
 
+function GhostsTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const emptyForm = { title: "", description: "", location: "", areaCode: "", date: "", endTime: "", vendorSpaces: "", spotPrice: "", vendorRegistrationType: "vendorgrid", vendorRegistrationUrl: "", contactEmail: "", eventWebsiteUrl: "", category: "" };
+  const [form, setForm] = useState(emptyForm);
+  const [accessEvent, setAccessEvent] = useState<any>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [pickedUserId, setPickedUserId] = useState("");
+  // Nested user.* shape, same as the Transfer dialog (PR #21): never top-level displayName/email.
+  const ghostUserName = (u: any) => [u.user?.firstName, u.user?.lastName].filter(Boolean).join(" ") || u.user?.email || "";
+
+  const { data: ghosts = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/ghost-events"],
+    queryFn: async () => { const r = await fetch("/api/admin/ghost-events", { credentials: "include" }); if (!r.ok) return []; return r.json(); },
+    retry: false,
+  });
+  const { data: users } = useAdminUsers();
+  const { data: access = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/ghost-events", accessEvent?.id, "access"],
+    queryFn: async () => { const r = await fetch(`/api/admin/ghost-events/${accessEvent.id}/access`, { credentials: "include" }); return r.json(); },
+    enabled: !!accessEvent,
+    retry: false,
+  });
+  const grantedIds = new Set((access || []).map((g: any) => g.userId));
+
+  const createGhost = useMutation({
+    mutationFn: async (data: any) => {
+      const r = await fetch("/api/admin/ghost-events", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      return r.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/ghost-events"] }); queryClient.invalidateQueries({ queryKey: ["/api/admin/events"] }); setForm(emptyForm); toast({ title: "Ghost market created — hidden from the public board" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const publishGhost = useMutation({
+    mutationFn: async (id: number) => { const r = await fetch(`/api/admin/ghost-events/${id}/publish`, { method: "POST", credentials: "include" }); if (!r.ok) { const e = await r.json(); throw new Error(e.message); } return r.json(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/ghost-events"] }); queryClient.invalidateQueries({ queryKey: ["/api/admin/events"] }); toast({ title: "Ghost market published" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const deleteGhost = useMutation({
+    mutationFn: async (id: number) => { const r = await fetch(`/api/admin/ghost-events/${id}`, { method: "DELETE", credentials: "include" }); if (!r.ok) { const e = await r.json(); throw new Error(e.message); } return r.json(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/ghost-events"] }); queryClient.invalidateQueries({ queryKey: ["/api/admin/events"] }); toast({ title: "Ghost market deleted" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const grantAccess = useMutation({
+    mutationFn: async ({ id, userId }: { id: number; userId: string }) => { const r = await fetch(`/api/admin/ghost-events/${id}/access`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ userId }) }); if (!r.ok) { const e = await r.json(); throw new Error(e.message); } return r.json(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/ghost-events", accessEvent?.id, "access"] }); queryClient.invalidateQueries({ queryKey: ["/api/admin/ghost-events"] }); setPickedUserId(""); setUserSearch(""); toast({ title: "Access granted" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const revokeAccess = useMutation({
+    mutationFn: async ({ id, userId }: { id: number; userId: string }) => { const r = await fetch(`/api/admin/ghost-events/${id}/access/${userId}`, { method: "DELETE", credentials: "include" }); if (!r.ok) { const e = await r.json(); throw new Error(e.message); } return r.json(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/ghost-events", accessEvent?.id, "access"] }); queryClient.invalidateQueries({ queryKey: ["/api/admin/ghost-events"] }); toast({ title: "Access revoked" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const submit = () => {
+    if (!form.title.trim() || !form.date || !form.location.trim()) { toast({ title: "Title, date and location are required", variant: "destructive" }); return; }
+    createGhost.mutate({
+      ...form,
+      date: new Date(form.date).toISOString(),
+      endTime: form.endTime ? new Date(form.endTime).toISOString() : undefined,
+      vendorSpaces: form.vendorSpaces ? Number(form.vendorSpaces) : 0,
+      spotPrice: form.spotPrice ? Number(form.spotPrice) : 0,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Ghost className="w-5 h-5" />Create Ghost Market</CardTitle>
+          <CardDescription>A ghost market is a fully functional listing that is invisible to the public — it never appears on the board, map, or sitemap, and its page 404s for anyone without access. Use it to test VendorGrid registration, the application form, and approvals from a Pro user's perspective. Only admins, the owner, and users you grant access to can open it.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2"><p className="text-sm font-medium">Title *</p><Input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="Test market name" data-testid="input-ghost-title" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Location *</p><Input value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="Venue, City, ST" data-testid="input-ghost-location" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Date &amp; time *</p><Input type="datetime-local" value={form.date} onChange={(e) => set("date", e.target.value)} data-testid="input-ghost-date" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">End time (optional)</p><Input type="datetime-local" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} data-testid="input-ghost-end-time" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Area code (optional)</p><Input value={form.areaCode} onChange={(e) => set("areaCode", e.target.value)} placeholder="e.g. 406" data-testid="input-ghost-area-code" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Category (optional)</p><Input value={form.category} onChange={(e) => set("category", e.target.value)} placeholder="e.g. Craft Fair" data-testid="input-ghost-category" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Vendor spaces</p><Input type="number" min="0" value={form.vendorSpaces} onChange={(e) => set("vendorSpaces", e.target.value)} placeholder="0" data-testid="input-ghost-spaces" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Spot price (cents)</p><Input type="number" min="0" value={form.spotPrice} onChange={(e) => set("spotPrice", e.target.value)} placeholder="0" data-testid="input-ghost-spot-price" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">How vendors register</p>
+              <Select value={form.vendorRegistrationType} onValueChange={(v) => set("vendorRegistrationType", v)}>
+                <SelectTrigger data-testid="select-ghost-reg-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vendorgrid">Register through VendorGrid</SelectItem>
+                  <SelectItem value="external">External signup link</SelectItem>
+                  <SelectItem value="form">Application form link</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="phone">Phone</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><p className="text-sm font-medium">Registration URL / email / phone</p><Input value={form.vendorRegistrationUrl} onChange={(e) => set("vendorRegistrationUrl", e.target.value)} placeholder="Required unless VendorGrid registration" data-testid="input-ghost-reg-url" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Contact email (optional)</p><Input value={form.contactEmail} onChange={(e) => set("contactEmail", e.target.value)} placeholder="organizer@example.com" data-testid="input-ghost-contact-email" /></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Event website (optional)</p><Input value={form.eventWebsiteUrl} onChange={(e) => set("eventWebsiteUrl", e.target.value)} placeholder="https://…" data-testid="input-ghost-website" /></div>
+          </div>
+          <div className="space-y-2"><p className="text-sm font-medium">Details &amp; guidelines</p><Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Full event details for testers…" rows={4} data-testid="input-ghost-description" /></div>
+          <Button onClick={submit} disabled={createGhost.isPending} className="rounded-xl" data-testid="button-create-ghost">
+            {createGhost.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : "Create ghost market"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Ghost Markets</CardTitle><CardDescription>Hidden listings. Grant access to specific users so they can open the page and test registration.</CardDescription></CardHeader>
+        <CardContent>
+          {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div> : (
+            <div className="space-y-3">
+              {(ghosts || []).map((g: any) => (
+                <div key={g.id} className="flex items-center gap-4 p-4 bg-muted/40 rounded-xl" data-testid={`ghost-row-${g.id}`}>
+                  <Ghost className="w-8 h-8 text-primary/50 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate flex items-center gap-2">{g.title}<Badge variant="secondary">Ghost</Badge></p>
+                    <p className="text-sm text-muted-foreground">{g.location} · {new Date(g.date).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground">Owner: {g.creatorName || "Unknown"} · {g.grantCount ?? 0} granted user{(g.grantCount ?? 0) === 1 ? "" : "s"} · Registration: {g.vendorRegistrationType || "—"}</p>
+                  </div>
+                  <Button size="sm" variant="outline" className="rounded-xl h-8 shrink-0" onClick={() => { setAccessEvent(g); setUserSearch(""); setPickedUserId(""); }} data-testid={`button-ghost-access-${g.id}`}>
+                    Manage access
+                  </Button>
+                  <Button size="sm" variant="outline" className="rounded-xl h-8 shrink-0" onClick={() => publishGhost.mutate(g.id)} disabled={publishGhost.isPending} data-testid={`button-ghost-publish-${g.id}`}>
+                    Publish
+                  </Button>
+                  <Button size="sm" variant="destructive" className="rounded-xl h-8 shrink-0" onClick={() => deleteGhost.mutate(g.id)} disabled={deleteGhost.isPending} data-testid={`button-ghost-delete-${g.id}`}>
+                    <Trash2 className="w-3 h-3 mr-1" />Delete
+                  </Button>
+                </div>
+              ))}
+              {(ghosts || []).length === 0 && <p className="text-muted-foreground text-sm">No ghost markets yet.</p>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!accessEvent} onOpenChange={(v) => { if (!v) { setAccessEvent(null); setUserSearch(""); setPickedUserId(""); } }}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-display">Manage Access — {accessEvent?.title}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Only these users (plus admins and the owner) can open this ghost market's page.</p>
+          <div className="mt-4 space-y-3">
+            <Input
+              placeholder="Search users by name or email..."
+              value={userSearch}
+              onChange={(e) => { setUserSearch(e.target.value); setPickedUserId(""); }}
+              data-testid="input-ghost-user-search"
+            />
+            <div className="max-h-56 overflow-y-auto space-y-1 border border-border rounded-xl p-2">
+              {(users || [])
+                .filter((u: any) => {
+                  const q = userSearch.toLowerCase();
+                  return !grantedIds.has(u.userId) && (!q || ghostUserName(u).toLowerCase().includes(q) || (u.user?.email || "").toLowerCase().includes(q));
+                })
+                .map((u: any) => (
+                  <button
+                    key={u.userId}
+                    type="button"
+                    onClick={() => setPickedUserId(u.userId)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${pickedUserId === u.userId ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    data-testid={`option-ghost-user-${u.userId}`}
+                  >
+                    <Avatar className="w-7 h-7 shrink-0">
+                      <AvatarImage src={u.user?.profileImageUrl || undefined} />
+                      <AvatarFallback className="text-xs">{(ghostUserName(u) || u.user?.email || "?")[0].toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{ghostUserName(u) || u.user?.email}</p>
+                      {ghostUserName(u) && <p className="text-xs opacity-70 truncate">{u.user?.email}</p>}
+                    </div>
+                  </button>
+                ))}
+              {(users || []).filter((u: any) => {
+                const q = userSearch.toLowerCase();
+                return !grantedIds.has(u.userId) && (!q || ghostUserName(u).toLowerCase().includes(q) || (u.user?.email || "").toLowerCase().includes(q));
+              }).length === 0 && <p className="text-sm text-muted-foreground text-center py-3">No users found.</p>}
+            </div>
+            <Button className="w-full rounded-xl" disabled={!pickedUserId || grantAccess.isPending} onClick={() => grantAccess.mutate({ id: accessEvent.id, userId: pickedUserId })} data-testid="button-grant-access">
+              {grantAccess.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Granting...</> : "Grant access"}
+            </Button>
+          </div>
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-medium">Granted users</p>
+            {(access || []).length === 0 && <p className="text-sm text-muted-foreground">No one granted yet.</p>}
+            {(access || []).map((g: any) => (
+              <div key={g.userId} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/40">
+                <Avatar className="w-7 h-7 shrink-0">
+                  <AvatarImage src={g.userAvatar || undefined} />
+                  <AvatarFallback className="text-xs">{(g.userName || g.userEmail || "?")[0].toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{g.userName || g.userEmail}</p>
+                  {g.userName && <p className="text-xs text-muted-foreground truncate">{g.userEmail}</p>}
+                </div>
+                <Button size="sm" variant="outline" className="rounded-xl h-8 shrink-0" onClick={() => revokeAccess.mutate({ id: accessEvent.id, userId: g.userId })} disabled={revokeAccess.isPending} data-testid={`button-revoke-access-${g.userId}`}>
+                  Revoke
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
   const { data: profileData } = useRealProfile();
@@ -377,6 +586,7 @@ export default function AdminPage() {
           <TabsTrigger value="dashboard" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><BarChart3 className="w-4 h-4" />Dashboard</TabsTrigger>
           <TabsTrigger value="users" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Users className="w-4 h-4" />Users</TabsTrigger>
           <TabsTrigger value="events" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><CalendarDays className="w-4 h-4" />Events</TabsTrigger>
+          <TabsTrigger value="ghosts" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Ghost className="w-4 h-4" />Ghosts</TabsTrigger>
           <TabsTrigger value="payments" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Package className="w-4 h-4" />Payments</TabsTrigger>
           <TabsTrigger value="settings" className="rounded-lg px-4 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2"><Settings className="w-4 h-4" />Settings</TabsTrigger>
         </TabsList>
@@ -701,7 +911,7 @@ export default function AdminPage() {
                     <div key={e.id} className="flex items-center gap-4 p-4 bg-muted/40 rounded-xl" data-testid={`event-row-${e.id}`}>
                       <CalendarDays className="w-8 h-8 text-primary/50 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate">{e.title}</p>
+                        <p className="font-semibold truncate flex items-center gap-2">{e.title}{e.status === 'ghost' && <Badge variant="secondary">Ghost</Badge>}</p>
                         <p className="text-sm text-muted-foreground">{e.location} · {new Date(e.date).toLocaleDateString()}</p>
                         <p className="text-xs text-muted-foreground">Owner: {e.creatorName || "Unknown"} · {e.attendingCount} attending</p>
                       </div>
@@ -719,6 +929,10 @@ export default function AdminPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="ghosts" className="mt-0">
+          <GhostsTab />
         </TabsContent>
 
         {/* REGISTRATIONS */}
