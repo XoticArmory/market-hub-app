@@ -205,8 +205,8 @@ export function EventCard({ event, index = 0, posts = [], cityName = null, mapMo
         <div className="group h-full bg-card rounded-2xl overflow-hidden border border-border/50 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
           {/* Image — clickable link to event. Flyers are shown WHOLE (contain
               over a blurred fill of themselves) so flyer text is never cropped
-              mid-word; the date badge and vendor stack live in the card body
-              instead of overlapping the image. */}
+              mid-word; the date flag sits in the top-right corner for quick
+              visual scanning, and the vendor stack lives in the card body. */}
           <Link href={`/events/${event.id}`} className="block shrink-0" onClick={(e) => { if (mapMode) e.preventDefault(); else if (!isAuthenticated) trackAnonEventClick(event.id); }}>
             <div className="h-48 bg-muted relative overflow-hidden">
               {(event as any).bannerUrl ? (
@@ -216,6 +216,16 @@ export function EventCard({ event, index = 0, posts = [], cityName = null, mapMo
                 </>
               ) : (
                 <EventBannerPlaceholder className="absolute inset-0 h-full w-full" />
+              )}
+              {event.canceledAt ? (
+                <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
+                  CANCELED
+                </div>
+              ) : (
+                <div className="absolute top-4 right-4 bg-background/90 backdrop-blur text-foreground px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center">
+                  <span className="text-primary">{format(nextDate, 'MMM')}</span>
+                  <span className="text-xl leading-none">{format(nextDate, 'dd')}</span>
+                </div>
               )}
               {event.areaCode && (
                 <div className="absolute top-4 left-4 bg-background/80 backdrop-blur px-2 py-1 rounded-lg text-xs font-semibold text-foreground flex flex-col gap-0.5">
@@ -229,14 +239,6 @@ export function EventCard({ event, index = 0, posts = [], cityName = null, mapMo
           </Link>
           {/* Content */}
           <div className="p-6 flex-1 flex flex-col">
-            {/* Date — moved off the image so it never covers flyer headlines */}
-            <div className="flex items-center gap-2 mb-2">
-              {event.canceledAt ? (
-                <span className="bg-destructive text-destructive-foreground px-2.5 py-1 rounded-lg text-xs font-bold">CANCELED</span>
-              ) : (
-                <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-lg text-xs font-bold">{format(nextDate, 'EEE, MMM d')}</span>
-              )}
-            </div>
             {/* Title row: only save-the-date + share stay on the card. Email,
                 phone, website and directions live on the detail page. */}
             <div className="flex items-start gap-2 mb-2">
