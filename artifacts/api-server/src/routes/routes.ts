@@ -992,6 +992,111 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(updated);
   });
 
+  // ---- LISTING OWNERSHIP CLAIMS ----
+  // A signed-in non-owner asks to own a listing. The request is stored and
+  // reviewed by an admin; approval transfers ownership through the existing
+  // transfer flow. A claim can never move ownership on its own.
+  app.post('/api/events/:id/claim', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    if (isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const event = await storage.getEvent(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.canceledAt) return res.status(400).json({ message: "This event has been canceled." });
+    if (event.createdBy === userId) return res.status(400).json({ message: "You already own this listing." });
+    const existing = await storage.getClaimRequestByEventAndUser(eventId, userId);
+    if (existing?.status === 'pending') return res.status(409).json({ message: "Your claim request is already pending review." });
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, 500) : undefined;
+    const claim = await storage.createClaimRequest({ eventId, userId, message: message || undefined });
+    // Notify every admin so the request is seen without polling the admin page.
+    try {
+      const requester = await enrichUser(userId);
+      const admins = (await storage.getAllUserProfiles()).filter(p => p.isAdmin === true);
+      for (const admin of admins) {
+        await storage.createNotification({
+          userId: admin.userId, fromUserId: userId, type: 'claim',
+          title: `New listing claim: ${event.title}`,
+          message: `${requester.name || requester.email || 'Someone'} asked to claim ownership of "${event.title}". Review it in Admin → Events.`,
+          eventId,
+        });
+      }
+    } catch (e) { console.error('Failed to notify admins of claim request', e); }
+    res.status(201).json(claim);
+  });
+
+  // Current user's claim status for one event (drives the button/pending
+  // badge on the event detail page).
+  app.get('/api/events/:id/claim-status', isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const eventId = Number(req.params.id);
+    if (isNaN(eventId)) return res.status(400).json({ message: "Invalid event id" });
+    const claim = await storage.getClaimRequestByEventAndUser(eventId, userId);
+    res.json({ hasPendingClaim: claim?.status === 'pending', status: claim?.status ?? null });
+  });
+
+  app.get('/api/admin/claim-requests', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const claims = await storage.getClaimRequests();
+    const enriched = await Promise.all(claims.map(async (c) => {
+      const event = await storage.getEvent(c.eventId);
+      const requester = await enrichUser(c.userId);
+      return {
+        ...c,
+        eventTitle: event?.title ?? null,
+        eventLocation: event?.location ?? null,
+        eventDate: event?.date ?? null,
+        requesterName: requester.name ?? null,
+        requesterEmail: requester.email ?? null,
+        requesterAvatar: requester.avatar ?? null,
+      };
+    }));
+    res.json(enriched);
+  });
+
+  app.post('/api/admin/claim-requests/:id/approve', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid claim id" });
+    const claim = await storage.getClaimRequest(id);
+    if (!claim) return res.status(404).json({ message: "Claim request not found" });
+    if (claim.status !== 'pending') return res.status(409).json({ message: `This request was already ${claim.status}.` });
+    const event = await storage.getEvent(claim.eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    await storage.transferEventOwnership(claim.eventId, claim.userId);
+    const decided = await storage.updateClaimRequestStatus(id, 'approved');
+    try {
+      await storage.createNotification({
+        userId: claim.userId, type: 'claim',
+        title: 'Your listing claim was approved',
+        message: `You now own "${event.title}" on VendorGrid — you can edit its details and manage vendor applications.`,
+        eventId: claim.eventId,
+      });
+    } catch (e) { console.error('Failed to notify claim approval', e); }
+    res.json(decided);
+  });
+
+  app.post('/api/admin/claim-requests/:id/reject', isAuthenticated, async (req: any, res) => {
+    if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid claim id" });
+    const claim = await storage.getClaimRequest(id);
+    if (!claim) return res.status(404).json({ message: "Claim request not found" });
+    if (claim.status !== 'pending') return res.status(409).json({ message: `This request was already ${claim.status}.` });
+    const event = await storage.getEvent(claim.eventId);
+    const decided = await storage.updateClaimRequestStatus(id, 'rejected');
+    try {
+      await storage.createNotification({
+        userId: claim.userId, type: 'claim',
+        title: 'Your listing claim was not approved',
+        message: event
+          ? `Your request to own "${event.title}" was not approved. If you are the organizer, reach out through the contact page and we can sort it out.`
+          : 'Your request to own a listing was not approved. If you are the organizer, reach out through the contact page and we can sort it out.',
+        eventId: claim.eventId,
+      });
+    } catch (e) { console.error('Failed to notify claim rejection', e); }
+    res.json(decided);
+  });
+
   // ---- ADMIN: DRAFT EVENTS ----
   app.get('/api/admin/draft-events', isAuthenticated, async (req: any, res) => {
     if (!(await isAdminUser(req.user.claims.sub))) return res.status(403).json({ message: "Forbidden" });

@@ -6,6 +6,7 @@ import {
   vendorCatalog, vendorCatalogAssignments, vendorInventorySales, roadmapItems,
   promoCodes, promoCodeUses, referralRewards, anonymousEventClicks, eventVendorEntries, userPageOpens, appInstalls,
   vendorItemCogs, vendorEventOverhead, documents, eventDocuments, userFiles, directMessages,
+  eventClaimRequests,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
   type Message, type InsertMessage, type EventDate, type EventAttendance,
   type UserProfile, type InsertUserProfile, type AdminSetting,
@@ -20,6 +21,7 @@ import {
   type EventDocument, type InsertEventDocument,
   type UserFile, type InsertUserFile,
   type DirectMessage,
+  type EventClaimRequest, type InsertEventClaimRequest,
 } from "@workspace/db";
 import { users } from "@workspace/db";
 
@@ -45,6 +47,13 @@ export interface IStorage {
   transferEventOwnership(eventId: number, newOwnerId: string): Promise<Event>;
   updateEventBanner(id: number, bannerUrl: string | null): Promise<void>;
   updateVendorSpacesUsed(eventId: number, delta: number): Promise<void>;
+
+  // Listing ownership-claim requests
+  createClaimRequest(data: InsertEventClaimRequest): Promise<EventClaimRequest>;
+  getClaimRequest(id: number): Promise<EventClaimRequest | undefined>;
+  getClaimRequestByEventAndUser(eventId: number, userId: string): Promise<EventClaimRequest | undefined>;
+  getClaimRequests(): Promise<EventClaimRequest[]>;
+  updateClaimRequestStatus(id: number, status: string): Promise<EventClaimRequest>;
 
   // Event Dates
   getEventDates(eventId: number): Promise<EventDate[]>;
@@ -351,6 +360,33 @@ export class DatabaseStorage implements IStorage {
   async transferEventOwnership(eventId: number, newOwnerId: string): Promise<Event> {
     const [updated] = await db.update(events).set({ createdBy: newOwnerId }).where(eq(events.id, eventId)).returning();
     return updated;
+  }
+
+  // ---- Listing ownership-claim requests ----
+  async createClaimRequest(data: InsertEventClaimRequest): Promise<EventClaimRequest> {
+    const [row] = await db.insert(eventClaimRequests).values(data).returning();
+    return row;
+  }
+
+  async getClaimRequest(id: number): Promise<EventClaimRequest | undefined> {
+    const [row] = await db.select().from(eventClaimRequests).where(eq(eventClaimRequests.id, id));
+    return row;
+  }
+
+  async getClaimRequestByEventAndUser(eventId: number, userId: string): Promise<EventClaimRequest | undefined> {
+    const [row] = await db.select().from(eventClaimRequests)
+      .where(and(eq(eventClaimRequests.eventId, eventId), eq(eventClaimRequests.userId, userId)))
+      .orderBy(desc(eventClaimRequests.createdAt)).limit(1);
+    return row;
+  }
+
+  async getClaimRequests(): Promise<EventClaimRequest[]> {
+    return await db.select().from(eventClaimRequests).orderBy(desc(eventClaimRequests.createdAt));
+  }
+
+  async updateClaimRequestStatus(id: number, status: string): Promise<EventClaimRequest> {
+    const [row] = await db.update(eventClaimRequests).set({ status, decidedAt: new Date() }).where(eq(eventClaimRequests.id, id)).returning();
+    return row;
   }
 
   async updateEventBanner(id: number, bannerUrl: string | null): Promise<void> {

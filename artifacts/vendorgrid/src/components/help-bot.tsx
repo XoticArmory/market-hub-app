@@ -110,9 +110,9 @@ const HELP_ENTRIES: HelpEntry[] = [
     id: "takeover",
     keywords: ["claim", "takeover", "take over", "ownership", "my event is listed"],
     answer:
-      "Listings are managed by the person who posted them. If your event is listed and you'd like to manage it, reach out through the contact page and we'll hand it over.",
-    link: "/contact",
-    linkLabel: "Contact us",
+      "If your event is listed on VendorGrid, open the listing and use the 'Claim this listing' button — send the request and we'll review it and hand over ownership so you can manage it.",
+    link: "/",
+    linkLabel: "Browse events",
   },
   {
     id: "profile",
