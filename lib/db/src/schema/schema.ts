@@ -434,6 +434,26 @@ export const insertEventDocumentSchema = createInsertSchema(eventDocuments).omit
 export type InsertEventDocument = typeof eventDocuments.$inferInsert;
 export type EventDocument = typeof eventDocuments.$inferSelect;
 
+// Ownership-claim requests: a signed-in non-owner asks to own a listing.
+// An admin reviews each request in Admin → Events and approves (which
+// transfers ownership through the existing transfer flow) or rejects.
+// Approval is a deliberate admin action — a claim request can never move
+// ownership on its own, so a stranger can't take over a listing by
+// clicking the button.
+export const eventClaimRequests = pgTable("event_claim_requests", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  message: text("message"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  decidedAt: timestamp("decided_at"),
+});
+
+export const insertEventClaimRequestSchema = createInsertSchema(eventClaimRequests).omit({ id: true, createdAt: true, decidedAt: true });
+export type InsertEventClaimRequest = z.infer<typeof insertEventClaimRequestSchema>;
+export type EventClaimRequest = typeof eventClaimRequests.$inferSelect;
+
 export const userFiles = pgTable("user_files", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),

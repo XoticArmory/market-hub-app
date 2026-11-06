@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAdminSettings, useAdminUsers, useUpsertSetting, useClaimAdmin } from "@/hooks/use-admin";
+import { useAdminClaimRequests, useReviewClaimRequest } from "@/hooks/use-event-claim";
 import { useRealProfile } from "@/hooks/use-profile";
 import { useAdminPreview } from "@/contexts/admin-preview";
 import { useAuth } from "@/hooks/use-auth";
@@ -278,6 +279,8 @@ export default function AdminPage() {
   const { data: appInstalls } = useAppInstallStats();
   const { data: allEvents, isLoading: loadingEvents } = useAdminAllEvents();
   const { data: registrations, isLoading: loadingRegs } = useAdminRegistrations();
+  const { data: claimRequests, isLoading: loadingClaims } = useAdminClaimRequests();
+  const reviewClaim = useReviewClaimRequest();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -691,7 +694,44 @@ export default function AdminPage() {
         </TabsContent>
 
         {/* EVENTS */}
-        <TabsContent value="events" className="mt-0">
+        <TabsContent value="events" className="mt-0 space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Listing Claim Requests</CardTitle><CardDescription>Organizers asking to own a listing. Approving transfers ownership to them immediately — only approve once you&rsquo;ve confirmed they&rsquo;re the organizer.</CardDescription></CardHeader>
+            <CardContent>
+              {loadingClaims ? <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div> : (
+                <div className="space-y-3">
+                  {(claimRequests || []).map((c: any) => (
+                    <div key={c.id} className="flex flex-wrap items-center gap-4 p-4 bg-muted/40 rounded-xl" data-testid={`claim-row-${c.id}`}>
+                      <ShieldCheck className="w-8 h-8 text-primary/50 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{c.eventTitle || `Event #${c.eventId}`}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {c.requesterName || c.requesterEmail || "Unknown user"}
+                          {c.requesterName && c.requesterEmail ? ` · ${c.requesterEmail}` : ""}
+                          {c.eventLocation ? ` · ${c.eventLocation}` : ""}
+                          {c.eventDate ? ` · ${new Date(c.eventDate).toLocaleDateString()}` : ""}
+                        </p>
+                        {c.message && <p className="text-sm mt-1">&ldquo;{c.message}&rdquo;</p>}
+                        <p className="text-xs text-muted-foreground mt-1">Requested {new Date(c.createdAt).toLocaleString()}</p>
+                      </div>
+                      <Badge variant={c.status === "pending" ? "outline" : c.status === "approved" ? "default" : "destructive"} className={c.status === "approved" ? "bg-green-500" : ""}>{c.status}</Badge>
+                      {c.status === "pending" && (
+                        <div className="flex gap-2 shrink-0">
+                          <Button size="sm" className="rounded-xl h-8" onClick={() => reviewClaim.mutate({ id: c.id, decision: "approve" })} disabled={reviewClaim.isPending} data-testid={`button-claim-approve-${c.id}`}>
+                            <CheckCircle className="w-3 h-3 mr-1" />Approve &amp; transfer
+                          </Button>
+                          <Button size="sm" variant="outline" className="rounded-xl h-8" onClick={() => reviewClaim.mutate({ id: c.id, decision: "reject" })} disabled={reviewClaim.isPending} data-testid={`button-claim-reject-${c.id}`}>
+                            <XCircle className="w-3 h-3 mr-1" />Reject
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {(claimRequests || []).length === 0 && <p className="text-muted-foreground text-sm">No claim requests yet.</p>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader><CardTitle>All Events</CardTitle><CardDescription>View and manage all events on the platform.</CardDescription></CardHeader>
             <CardContent>

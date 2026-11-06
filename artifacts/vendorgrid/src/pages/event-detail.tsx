@@ -7,6 +7,7 @@ import { useProfile } from "@/hooks/use-profile";
 import { useAdminPreview } from "@/contexts/admin-preview";
 import { useEventRegistrations, useRegisterVendorSpace, useUnregisterVendorSpace, useDeclareVendingIntent } from "@/hooks/use-registrations";
 import { useEventMap } from "@/hooks/use-event-map";
+import { useClaimStatus, useSubmitClaim } from "@/hooks/use-event-claim";
 import { format } from "date-fns";
 import { MapPin, Calendar, Clock, Package, User, ArrowLeft, Loader2, Users, CheckCircle, Star, Hash, Map, DollarSign, ShieldCheck, Trash2, PlusCircle, Crown, X, ImageIcon, AlertTriangle, ExternalLink, Key, Copy, Camera, ClipboardList, ThumbsUp, ThumbsDown, Clock3, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil, Mail, Store, Navigation, Phone, Globe, LayoutGrid } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -535,6 +536,8 @@ export default function EventDetail() {
   const [addPhotoDialogOpen, setAddPhotoDialogOpen] = useState(false);
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [intentDialogOpen, setIntentDialogOpen] = useState(false);
+  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [claimMessage, setClaimMessage] = useState("");
   const [emailCopyOpen, setEmailCopyOpen] = useState(false);
   const [phoneCopyOpen, setPhoneCopyOpen] = useState(false);
   const [phoneCopied, setPhoneCopied] = useState(false);
@@ -817,6 +820,9 @@ export default function EventDetail() {
   const isAdmin = profile?.isAdmin === true;
   const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const canManageEvent = isAdmin || (isOwner && isEventOwnerPro);
+  // Listing-claim status for signed-in non-owners (drives the Claim button).
+  const { data: claimStatus } = useClaimStatus(eventId, isAuthenticated && !isOwner);
+  const submitClaim = useSubmitClaim(eventId);
   const hasVendorSpaces = (event?.vendorSpaces || 0) > 0;
   const regType = (event as any)?.vendorRegistrationType as string | null;
   const regUrl = (event as any)?.vendorRegistrationUrl as string | null;
@@ -1390,6 +1396,27 @@ export default function EventDetail() {
                 </Button>
               )}
 
+              {/* Claim this listing — signed-in non-owners only. The request
+                  goes to an admin for review; ownership is never moved
+                  instantly. A pending request shows as a badge instead. */}
+              {!isOwner && !event.canceledAt && (
+                claimStatus?.hasPendingClaim ? (
+                  <Badge variant="outline" className="gap-1.5 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5" data-testid="badge-claim-pending">
+                    <Clock3 className="w-3.5 h-3.5" />Claim Requested — Pending Review
+                  </Badge>
+                ) : (
+                  <Button
+                    size="default"
+                    variant="outline"
+                    className="rounded-xl gap-2"
+                    onClick={() => setClaimDialogOpen(true)}
+                    data-testid="button-claim-listing"
+                  >
+                    <ShieldCheck className="w-4 h-4" />Claim this listing
+                  </Button>
+                )
+              )}
+
               {/* I'm Vending Here — all authenticated non-owners, when not already registered */}
               {!isOwner && !event.canceledAt && !alreadyRegistered && !myPost && (
                 <Button
@@ -1484,6 +1511,37 @@ export default function EventDetail() {
                   </DialogContent>
                 </Dialog>
               )}
+
+              {/* Claim this listing — confirm + optional note for the admin */}
+              <Dialog open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
+                <DialogContent className="sm:max-w-md rounded-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-display">Claim this listing</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    Is <span className="font-medium text-foreground">{event.title}</span> your market? Send a claim request and we&rsquo;ll review it — once we&rsquo;ve confirmed you&rsquo;re the organizer, ownership moves to your account so you can edit the details and manage vendor applications.
+                  </p>
+                  <Textarea
+                    placeholder="Anything that helps us confirm you're the organizer? (optional — e.g. your role, or a link to the event's own page)"
+                    className="min-h-[80px] rounded-xl resize-none mt-4"
+                    value={claimMessage}
+                    onChange={(e) => setClaimMessage(e.target.value)}
+                    maxLength={500}
+                    data-testid="input-claim-message"
+                  />
+                  <div className="flex gap-3 mt-4">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setClaimDialogOpen(false)}>Cancel</Button>
+                    <Button
+                      className="flex-1 rounded-xl"
+                      disabled={submitClaim.isPending}
+                      onClick={() => submitClaim.mutate(claimMessage || undefined, { onSuccess: () => { setClaimDialogOpen(false); setClaimMessage(""); } })}
+                      data-testid="button-submit-claim"
+                    >
+                      {submitClaim.isPending ? "Sending..." : "Send claim request"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* Generate Market Day Report — Pro users after event ends */}
               {isAuthenticated && (isVendorPro || isEventOwnerPro) && new Date(event.date) < new Date() && (
@@ -1719,6 +1777,11 @@ export default function EventDetail() {
           ) : (
             <div className="flex flex-wrap items-center gap-3">
               {applyCta}
+              {!event.canceledAt && (
+                <Button asChild variant="outline" className="rounded-xl gap-2" title="Sign in to claim this listing" data-testid="button-claim-listing-login">
+                  <a href="/auth"><ShieldCheck className="w-4 h-4" />Claim this listing</a>
+                </Button>
+              )}
               <Button asChild variant="outline" className="rounded-xl" data-testid="button-login-to-attend">
                 <a href="/auth">Login to mark attendance</a>
               </Button>
