@@ -5,6 +5,7 @@ import {
   notifications, eventMaps, vendorRegistrations, termsAcceptances, profileViews, vendorInventory,
   vendorCatalog, vendorCatalogAssignments, vendorInventorySales, roadmapItems,
   promoCodes, promoCodeUses, referralRewards, anonymousEventClicks, eventVendorEntries, userPageOpens, appInstalls,
+  vendorItemCogs, vendorEventOverhead, documents, eventDocuments, userFiles, directMessages, ghostEventAccess,
   vendorItemCogs, vendorEventOverhead, documents, eventDocuments, userFiles, directMessages,
   eventClaimRequests,
   type Event, type InsertEvent, type VendorPost, type InsertVendorPost,
@@ -48,6 +49,16 @@ export interface IStorage {
   updateEventBanner(id: number, bannerUrl: string | null): Promise<void>;
   updateVendorSpacesUsed(eventId: number, delta: number): Promise<void>;
 
+  // Ghost markets (status 'ghost'): invisible publicly, functional for
+  // admins, the owner, and granted users. The admin list includes ghosts
+  // (but never drafts, preserving existing draft behavior).
+  getAdminEvents(): Promise<Event[]>;
+  getGhostEvents(): Promise<Event[]>;
+  hasGhostAccess(eventId: number, userId: string): Promise<boolean>;
+  getGhostAccess(eventId: number): Promise<{ id: number; eventId: number; userId: string; grantedBy: string; grantedAt: Date | null }[]>;
+  grantGhostAccess(eventId: number, userId: string, grantedBy: string): Promise<void>;
+  revokeGhostAccess(eventId: number, userId: string): Promise<void>;
+  clearGhostAccess(eventId: number): Promise<void>;
   // Listing ownership-claim requests
   createClaimRequest(data: InsertEventClaimRequest): Promise<EventClaimRequest>;
   getClaimRequest(id: number): Promise<EventClaimRequest | undefined>;
@@ -286,7 +297,8 @@ export class DatabaseStorage implements IStorage {
     const notCanceled = or(isNull(events.canceledAt), gte(events.canceledAt, threeDaysAgo));
     const hasActiveDate = inArray(events.id, activeIds);
     const notDraft = sql`(${events.status} IS NULL OR ${events.status} != 'draft')`;
-    const filters = and(notCanceled!, hasActiveDate, notDraft);
+    const notGhost = sql`(${events.status} IS NULL OR ${events.status} != 'ghost')`;
+    const filters = and(notCanceled!, hasActiveDate, notDraft, notGhost);
 
     if (areaCode) {
       return await db.select().from(events).where(and(eq(events.areaCode, areaCode), filters!)).orderBy(desc(events.createdAt));
@@ -298,6 +310,47 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(events)
       .where(eq(events.status, 'draft'))
       .orderBy(desc(events.createdAt));
+  }
+
+  // Admin event list: everything except drafts (published + ghost). Drafts
+  // keep their own admin endpoints and stay out of this list, as before.
+  async getAdminEvents(): Promise<Event[]> {
+    return await db.select().from(events)
+      .where(sql`(${events.status} IS NULL OR ${events.status} != 'draft')`)
+      .orderBy(desc(events.createdAt));
+  }
+
+  async getGhostEvents(): Promise<Event[]> {
+    return await db.select().from(events)
+      .where(eq(events.status, 'ghost'))
+      .orderBy(desc(events.createdAt));
+  }
+
+  async hasGhostAccess(eventId: number, userId: string): Promise<boolean> {
+    const rows = await db.select({ id: ghostEventAccess.id }).from(ghostEventAccess)
+      .where(and(eq(ghostEventAccess.eventId, eventId), eq(ghostEventAccess.userId, userId)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async getGhostAccess(eventId: number) {
+    return await db.select().from(ghostEventAccess)
+      .where(eq(ghostEventAccess.eventId, eventId))
+      .orderBy(ghostEventAccess.grantedAt);
+  }
+
+  async grantGhostAccess(eventId: number, userId: string, grantedBy: string): Promise<void> {
+    await db.insert(ghostEventAccess).values({ eventId, userId, grantedBy })
+      .onConflictDoNothing({ target: [ghostEventAccess.eventId, ghostEventAccess.userId] });
+  }
+
+  async revokeGhostAccess(eventId: number, userId: string): Promise<void> {
+    await db.delete(ghostEventAccess)
+      .where(and(eq(ghostEventAccess.eventId, eventId), eq(ghostEventAccess.userId, userId)));
+  }
+
+  async clearGhostAccess(eventId: number): Promise<void> {
+    await db.delete(ghostEventAccess).where(eq(ghostEventAccess.eventId, eventId));
   }
 
   async publishDraftEvent(id: number): Promise<Event> {

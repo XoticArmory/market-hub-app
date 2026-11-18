@@ -61,6 +61,19 @@ export const events = pgTable("events", {
   scrapedSource: text("scraped_source"),
 });
 
+// Ghost markets: events with status 'ghost' are invisible publicly (excluded
+// from the board/map/sitemap, detail 404s for non-viewers) but fully
+// functional for admins, the owner, and users listed here. Created via the
+// standalone SQL file lib/db/0002-ghost-event-access.sql (run once in the
+// Supabase SQL editor after merge); the API server is the only accessor.
+export const ghostEventAccess = pgTable("ghost_event_access", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  grantedBy: varchar("granted_by").notNull().references(() => users.id),
+  grantedAt: timestamp("granted_at").defaultNow(),
+}, (t) => [unique("ghost_event_access_event_user_unique").on(t.eventId, t.userId)]);
+
 export const eventDates = pgTable("event_dates", {
   id: serial("id").primaryKey(),
   eventId: integer("event_id").notNull().references(() => events.id),
