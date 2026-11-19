@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProfile } from "@/hooks/use-profile";
 import { useToast } from "@/hooks/use-toast";
@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   FileText, File, FileSpreadsheet, Presentation, Upload, Trash2,
   Download, FolderOpen, Plus, X, Loader2, Copy, Check, Lock, Image,
-  Search, Crown,
+  Search, Crown, Eye, ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -40,6 +41,69 @@ function getFileTypeBadge(fileType: string): string {
   if (fileType.startsWith("image/")) return "Image";
   if (fileType === "text/plain") return "Text";
   return "File";
+}
+
+function getPreviewKind(fileType: string): "image" | "pdf" | "office" | "text" | "other" {
+  if (fileType.startsWith("image/")) return "image";
+  if (fileType === "application/pdf") return "pdf";
+  if (fileType.includes("word") || fileType.includes("document") ||
+      fileType.includes("excel") || fileType.includes("sheet") ||
+      fileType.includes("presentation") || fileType.includes("powerpoint")) return "office";
+  if (fileType === "text/plain" || fileType === "text/csv") return "text";
+  return "other";
+}
+
+// Fetches a plain-text / CSV file and renders it inline.
+function TextPreview({ url }: { url: string }) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url).then(r => {
+      if (!r.ok) throw new Error("fetch failed");
+      return r.text();
+    }).then(t => { if (!cancelled) setText(t); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, [url]);
+  if (error) return <p className="text-sm text-muted-foreground p-4">Couldn&apos;t load a preview of this file — try Download instead.</p>;
+  if (text === null) return <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" />Loading preview…</div>;
+  return <pre className="whitespace-pre-wrap break-words text-sm bg-muted/40 rounded-xl p-4 overflow-auto max-h-[65vh]">{text}</pre>;
+}
+
+function FilePreview({ file }: { file: UserFile }) {
+  const kind = getPreviewKind(file.fileType);
+  if (kind === "image") {
+    return <img src={file.fileUrl} alt={file.title} className="max-h-[65vh] w-full object-contain rounded-xl bg-muted/40" />;
+  }
+  if (kind === "pdf") {
+    return <iframe src={file.fileUrl} title={file.title} className="w-full h-[65vh] rounded-xl border" />;
+  }
+  if (kind === "text") {
+    return <TextPreview url={file.fileUrl} />;
+  }
+  if (kind === "office") {
+    return (
+      <iframe
+        src={`https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(file.fileUrl)}`}
+        title={file.title}
+        className="w-full h-[65vh] rounded-xl border"
+      />
+    );
+  }
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+      {getFileIcon(file.fileType, "w-12 h-12")}
+      <p className="text-sm text-muted-foreground max-w-sm">
+        There&apos;s no inline preview for this file type yet — you can open it in a new tab or download it instead.
+      </p>
+      <a href={file.fileUrl} target="_blank" rel="noopener noreferrer">
+        <Button variant="outline" className="rounded-xl gap-2">
+          <ExternalLink className="w-4 h-4" />Open in new tab
+        </Button>
+      </a>
+    </div>
+  );
 }
 
 interface UserFile {
@@ -89,6 +153,7 @@ export default function MyFilesPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [viewingFile, setViewingFile] = useState<UserFile | null>(null);
   const [form, setForm] = useState({ title: "", file: null as File | null });
 
   const { data: files = [], isLoading } = useQuery<UserFile[]>({
@@ -169,6 +234,7 @@ export default function MyFilesPage() {
               {[
                 "Private storage — only you can see your files",
                 "Upload PDFs, Word docs, Excel sheets, images & more",
+                "View files right in your folder — no download needed",
                 "One-click shareable links for each file",
                 "Share file locations with VendorGrid instantly",
                 "Up to 25 MB per file",
@@ -212,9 +278,9 @@ export default function MyFilesPage() {
       {/* Share tip */}
       {files.length > 0 && (
         <div className="flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3">
-          <Copy className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <Eye className="w-4 h-4 text-primary mt-0.5 shrink-0" />
           <p className="text-sm text-muted-foreground">
-            Use <span className="font-semibold text-foreground">Copy Link</span> on any file to get a shareable URL — paste it anywhere VendorGrid asks for a file location.
+            Use <span className="font-semibold text-foreground">View</span> on any file to see it right here — no download needed. Use <span className="font-semibold text-foreground">Copy Link</span> to get a shareable URL — paste it anywhere VendorGrid asks for a file location.
           </p>
         </div>
       )}
@@ -353,7 +419,14 @@ export default function MyFilesPage() {
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-foreground leading-snug truncate">{file.title}</p>
+                      <button
+                        onClick={() => setViewingFile(file)}
+                        className="font-semibold text-foreground leading-snug truncate hover:text-primary hover:underline text-left"
+                        title="View this file"
+                        data-testid={`button-view-title-my-file-${file.id}`}
+                      >
+                        {file.title}
+                      </button>
                       <Badge variant="outline" className="text-xs shrink-0">{getFileTypeBadge(file.fileType)}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{file.fileName}</p>
@@ -364,6 +437,15 @@ export default function MyFilesPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    <Button
+                      size="sm"
+                      className="rounded-xl gap-1.5 h-8 text-xs"
+                      onClick={() => setViewingFile(file)}
+                      data-testid={`button-view-my-file-${file.id}`}
+                      title="View this file right here — no download needed"
+                    >
+                      <Eye className="w-3.5 h-3.5" />View
+                    </Button>
                     <CopyLinkButton url={file.fileUrl} id={file.id} />
                     <a href={file.fileUrl} target="_blank" rel="noopener noreferrer" download={file.fileName}>
                       <Button size="sm" variant="outline" className="rounded-xl gap-1.5 h-8 text-xs" data-testid={`button-download-my-file-${file.id}`}>
@@ -395,6 +477,40 @@ export default function MyFilesPage() {
         <Lock className="w-3.5 h-3.5" />
         Your files are private. Only you can see, manage, or delete them.
       </p>
+
+      {/* View preview — see the file right here, no download needed */}
+      <Dialog open={viewingFile !== null} onOpenChange={open => { if (!open) setViewingFile(null); }}>
+        <DialogContent className="sm:max-w-4xl rounded-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-view-my-file">
+          {viewingFile && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 pr-8">
+                  {getFileIcon(viewingFile.fileType)}
+                  <span className="truncate">{viewingFile.title}</span>
+                  <Badge variant="outline" className="text-xs shrink-0">{getFileTypeBadge(viewingFile.fileType)}</Badge>
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  {viewingFile.fileName} · {formatBytes(viewingFile.fileSize)} · Uploaded {format(new Date(viewingFile.createdAt), "MMM d, yyyy")}
+                </p>
+              </DialogHeader>
+              <div className="mt-2">
+                <FilePreview file={viewingFile} />
+              </div>
+              <div className="flex justify-end gap-2 mt-4 flex-wrap">
+                <CopyLinkButton url={viewingFile.fileUrl} id={viewingFile.id} />
+                <a href={viewingFile.fileUrl} target="_blank" rel="noopener noreferrer" download={viewingFile.fileName}>
+                  <Button size="sm" variant="outline" className="rounded-xl gap-1.5 h-8 text-xs">
+                    <Download className="w-3.5 h-3.5" />Download
+                  </Button>
+                </a>
+                <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs" onClick={() => setViewingFile(null)}>
+                  Close
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
