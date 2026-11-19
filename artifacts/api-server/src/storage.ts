@@ -1208,7 +1208,13 @@ export class DatabaseStorage implements IStorage {
 
   async getInventorySales(vendorId: string, eventId?: number): Promise<(VendorInventorySale & { itemName: string })[]> {
     const rows = await pool.query<any>(`
-      SELECT vis.*, vc.item_name AS "itemName"
+      SELECT vis.id AS "id",
+        vis.vendor_id AS "vendorId",
+        vis.catalog_item_id AS "catalogItemId",
+        vis.event_id AS "eventId",
+        vis.quantity_sold AS "quantitySold",
+        vis.sold_at AS "soldAt",
+        vc.item_name AS "itemName"
       FROM vendor_inventory_sales vis
       JOIN vendor_catalog vc ON vc.id = vis.catalog_item_id
       WHERE vis.vendor_id = $1

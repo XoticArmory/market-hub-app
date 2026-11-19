@@ -54,10 +54,19 @@ export default function InventoryAnalyticsPage() {
     enabled: hasActivePro === true,
   });
 
-  const { data: sales = [], isLoading: loadingSales } = useQuery<SaleRecord[]>({
+  const { data: salesRaw = [], isLoading: loadingSales } = useQuery<SaleRecord[]>({
     queryKey: ["/api/vendor/inventory/sales"],
     enabled: hasActivePro === true,
   });
+
+  // Guard against malformed sale rows (e.g. missing/non-numeric quantities):
+  // without this a single bad row turns every total on the page into NaN.
+  const sales = salesRaw.map(s => ({
+    ...s,
+    catalogItemId: Number(s.catalogItemId) || 0,
+    eventId: Number(s.eventId) || 0,
+    quantitySold: Number(s.quantitySold) || 0,
+  }));
 
   const isLoading = loadingCatalog || loadingSales;
 
