@@ -24,6 +24,7 @@ const formSchema = z.object({
   location: z.string().min(3, "Location is required"),
   areaCode: z.string().optional(),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
+  endTime: z.string().optional(),
   vendorSpaces: z.coerce.number().min(0).default(0),
   boothWidth: z.coerce.number().int().positive("Enter a valid width"),
   boothDepth: z.coerce.number().int().positive("Enter a valid depth"),
@@ -81,6 +82,7 @@ export default function AddEvent() {
       location: "",
       areaCode: profile?.areaCode || "",
       date: "",
+      endTime: "",
       vendorSpaces: 0,
       boothWidth: 10,
       boothDepth: 10,
@@ -102,7 +104,7 @@ export default function AddEvent() {
       event = await createEvent({
         ...data,
         date: new Date(data.date),
-        endTime: (data as any).endTime || undefined,
+        endTime: data.endTime ? fromLocalInputValue(data.endTime) : undefined,
         spotPrice: Math.round((data.spotPrice || 0) * 100),
         bannerUrl: bannerUrl || undefined,
         // Convert additional dates to ISO in the browser (local parse), the
