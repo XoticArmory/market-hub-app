@@ -146,10 +146,10 @@ export default function InventoryEventPage() {
     });
   }
 
-  const totalRevenue = summary.reduce((s, item) => s + item.revenueCents, 0);
-  const totalProfit = summary.reduce((s, item) => s + item.profitCents, 0);
-  const totalAssigned = summary.reduce((s, item) => s + item.quantityAssigned, 0);
-  const totalSold = summary.reduce((s, item) => s + item.totalSold, 0);
+  const totalRevenue = summary.reduce((s, item) => s + (Number(item.revenueCents) || 0), 0);
+  const totalProfit = summary.reduce((s, item) => s + (Number(item.profitCents) || 0), 0);
+  const totalAssigned = summary.reduce((s, item) => s + (Number(item.quantityAssigned) || 0), 0);
+  const totalSold = summary.reduce((s, item) => s + (Number(item.totalSold) || 0), 0);
   const sellThrough = totalAssigned > 0 ? Math.round((totalSold / totalAssigned) * 100) : 0;
 
   return (
@@ -176,6 +176,11 @@ export default function InventoryEventPage() {
         </div>
       </div>
 
+      {isLoading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
           <CardContent className="pt-4">
@@ -202,6 +207,7 @@ export default function InventoryEventPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {sellThrough > 0 && (
         <Card>
