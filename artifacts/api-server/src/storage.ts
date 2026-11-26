@@ -818,7 +818,12 @@ export class DatabaseStorage implements IStorage {
 
   // ---- Admin Stats ----
   async getAdminStats(): Promise<any> {
-    const allEvents = await db.select().from(events);
+    // Match the admin event list (getAdminEvents): drafts are excluded —
+    // they have their own endpoints and no admin UI tab — so the dashboard
+    // "Total Events" count agrees with the list instead of running 1 high.
+    const allEvents = (await db.select().from(events)).filter(
+      (e) => e.status !== 'draft',
+    );
     const allProfiles = await db.select().from(userProfiles);
     const allRegistrations = await db.select().from(vendorRegistrations);
 
