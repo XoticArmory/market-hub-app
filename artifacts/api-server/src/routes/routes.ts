@@ -686,7 +686,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const isAdmin = existing?.isAdmin === true;
       // Vendor profile type requires an active Vendor Pro subscription
       if (input.profileType === 'vendor') {
-        const isVendorPro = existing?.subscriptionTier === 'vendor_pro' && existing?.subscriptionStatus === 'active';
+        const isVendorPro = isPro(existing);
         if (!isAdmin && !isVendorPro) {
           return res.status(403).json({ message: "Vendor Pro subscription required to use a vendor account." });
         }
@@ -705,7 +705,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
     const isAdmin = profile?.isAdmin === true;
-    const isVendorPro = profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active';
+    const isVendorPro = isPro(profile);
     if (!isAdmin && !isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const { notificationAreaCodes } = req.body;
     if (!Array.isArray(notificationAreaCodes)) return res.status(400).json({ message: "notificationAreaCodes must be an array" });
@@ -1936,7 +1936,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const enriched = await Promise.all(posts.map(async (p) => {
       const u = await enrichUser(p.vendorId);
       const vendorProfile = await storage.getUserProfile(p.vendorId);
-      const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+      const isProVendor = isPro(vendorProfile);
       const vendorWebsiteUrl = isProVendor ? (vendorProfile?.websiteUrl || null) : null;
       const catalogAssignments = isProVendor
         ? await storage.getCatalogAssignmentsForEvent(eventId, p.vendorId)
@@ -1952,7 +1952,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .map(async ({ vendorId, assignments }) => {
           const u = await enrichUser(vendorId);
           const vendorProfile = await storage.getUserProfile(vendorId);
-          const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+          const isProVendor = isPro(vendorProfile);
           return {
             id: null as number | null,
             vendorId,
@@ -1983,7 +1983,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       approvedWithNoPost.map(async (r) => {
         const u = await enrichUser(r.vendorId);
         const vendorProfile = await storage.getUserProfile(r.vendorId);
-        const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+        const isProVendor = isPro(vendorProfile);
         return {
           id: null as number | null,
           vendorId: r.vendorId,
@@ -2013,7 +2013,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const event = await storage.getEvent(eventId);
       if (event?.status === 'ghost' && !(await canAccessGhost(event, userId))) return res.status(404).json({ message: "Event not found" });
       const profile = await storage.getUserProfile(userId);
-      const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+      const isVendorPro = isPro(profile);
       if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro subscription required to post a vendor listing." });
       const existingPost = await storage.getVendorPostForUser(eventId, userId);
       if (existingPost) return res.status(409).json({ message: "You already have a listing for this event. Remove your existing listing first." });
@@ -2044,7 +2044,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { imageUrls } = req.body;
     if (!Array.isArray(imageUrls)) return res.status(400).json({ message: "imageUrls must be an array" });
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro subscription required to manage photos." });
     const limited = (imageUrls as string[]).slice(0, 10);
     const updated = await storage.updateVendorPostImages(postId, userId, limited);
@@ -2077,7 +2077,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const profile = await storage.getUserProfile(userId);
       const vendorName = profile?.businessName || (await enrichUser(userId)).name || "A vendor";
-      const isProVendor = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+      const isProVendor = isPro(profile);
 
       const reg = await storage.createVendorRegistration({
         eventId,
@@ -2127,7 +2127,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (reg.status === 'intent_pending') {
       // Intent approval — route by Pro vs Free
       const vendorProfile = await storage.getUserProfile(reg.vendorId);
-      const isProVendor = (vendorProfile?.subscriptionTier === 'vendor_pro' && vendorProfile?.subscriptionStatus === 'active') || vendorProfile?.isAdmin === true;
+      const isProVendor = isPro(vendorProfile);
       const vendorDisplayName = vendorProfile?.businessName || (await enrichUser(reg.vendorId)).name || "Vendor";
 
       await storage.updateRegistrationStatus(regId, 'approved');
@@ -2459,13 +2459,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!event) return res.status(404).json({ message: "Event not found" });
 
     const profile = await storage.getUserProfile(userId);
-    const isVendorProCheck = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorProCheck = isPro(profile);
     if (!isVendorProCheck) return res.status(403).json({ message: "Vendor Pro subscription required to register for vendor spaces." });
 
     const existing = await storage.getVendorRegistrationForUser(eventId, userId);
     if (existing) return res.status(409).json({ message: "You are already registered for this event." });
 
-    const isPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const hasPro = isPro(profile);
 
     // Application-form flow: create a pending-approval registration and stop
     if (event.vendorRegistrationType === 'form') {
@@ -2476,7 +2476,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         spotName: spotName || null,
         amountCents: 0,
         feeCents: 0,
-        isPro,
+        isPro: hasPro,
         status: 'awaiting_approval',
         stripePaymentIntentId: null,
       });
@@ -2493,7 +2493,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "Invalid registration code. Please check with the event organizer." });
     }
     const spotPriceCents = hasValidCode ? 0 : (event.spotPrice || 0);
-    const feeCents = (isPro || hasValidCode) ? 0 : Math.round(spotPriceCents * 0.005);
+    const feeCents = (hasPro || hasValidCode) ? 0 : Math.round(spotPriceCents * 0.005);
     const reg = await storage.createVendorRegistration({
       eventId,
       vendorId: userId,
@@ -2501,7 +2501,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       spotName: spotName || null,
       amountCents: spotPriceCents,
       feeCents,
-      isPro,
+      isPro: hasPro,
       status: spotPriceCents === 0 ? 'paid' : 'pending',
       stripePaymentIntentId: null,
     });
@@ -2615,7 +2615,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/vendor/analytics', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const analytics = await storage.getVendorAnalytics(userId);
     res.json(analytics);
@@ -2660,7 +2660,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/vendor/inventory', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const eventId = req.query.eventId ? Number(req.query.eventId) : undefined;
     const items = await storage.getVendorInventory(userId, eventId);
@@ -2670,7 +2670,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/vendor/inventory', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const { eventId, itemName, quantityBrought, quantitySold, priceCents } = req.body;
     if (!itemName) return res.status(400).json({ message: "itemName required" });
@@ -2719,7 +2719,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch('/api/vendor/inventory/:id', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const id = Number(req.params.id);
     const { itemName, quantityBrought, quantitySold, priceCents } = req.body;
@@ -2730,7 +2730,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete('/api/vendor/inventory/:id', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     await storage.deleteVendorInventoryItem(Number(req.params.id));
     res.json({ ok: true });
@@ -2777,7 +2777,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/vendor/catalog', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const items = await storage.getVendorCatalog(userId);
     res.json(items);
@@ -2786,7 +2786,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/vendor/catalog', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const { itemName, quantity, priceCents, costCents, imageUrl, images, variations } = req.body;
     if (!itemName) return res.status(400).json({ message: "itemName required" });
@@ -2805,7 +2805,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch('/api/vendor/catalog/:id', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const id = Number(req.params.id);
     const existingItem = await storage.getCatalogItem(id);
@@ -2827,7 +2827,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete('/api/vendor/catalog/:id', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const itemId = Number(req.params.id);
     const existingItem = await storage.getCatalogItem(itemId);
@@ -2839,7 +2839,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/vendor/catalog/:id/assign', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const catalogItemId = Number(req.params.id);
     const { eventId, quantityAssigned, afterMarketReport } = req.body;
@@ -2884,7 +2884,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete('/api/vendor/catalog/:id/assign/:eventId', isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const profile = await storage.getUserProfile(userId);
-    const isVendorPro = (profile?.subscriptionTier === 'vendor_pro' && profile?.subscriptionStatus === 'active') || profile?.isAdmin === true;
+    const isVendorPro = isPro(profile);
     if (!isVendorPro) return res.status(403).json({ message: "Vendor Pro required" });
     const catalogItemId = Number(req.params.id);
     const eid = Number(req.params.eventId);
@@ -3116,9 +3116,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       req.log.warn({ err: e }, 'Failed to fetch Stripe invoice revenue for admin stats');
     }
 
+    // Monthly run-rate from live Stripe subscriptions: a monthly price
+    // counts as-is, an annual price counts / 12. There is one Pro level —
+    // monthly vs annual is only the billing length — so the old
+    // count × $14.95 estimate overstated annual members. Falls back to
+    // the stored estimate on any Stripe error.
+    let estimatedMonthlyProRevenueCents = stats.estimatedMonthlyProRevenueCents ?? 0;
+    try {
+      const stripe = getStripe();
+      if (stripe) {
+        const subs = await stripe.subscriptions.list({ status: 'all', limit: 100 });
+        let runRate = 0;
+        for (const sub of subs.data) {
+          if (sub.status !== 'active' && sub.status !== 'trialing') continue;
+          for (const item of sub.items.data) {
+            const price = item.price as Stripe.Price;
+            if (!price?.unit_amount) continue;
+            runRate += price.recurring?.interval === 'year' ? Math.round(price.unit_amount / 12) : price.unit_amount;
+          }
+        }
+        estimatedMonthlyProRevenueCents = runRate;
+      }
+    } catch (e) {
+      req.log.warn({ err: e }, 'Failed to fetch Stripe subscription run-rate for admin stats');
+    }
+
     res.json({
       ...stats,
       stripeSubscriptionRevenueCents,
+      estimatedMonthlyProRevenueCents,
       // Combined total: booth registration fees + Stripe subscription payments
       totalRevenueCents: (stats.totalRevenueCents || 0) + stripeSubscriptionRevenueCents,
     });
@@ -3538,8 +3564,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           // referrer a free month. billing_reason is 'subscription_cycle' when
           // a trial converts; 'subscription_create' is accepted defensively.
           // The referral_rewards row (unique per subscription) makes this
-          // idempotent across webhook redeliveries, and banked credit is
-          // uncapped by design — a prolific referrer can earn a lifetime
+          // idempotent across webhook redeliveries, and banked free months
+          // are uncapped by design — a prolific referrer can earn a lifetime
           // free account.
           if (subId && invoice.amount_paid > 0 &&
               (invoice.billing_reason === 'subscription_cycle' || invoice.billing_reason === 'subscription_create')) {
@@ -3551,19 +3577,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               const referredUserId = sub.metadata?.userId;
               if (referralCodeId && referrerId && referredUserId) {
                 const referrerProfile = await storage.getUserProfile(referrerId);
-                if (referrerProfile?.stripeCustomerId) {
-                  await stripe.customers.createBalanceTransaction(referrerProfile.stripeCustomerId, {
-                    amount: -1495, // one month of Pro free, flat for monthly and annual referrers
-                    currency: 'usd',
-                    description: 'VendorGrid referral reward — 1 free month of Pro',
-                  });
-                  await storage.recordReferralReward({
-                    referralCodeId: Number(referralCodeId),
-                    referrerUserId: referrerId,
-                    referredUserId,
-                    stripeSubscriptionId: subId,
-                    amountCents: 1495,
-                  });
+                // A free month, not a Stripe credit: extend the referrer's
+                // paid period by one month. Anchored at whichever is later
+                // (current trial end or current period end) so the free
+                // month starts when they would next pay, and multiple
+                // rewards bank — each one pushes the free period out
+                // another month. Same for monthly and annual referrers:
+                // one month of Pro free either way.
+                if (referrerProfile?.stripeSubscriptionId) {
+                  try {
+                    const referrerSub = await stripe.subscriptions.retrieve(referrerProfile.stripeSubscriptionId);
+                    if ((referrerSub.status === 'active' || referrerSub.status === 'trialing') && !referrerSub.cancel_at_period_end) {
+                      // Stripe SDK 22 keeps the period end on the subscription
+                      // item, not the subscription itself.
+                      const firstItem = referrerSub.items?.data?.[0] as any;
+                      const anchor = Math.max(referrerSub.trial_end ?? 0, firstItem?.current_period_end ?? 0);
+                      const newTrialEnd = anchor + 30 * 24 * 60 * 60;
+                      await stripe.subscriptions.update(referrerSub.id, { trial_end: newTrialEnd });
+                      const price = firstItem?.price;
+                      const monthValueCents = price?.recurring?.interval === 'year'
+                        ? Math.round((price.unit_amount ?? 9900) / 12)
+                        : (price?.unit_amount ?? 1495);
+                      await storage.recordReferralReward({
+                        referralCodeId: Number(referralCodeId),
+                        referrerUserId: referrerId,
+                        referredUserId,
+                        stripeSubscriptionId: subId,
+                        amountCents: monthValueCents,
+                      });
+                    }
+                  } catch (e) {
+                    req.log.warn({ err: e, referrerId }, 'Failed to grant referral free month');
+                  }
                 }
               }
             }
