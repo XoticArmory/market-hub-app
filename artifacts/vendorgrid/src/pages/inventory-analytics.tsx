@@ -45,7 +45,7 @@ function truncate(s: string, n: number) {
 
 export default function InventoryAnalyticsPage() {
   const [, setLocation] = useLocation();
-  const { data: profileData } = useProfile();
+  const { data: profileData, isLoading: profileLoading } = useProfile();
   const profile = profileData?.profile;
   const hasActivePro = profile?.subscriptionStatus === "active" && profile?.subscriptionTier && profile.subscriptionTier !== "free";
 
@@ -110,6 +110,17 @@ export default function InventoryAnalyticsPage() {
   }, {});
 
   const eventPerformance = Object.values(salesByEvent).sort((a, b) => b.revenue - a.revenue);
+
+  // Wait for the profile to load before deciding the gate — otherwise a Pro
+  // user sees the "Upgrade to Pro" upsell while their subscription is still
+  // loading (same pattern as the inventory hub, which shows a skeleton first).
+  if (profileLoading || profileData === undefined) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (!hasActivePro) {
     return (
