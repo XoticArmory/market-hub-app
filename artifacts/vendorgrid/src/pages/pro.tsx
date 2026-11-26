@@ -50,7 +50,7 @@ const featureGroups: { title: string; features: Feature[] }[] = [
   {
     title: "Platform fees",
     features: [
-      { name: "In-app registration fee", detail: "Where VendorGrid handles a vendor-space registration", free: null, pro: "0%" },
+      { name: "In-app registration fee", detail: "Where VendorGrid handles a vendor-space registration", free: "0.5%", pro: "0%" },
     ],
   },
 ];

@@ -54,7 +54,7 @@ const HELP_ENTRIES: HelpEntry[] = [
     id: "payments",
     keywords: ["payment", "pay", "stripe", "square", "fee", "checkout", "money"],
     answer:
-      "As a Pro organizer you pay no platform fee on in-app registrations — organizers can take Stripe or Square payments for vendor spots.",
+      "As a Pro organizer you pay no platform fee on in-app registrations — organizers can take Stripe or Square payments for vendor spots. Vendors without Pro pay a 0.5% fee on in-app registrations.",
     link: "/pro",
     linkLabel: "Pro details",
   },
