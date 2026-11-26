@@ -816,7 +816,7 @@ export default function EventDetail() {
   const realIsOwner = event?.createdBy === user?.id;
   // Ownership always reflects who actually created the event — preview tier only changes the tier/status display
   const isOwner = realIsOwner;
-  const isVendorPro = (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active") || profile?.isAdmin === true;
+  const isVendorPro = ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active") || profile?.isAdmin === true;
   const isAdmin = profile?.isAdmin === true;
   const isEventOwnerPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const canManageEvent = isAdmin || (isOwner && isEventOwnerPro);

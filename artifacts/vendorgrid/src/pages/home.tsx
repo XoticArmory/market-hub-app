@@ -144,7 +144,7 @@ export default function Home() {
   const { data: profileData } = useProfile();
   const profile = profileData?.profile;
   const isAdmin = profile?.isAdmin === true;
-  const isVendorPro = isAdmin || (profile?.subscriptionTier === "vendor_pro" && profile?.subscriptionStatus === "active");
+  const isVendorPro = isAdmin || ((profile?.subscriptionTier === "vendor_pro" || profile?.subscriptionTier === "event_owner_pro") && profile?.subscriptionStatus === "active");
   const { data: myRegistrations = [] } = useUserRegistrations();
   const registeredEventIds = new Set(
     (myRegistrations as any[])
