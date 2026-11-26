@@ -36,7 +36,7 @@ Pro features are tied to an active, paid subscription. Features may be modified 
 Pro features, including push notifications (Event Owner Pro), must only be used to contact users who have opted in by registering on the platform. Spam or harassment violates these terms and may result in account termination without refund.
 
 7. PLATFORM FEE
-Non-Vendor Pro vendors registering for event spaces are charged a 0.5% platform fee in addition to the event owner's posted space price.
+Vendors without Pro registering for event spaces are charged a 0.5% platform fee in addition to the event owner's posted space price.
 
 8. GOVERNING LAW
 These terms are governed by the laws of the jurisdiction in which the platform is operated.
@@ -51,7 +51,7 @@ const PRO_FEATURES = [
   "Event analytics: repeat vendors, attendance trends",
   "Post a vendor card at events to showcase what you're bringing",
   "Upload up to 10 product photos per event",
-  "Register for vendor spaces at events — no platform fees",
+  "Register for vendor spaces at events — no platform fees for Pro members",
   "Communicate directly with event owners and vendors",
   "Receive notifications of events in your area",
   "Register for notifications in multiple areas",
