@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 const TIER_LABELS: Record<string, string> = {
-  event_owner_pro: "VendorGrid Pro (legacy)",
+  event_owner_pro: "VendorGrid Pro",
   vendor_pro: "VendorGrid Pro",
   free: "Free",
 };
@@ -710,7 +710,7 @@ export default function AdminPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {Object.entries(stats.tierCounts || {}).filter(([k]) => k !== 'free').map(([tier, count]) => (
-                  <StatCard key={tier} label={TIER_LABELS[tier] || tier} value={count as number} sub={`~$${((count as number) * 14.95).toFixed(2)}/mo estimated`} />
+                  <StatCard key={tier} label={TIER_LABELS[tier] || tier} value={count as number} sub={`~$${(((stats.estimatedMonthlyProRevenueCents ?? (count as number) * 1495) / 100).toFixed(2))}/mo run rate`} />
                 ))}
               </div>
 
@@ -1065,7 +1065,7 @@ export default function AdminPage() {
                 <SelectTrigger className="rounded-xl" data-testid="select-sub-tier"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="vendor_pro">VendorGrid Pro ($14.95/mo)</SelectItem>
+                  <SelectItem value="vendor_pro">VendorGrid Pro ($14.95/mo or $99/yr)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
