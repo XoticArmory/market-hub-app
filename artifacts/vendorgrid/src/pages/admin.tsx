@@ -871,7 +871,7 @@ export default function AdminPage() {
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="outline" className="capitalize">{u.profileType?.replace("_", " ")}</Badge>
                         <Badge variant={u.subscriptionTier !== 'free' && u.subscriptionStatus === 'active' ? 'default' : 'outline'} className={u.subscriptionTier !== 'free' && u.subscriptionStatus === 'active' ? 'bg-green-500' : ''}>
-                          {u.subscriptionTier !== 'free' ? TIER_LABELS[u.subscriptionTier] || u.subscriptionTier : 'Free'}
+                          {u.subscriptionTier !== 'free' ? (u.subscriptionStatus === 'active' ? TIER_LABELS[u.subscriptionTier] || u.subscriptionTier : `${TIER_LABELS[u.subscriptionTier] || u.subscriptionTier} (inactive)`) : 'Free'}
                         </Badge>
                         {u.isAdmin && <Badge className="bg-amber-500 text-white">Admin</Badge>}
                       </div>
