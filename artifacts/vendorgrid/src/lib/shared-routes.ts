@@ -21,6 +21,7 @@ export const api = {
   },
   events: {
     list: { method: "GET" as const, path: "/api/events" as const, responses: { 200: z.array(_any) } },
+    states: { method: "GET" as const, path: "/api/events/states" as const, responses: { 200: z.array(_any) } },
     get: { method: "GET" as const, path: "/api/events/:id" as const, responses: { 200: _any, 404: errorSchemas.notFound } },
     create: { method: "POST" as const, path: "/api/events" as const, input: _any, responses: { 201: _any } },
     delete: { method: "DELETE" as const, path: "/api/events/:id" as const, responses: { 204: z.void() } },

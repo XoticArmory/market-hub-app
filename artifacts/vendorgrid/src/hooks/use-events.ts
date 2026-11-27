@@ -15,6 +15,25 @@ export function useEvents(areaCode?: string) {
   });
 }
 
+export type EventStateCount = { abbr: string; name: string; slug: string; count: number };
+
+// States with at least one upcoming published event, for the sidebar
+// Browse-by-state dropdown. Same board rules as the events list, via
+// GET /api/events/states. 5-minute staleTime: a newly published event
+// in a new state appears on next navigation/reload (or immediately
+// when a create/cancel/publish mutation invalidates this query).
+export function useEventStates() {
+  return useQuery({
+    queryKey: [api.events.states.path],
+    queryFn: async () => {
+      const res = await fetch(api.events.states.path, { credentials: "include", cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to fetch event states");
+      return (await res.json()) as EventStateCount[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useEvent(id: number) {
   return useQuery({
     queryKey: [api.events.get.path, id],
@@ -43,6 +62,7 @@ export function useCancelEvent(eventId: number) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.events.states.path] });
       queryClient.invalidateQueries({ queryKey: [api.events.get.path, eventId] });
       toast({ title: "Event canceled", description: `${data.notified} attendee(s) have been notified.` });
     },
@@ -69,6 +89,7 @@ export function useCreateEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.events.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.events.states.path] });
       toast({ title: "Event created!", description: "Your market event has been added." });
     },
     onError: (e: Error) => toast({ title: "Failed to create event", description: e.message, variant: "destructive" }),

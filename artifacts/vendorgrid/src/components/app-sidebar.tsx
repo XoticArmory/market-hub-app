@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, FolderOpen, Lock, Package, Search, Store, MapPin, ArrowRight } from "lucide-react";
+import { CalendarDays, MessageCircle, PlusCircle, LogIn, LogOut, User, ShieldCheck, Crown, Bell, Eye, X, Mail, Loader2, Send, FolderOpen, Lock, Package, Search, Store, MapPin, ArrowRight, ChevronDown } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible, CollapsibleTrigger, CollapsibleContent,
+} from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +20,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProfile, useRealProfile } from "@/hooks/use-profile";
 import { useUnreadCount } from "@/hooks/use-notifications";
 import { useAdminPreview } from "@/contexts/admin-preview";
+import { useEventStates } from "@/hooks/use-events";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +30,15 @@ const TIER_LABELS: Record<string, string> = {
   vendor_pro: "VendorGrid Pro",
 };
 
+// Static fallback for the Browse-by-state dropdown, shown while the live
+// states request is loading or if it fails, so the rail never breaks.
+const FALLBACK_STATES = [
+  { title: "Montana", slug: "montana" },
+  { title: "Idaho", slug: "idaho" },
+  { title: "North Dakota", slug: "north-dakota" },
+  { title: "South Dakota", slug: "south-dakota" },
+];
+
 export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boolean; setContactOpen: (open: boolean) => void }) {
   const [location] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
@@ -34,6 +47,21 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
   const { data: unreadData } = useUnreadCount();
   const { previewTier, setPreviewTier } = useAdminPreview();
   const { toast } = useToast();
+  // Live states for the Browse-by-state dropdown (GET /api/events/states):
+  // only states with at least one upcoming published event, with counts.
+  const { data: liveStates } = useEventStates();
+  const stateLinks: { title: string; slug: string; count?: number }[] =
+    liveStates && liveStates.length > 0
+      ? liveStates.map((s) => ({ title: s.name, slug: s.slug, count: s.count }))
+      : FALLBACK_STATES.map((s) => ({ ...s, count: undefined }));
+  // Dropdown starts closed, except on a state page where it opens so the
+  // visitor sees where they are.
+  const [statesOpen, setStatesOpen] = useState(() =>
+    FALLBACK_STATES.some((s) => location === `/${s.slug}`)
+  );
+  useEffect(() => {
+    if (liveStates?.some((s) => location === `/${s.slug}`)) setStatesOpen(true);
+  }, [liveStates, location]);
   const profile = profileData?.profile;
   const realProfile = realProfileData?.profile;
   const isAdmin = realProfile?.isAdmin === true;
@@ -131,36 +159,50 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {/* Browse by state + Pro upsell — gives the rail a job below the
-              nav instead of leaving it empty on wide screens. Static links
-              only; no new data fetching on every page. */}
+          {/* Browse by state — dynamic dropdown fed by GET /api/events/states.
+              Only states with at least one upcoming published event appear,
+              with their event counts, so a new state shows up as soon as its
+              first event is published — no code change. Falls back to the
+              static list while loading or if the request fails. */}
           <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Browse by state</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {[
-                  { title: "Montana", url: "/montana" },
-                  { title: "Idaho", url: "/idaho" },
-                  { title: "North Dakota", url: "/north-dakota" },
-                  { title: "South Dakota", url: "/south-dakota" },
-                ].map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={location === item.url} className={`mb-1 transition-all duration-200 ${location === item.url ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'hover:bg-primary/10 hover:text-primary'}`}>
-                      <Link href={item.url} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
-                        <MapPin className="w-5 h-5" /><span className="font-medium">{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/locations"} className={`mb-1 transition-all duration-200 ${location === "/locations" ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'hover:bg-primary/10 hover:text-primary'}`}>
-                    <Link href="/locations" className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
-                      <MapPin className="w-5 h-5" /><span className="font-medium">All locations</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
+            <Collapsible open={statesOpen} onOpenChange={setStatesOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 hover:text-foreground transition-colors"
+                  data-testid="button-browse-by-state"
+                  aria-expanded={statesOpen}
+                >
+                  <span>Browse by state</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${statesOpen ? "rotate-180" : ""}`} />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {stateLinks.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild isActive={location === `/${item.slug}`} className={`mb-1 transition-all duration-200 ${location === `/${item.slug}` ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'hover:bg-primary/10 hover:text-primary'}`}>
+                          <Link href={`/${item.slug}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                            <MapPin className="w-5 h-5" /><span className="font-medium">{item.title}</span>
+                            {item.count !== undefined && (
+                              <Badge variant="secondary" className="ml-auto h-5 text-[10px]">{item.count}</Badge>
+                            )}
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={location === "/locations"} className={`mb-1 transition-all duration-200 ${location === "/locations" ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'hover:bg-primary/10 hover:text-primary'}`}>
+                        <Link href="/locations" className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                          <MapPin className="w-5 h-5" /><span className="font-medium">All locations</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
           </SidebarGroup>
 
           {!hasActivePro && (
