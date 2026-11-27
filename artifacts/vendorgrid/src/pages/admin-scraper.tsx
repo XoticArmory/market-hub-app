@@ -281,6 +281,7 @@ export default function AdminScraperPage() {
     mutationFn: async (id: number) => apiRequest("POST", `/api/admin/draft-events/${id}/publish`),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/draft-events"] });
+      qc.invalidateQueries({ queryKey: ["/api/events/states"] });
       toast({ title: "Event published!", description: "It's now live on VendorGrid." });
     },
     onError: (e: any) => toast({ title: "Publish failed", description: e.message, variant: "destructive" }),
