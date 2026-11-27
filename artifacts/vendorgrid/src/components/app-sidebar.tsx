@@ -143,6 +143,11 @@ export function AppSidebar({ contactOpen, setContactOpen }: { contactOpen: boole
                   { title: "Idaho", url: "/idaho" },
                   { title: "North Dakota", url: "/north-dakota" },
                   { title: "South Dakota", url: "/south-dakota" },
+                  { title: "Arizona", url: "/arizona" },
+                  { title: "Oregon", url: "/oregon" },
+                  { title: "Utah", url: "/utah" },
+                  { title: "Washington", url: "/washington" },
+                  { title: "Wisconsin", url: "/wisconsin" },
                 ].map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={location === item.url} className={`mb-1 transition-all duration-200 ${location === item.url ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'hover:bg-primary/10 hover:text-primary'}`}>
